@@ -16,7 +16,7 @@
 
 const {
   Icon, ChatView, Composer, CommandBridge, WindowChrome, TabBar,
-  StatusBar, AmbientRail, PlanKanban, HistoryModal, useTweaks,
+  StatusBar, AmbientRail, PlanKanban, HistoryModal, ModelManagerModal, useTweaks,
   TweaksPanel, TweakSection, TweakRadio, TweakToggle, TweakColor, TweakSlider,
   TWEAK_DEFAULTS, NULL_MODEL, EMPTY_PROJECT, NULL_PEER,
   INTENT_FRAMING, APPROVAL_PROMPT,
@@ -32,6 +32,7 @@ function App() {
   const [bridgeOpen,  setBridgeOpen]  = React.useState(false);
   const [bridgeView,  setBridgeView]  = React.useState("commands");
   const [historyOpen, setHistoryOpen] = React.useState(false);
+  const [modelManagerOpen, setModelManagerOpen] = React.useState(false);
   const [planOpen,    setPlanOpen]    = React.useState(false);
   const [planMode,    setPlanMode]    = React.useState(false);
   const planStartedRef = React.useRef(false); // true after first send in plan mode
@@ -58,7 +59,7 @@ function App() {
   const [ctx,           setCtx]           = React.useState(data.ctx);
   const [kanban,        setKanban]        = React.useState([]);
   const [planMeta,      setPlanMeta]      = React.useState(data.planMeta);
-  const [models,        setModels]        = React.useState([]);
+  const [models,        setModels]        = React.useState(() => bridge?.models || data.models || []);
   const [activity,      setActivity]      = React.useState([]);
   const [sparkline,     setSparkline]     = React.useState(Array(30).fill(0));
   const [loginProviders, setLoginProviders] = React.useState(null);
@@ -67,6 +68,16 @@ function App() {
   // Each entry: { id, name, path, color, branch }
   const [sessions,        setSessions]        = React.useState([]);
   const [activeSessionId, setActiveSessionId] = React.useState("");
+  const [appVersion,      setAppVersion]      = React.useState(window.OMP_APP_VERSION || "");
+
+  React.useEffect(() => {
+    bridge?.getAppVersion?.().then(v => {
+      if (v) {
+        window.OMP_APP_VERSION = v;
+        setAppVersion(v);
+      }
+    });
+  }, [bridge]);
 
   // ── Cross-cutting effects (bridge subscription, theme, ⌘K) ────────────────
   useBridgeSnapshot(bridge, {
@@ -78,12 +89,15 @@ function App() {
   useThemeEffect(t);
   useCommandShortcut(setBridgeOpen, setBridgeView);
 
-  // Global Ctrl+H / Cmd+H shortcut for conversation history
+  // Global shortcuts: Ctrl+H for history, Ctrl+M for model management
   React.useEffect(() => {
     const onKey = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "h") {
         e.preventDefault();
         setHistoryOpen(prev => !prev);
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "m") {
+        e.preventDefault();
+        setModelManagerOpen(prev => !prev);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -175,6 +189,7 @@ function App() {
     else if (c.name === "login")    { openBridge("login"); }
     else if (c.name === "new")      { bridge?.newSession(); }
     else if (c.name === "history")  { setHistoryOpen(true); }
+    else if (c.name === "models")   { setModelManagerOpen(true); }
   };
 
   const handleResumeSession = async (session) => {
@@ -233,6 +248,9 @@ function App() {
             onNew={handleNewProject}
             onClose={handleCloseTab}
             onHistory={() => setHistoryOpen(true)}
+            onManageModels={() => setModelManagerOpen(true)}
+            appVersion={appVersion}
+            theme={t.theme}
           />
 
           <div className={`stage ${showRail ? "with-rail" : ""}`}>
@@ -307,6 +325,8 @@ function App() {
         onPickLogin={handlePickLogin}
         loginProviders={loginProviders}
         currentModelId={model.id}
+        models={models}
+        onManageModels={() => setModelManagerOpen(true)}
       />
 
       {planOpen && (
@@ -324,6 +344,14 @@ function App() {
           onClose={() => setHistoryOpen(false)}
           onResume={handleResumeSession}
           activeCwd={activeProject?.path}
+        />
+      )}
+
+      {modelManagerOpen && (
+        <ModelManagerModal
+          open={modelManagerOpen}
+          onClose={() => setModelManagerOpen(false)}
+          onModelUpdated={() => bridge?.refreshModels()}
         />
       )}
 

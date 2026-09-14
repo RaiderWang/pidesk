@@ -119,7 +119,8 @@ function App() {
           <WindowChrome project={project} peer={data.peer}
             onCmd={() => setBridgeOpen(true)} />
           <TabBar projects={data.projects} activeId={activeTabId}
-            onSelect={setActiveTabId} peer={data.peer} onNew={() => {}} />
+            onSelect={setActiveTabId} peer={data.peer} onNew={() => {}}
+            appVersion={window.OMP_APP_VERSION || "0.2.0"} theme={t.theme} />
 
           <div className={`stage ${showRail ? "with-rail" : ""}`}>
             <main className="session">

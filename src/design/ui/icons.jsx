@@ -61,6 +61,7 @@ const _ICON_PATHS = {
   link:    { p: ['<path d="M7 9l-2 2a3 3 0 0 1-4-4l2-2"/><path d="M9 7l2-2a3 3 0 0 1 4 4l-2 2"/><path d="M6 10l4-4"/>'],                                                                                                                    d: [14,5]    },
   send:    { p: ['<path d="M2 8l12-5-5 12-2-5z"/>'],                                                                                                                                                                                          d: [14,3]    },
   cog:     { p: ['<circle cx="8" cy="8" r="2"/><path d="M8 1v2m0 10v2M1 8h2m10 0h2M3 3l1.4 1.4M11.6 11.6L13 13M3 13l1.4-1.4M11.6 4.4L13 3"/>'],                                                                                            d: [8,8]     },
+  cpu:     { p: ['<rect x="4" y="4" width="8" height="8" rx="1.5"/><rect x="6.5" y="6.5" width="3" height="3" rx="0.5"/><path d="M6 1v3M10 1v3M6 12v3M10 12v3M1 6h3M1 10h3M12 6h3M12 10h3"/>'],                                         d: [12,4]    },
 };
 const Icon = ({ name, size = 14, color = "currentColor", dotColor = "var(--accent, #ff8a4c)", ...rest }) => {
   const def = _ICON_PATHS[name];

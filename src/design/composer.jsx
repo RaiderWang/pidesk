@@ -220,9 +220,21 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
 //  commands view  — lists all slash-commands; /model drills into picker
 //  models view    — filterable model list; Esc returns to commands
 //
-function CommandBridge({ open, onClose, onPick, onPickModel, currentModelId, onPickLogin, loginProviders, initialView = "commands" }) {
-  const [q, setQ]       = React.useState("");
-  const [view, setView] = React.useState("commands");
+function CommandBridge({
+  open,
+  onClose,
+  onPick,
+  onPickModel,
+  currentModelId,
+  onPickLogin,
+  loginProviders,
+  initialView = "commands",
+  onManageModels,
+  models: propModels,
+}) {
+  const [q, setQ]                   = React.useState("");
+  const [view, setView]             = React.useState("commands");
+  const [refreshing, setRefreshing] = React.useState(false);
   const inputRef = React.useRef(null);
 
   React.useEffect(() => {
@@ -232,6 +244,13 @@ function CommandBridge({ open, onClose, onPick, onPickModel, currentModelId, onP
       setTimeout(() => inputRef.current?.focus(), 30);
     }
   }, [open]);
+
+  // When model view opens, automatically trigger a background refresh
+  React.useEffect(() => {
+    if (open && view === "models") {
+      window.OMP_BRIDGE?.refreshModels();
+    }
+  }, [open, view]);
 
   React.useEffect(() => {
     const onKey = (e) => {
@@ -246,8 +265,19 @@ function CommandBridge({ open, onClose, onPick, onPickModel, currentModelId, onP
 
   if (!open) return null;
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await window.OMP_BRIDGE?.refreshModels();
+    } finally {
+      setTimeout(() => setRefreshing(false), 500);
+    }
+  };
+
   const fil    = (s) => s.toLowerCase().includes(q.toLowerCase());
-  const models = window.OMP_DATA.models;
+  const models = (propModels && propModels.length > 0)
+    ? propModels
+    : (window.OMP_BRIDGE?.models?.length > 0 ? window.OMP_BRIDGE.models : window.OMP_DATA.models) || [];
 
   // ── Model picker view ──────────────────────────────────────────────
   if (view === "models") {
@@ -269,16 +299,21 @@ function CommandBridge({ open, onClose, onPick, onPickModel, currentModelId, onP
           </div>
           <div className="bridge-body">
             <div className="bridge-group">
-              <div className="bridge-group-head mono" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div className="bridge-group-head mono" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 switch model
                 <span style={{ color: "var(--fg-4)" }}>
                   tauri:{window.__TAURI__ ? "✓" : "✗"}
                   · connected:{window.OMP_BRIDGE?.isConnected ? "✓" : "✗"}
-                  · models:{window.OMP_DATA.models.length}
+                  · models:{models.length}
                 </span>
-                <button className="btn ghost" style={{ marginLeft: "auto", height: 18, fontSize: "var(--d-text-xs)", padding: "0 6px" }}
-                  onClick={() => window.OMP_BRIDGE?.refreshModels()}>
-                  refresh
+                <button className="btn ghost" disabled={refreshing} style={{ marginLeft: "auto", height: 18, fontSize: "var(--d-text-xs)", padding: "0 6px" }}
+                  onClick={handleRefresh}>
+                  {refreshing ? "refreshing…" : "refresh"}
+                </button>
+                <button className="btn ghost outlined" style={{ height: 18, fontSize: "var(--d-text-xs)", padding: "0 6px", display: "flex", alignItems: "center", gap: 4 }}
+                  onClick={() => { onClose(); onManageModels?.(); }}>
+                  <Icon name="cpu" size={10} color="var(--accent)" />
+                  manage
                 </button>
               </div>
               {modelHits.map((m) => (
@@ -394,9 +429,12 @@ function CommandBridge({ open, onClose, onPick, onPickModel, currentModelId, onP
                     onClick={() => {
                       if (isModel) { setQ(""); setView("models"); }
                       else if (isLogin) { setQ(""); setView("login"); }
+                      else if (c.name === "models") { onManageModels?.(); onClose(); }
                       else { onPick(c); onClose(); }
                     }}>
-                    <span className="bridge-glyph">{c.icon}</span>
+                    <span className="bridge-glyph">
+                      {["clock", "cog", "bolt", "cpu"].includes(c.icon) ? <Icon name={c.icon} size={11} /> : c.icon}
+                    </span>
                     <span className="mono" style={{ color: "var(--accent)" }}>/{c.name}</span>
                     <span style={{ color: "var(--fg-3)" }}>{c.hint}</span>
                     {isModel && (

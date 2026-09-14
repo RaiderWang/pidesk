@@ -147,3 +147,18 @@
   0%, 100% { opacity: 1; }
   50%       { opacity: 0; }
 }
+
+/* ── Model Manager Modal ─────────────────────────────────────────────────── */
+.bridge-body textarea:focus,
+.bridge-body input:focus,
+.bridge-body select:focus {
+  border-color: var(--accent) !important;
+  outline: none;
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 35%, transparent);
+}
+
+.model-card:hover {
+  border-color: color-mix(in oklab, var(--accent) 30%, var(--line)) !important;
+  background: var(--bg-hover) !important;
+}
+

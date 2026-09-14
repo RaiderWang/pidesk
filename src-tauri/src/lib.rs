@@ -7,6 +7,7 @@
 mod agent;
 mod git;
 mod git_watcher;
+mod models_config;
 mod saved_sessions;
 
 use agent::AgentBridge;
@@ -142,6 +143,12 @@ fn open_url_external(url: String) -> Result<(), String> {
     open::that(&url).map_err(|e| e.to_string())
 }
 
+/// Get the application version from package metadata.
+#[tauri::command]
+fn get_app_version(app: tauri::AppHandle) -> String {
+    app.package_info().version.to_string()
+}
+
 /// Run the Tauri application. Panics if the runtime fails to initialise.
 ///
 /// # Panics
@@ -164,6 +171,11 @@ pub fn run() {
             stop_git_watch,
             open_url_external,
             list_saved_sessions,
+            models_config::read_models_config,
+            models_config::write_models_config,
+            models_config::open_models_file,
+            models_config::open_models_folder,
+            get_app_version,
         ])
         .setup(|app| {
             #[cfg(debug_assertions)]

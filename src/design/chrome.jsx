@@ -57,7 +57,10 @@ function WindowChrome({ project, peer, onCmd }) {
 }
 
 // ── Project tabs ─────────────────────────────────────────────────────
-function TabBar({ projects, activeId, onSelect, onClose, peer, onNew, onHistory }) {
+function TabBar({ projects, activeId, onSelect, onClose, peer, onNew, onHistory, onManageModels, appVersion, theme }) {
+  const version = appVersion || window.OMP_APP_VERSION || "0.2.0";
+  const themeName = theme || "aurora";
+  const versionLabel = `v${version}-${themeName}`;
   return (
     <div className="tabs">
       {projects.map((p) => {
@@ -82,9 +85,12 @@ function TabBar({ projects, activeId, onSelect, onClose, peer, onNew, onHistory 
       <button className="tab-add" title="conversation history (Ctrl+H)" onClick={onHistory}>
         <Icon name="clock" size={11} />
       </button>
+      <button className="tab-add" title="manage models (Ctrl+M)" onClick={onManageModels}>
+        <Icon name="cpu" size={11} />
+      </button>
       <div style={{ flex: 1 }} />
       <div className="tabs-right mono">
-        <span style={{ color: "var(--fg-4)" }}>v0.4.7-aurora</span>
+        <span style={{ color: "var(--fg-4)" }} title={`OMP Desktop v${version}`}>{versionLabel}</span>
       </div>
     </div>
   );

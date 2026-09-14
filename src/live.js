@@ -27,6 +27,7 @@
       { name: "history",  hint: "browse and resume saved sessions",   icon: "clock", group: "Session" },
       { name: "branch",   hint: "fork the session from current head", icon: "⑂", group: "Session" },
       { name: "model",    hint: "switch model",                       icon: "◉", group: "Agent"   },
+      { name: "models",   hint: "manage custom models (models.yml)",  icon: "cpu", group: "Agent" },
       { name: "thinking", hint: "cycle thinking level",               icon: "✶", group: "Agent"   },
       { name: "login",    hint: "authenticate with a model provider",   icon: "⊙", group: "Agent"   },
       { name: "todo",     hint: "open the kanban surface",            icon: "▦", group: "View"    },
@@ -405,16 +406,22 @@
       notify();
 
     } else if (command === "get_available_models") {
-      state.models = (data.models ?? []).map(m => ({
+      const rpcModels = (data.models ?? []).map(m => ({
         id:       m.id,
         name:     m.name ?? window.MODEL_NAMES?.[m.id] ?? window.formatModelId(m.id),
         provider: m.provider,
         note:     m.provider,
         latency:  0,
-        current:  state.rpcState?.model?.id === m.id,
+        current:  state.rpcState?.model?.id === m.id || state.model?.id === m.id,
       }));
-      notify();
-      console.log(`[live] models loaded (${state.models.length}) for session '${activeSessionId}'`);
+      _loadCustomModelsFromConfig().then(customData => {
+        state.models = _mergeModels(rpcModels, customData);
+        notify();
+        console.log(`[live] models loaded (${state.models.length} total) for session '${activeSessionId}'`);
+      }).catch(() => {
+        state.models = rpcModels;
+        notify();
+      });
 
     } else if (command === "set_model") {
       if (data) {
@@ -821,10 +828,73 @@
     state.ctx = window.buildCtx(state.rpcState, state.sessionCost, state.currentTps);
   }
 
+  async function _loadCustomModelsFromConfig() {
+    if (!window.__TAURI__) return { customModels: [], customProviders: new Set() };
+    try {
+      const res = await window.__TAURI__.core.invoke("read_models_config");
+      if (!res?.content || !window.YamlUtil?.parseModelsYaml) {
+        return { customModels: [], customProviders: new Set() };
+      }
+      const parsed = window.YamlUtil.parseModelsYaml(res.content);
+      const customModels = [];
+      const providers = parsed?.providers || {};
+      const customProviders = new Set(Object.keys(providers));
+
+      for (const [providerName, pConfig] of Object.entries(providers)) {
+        if (!pConfig || !Array.isArray(pConfig.models)) continue;
+        for (const m of pConfig.models) {
+          if (!m || !m.id) continue;
+          customModels.push({
+            id:            m.id,
+            name:          m.name || m.id,
+            provider:      providerName,
+            note:          providerName,
+            latency:       0,
+            current:       state.rpcState?.model?.id === m.id || state.model?.id === m.id,
+            contextWindow: m.contextWindow,
+            maxTokens:     m.maxTokens,
+            reasoning:     !!m.reasoning,
+          });
+        }
+      }
+      return { customModels, customProviders };
+    } catch (e) {
+      console.warn("[live] Failed to read models.yml for custom models:", e);
+      return { customModels: [], customProviders: new Set() };
+    }
+  }
+
+  function _mergeModels(baseList, { customModels, customProviders }) {
+    const customIds = new Set((customModels || []).map(m => m.id));
+    // Filter out obsolete models that belong to defined custom providers
+    const retained = (baseList || []).filter(m => {
+      if (customProviders && customProviders.has(m.provider)) {
+        return customIds.has(m.id);
+      }
+      return true;
+    });
+
+    const retainedIds = new Set(retained.map(m => m.id));
+    const merged = [...retained];
+    for (const cm of (customModels || [])) {
+      if (!retainedIds.has(cm.id)) {
+        merged.push(cm);
+        retainedIds.add(cm.id);
+      }
+    }
+    return merged;
+  }
+
   function _initFetch() {
     _send({ type: "get_state" });
     _send({ type: "get_messages" });
     _send({ type: "get_available_models" });
+    _loadCustomModelsFromConfig().then(customData => {
+      if (customData.customModels.length > 0) {
+        state.models = _mergeModels(state.models, customData);
+        notify();
+      }
+    }).catch(() => {});
   }
 
   // ── Send a command to the active session's omp ────────────────────────────
@@ -870,6 +940,8 @@
   // ── OMP_BRIDGE public API ─────────────────────────────────────────────────
   window.OMP_BRIDGE = {
     get isConnected() { return !!window.__TAURI__ && !!activeSessionId; },
+    get models()      { return state.models; },
+    get activeSessionId() { return activeSessionId; },
 
     // ── Messaging ────────────────────────────────────────────────────────────
     send(text, images) {
@@ -897,7 +969,14 @@
     },
     newSession()       { _send({ type: "new_session" }); },
     exportHtml()       { _send({ type: "export_html" }); },
-    refreshModels()    { _initFetch(); },
+    async refreshModels() {
+      _initFetch();
+      const customData = await _loadCustomModelsFromConfig();
+      if (customData.customModels.length > 0 || customData.customProviders.size > 0) {
+        state.models = _mergeModels(state.models, customData);
+        notify();
+      }
+    },
 
     // ── Login ─────────────────────────────────────────────────────────────────
 
@@ -1000,6 +1079,61 @@
       } catch (err) {
         console.error("[live] listSavedSessions error:", err);
         return [];
+      }
+    },
+
+    /** Read models.yml configuration from disk. */
+    async readModelsConfig() {
+      if (!window.__TAURI__) return { path: "", content: "", exists: false };
+      try {
+        return await window.__TAURI__.core.invoke("read_models_config");
+      } catch (err) {
+        console.error("[live] readModelsConfig error:", err);
+        throw err;
+      }
+    },
+
+    /** Write models.yml configuration to disk. */
+    async writeModelsConfig(content) {
+      if (!window.__TAURI__) return;
+      try {
+        await window.__TAURI__.core.invoke("write_models_config", { content });
+      } catch (err) {
+        console.error("[live] writeModelsConfig error:", err);
+        throw err;
+      }
+    },
+
+    /** Open models.yml in the system default text editor. */
+    async openModelsFile() {
+      if (!window.__TAURI__) return;
+      try {
+        await window.__TAURI__.core.invoke("open_models_file");
+      } catch (err) {
+        console.error("[live] openModelsFile error:", err);
+        throw err;
+      }
+    },
+
+    /** Open models directory in the file explorer. */
+    async openModelsFolder() {
+      if (!window.__TAURI__) return;
+      try {
+        await window.__TAURI__.core.invoke("open_models_folder");
+      } catch (err) {
+        console.error("[live] openModelsFolder error:", err);
+        throw err;
+      }
+    },
+
+    /** Get application version from Tauri backend. */
+    async getAppVersion() {
+      if (!window.__TAURI__) return "0.2.0";
+      try {
+        return await window.__TAURI__.core.invoke("get_app_version");
+      } catch (err) {
+        console.error("[live] getAppVersion error:", err);
+        return "0.2.0";
       }
     },
 
@@ -1106,6 +1240,10 @@
     } else {
       _setupWindowChrome();
     }
+
+    window.__TAURI__.core.invoke("get_app_version")
+      .then(v => { window.OMP_APP_VERSION = v; })
+      .catch(() => {});
 
     console.log("[live] Tauri multi-session mode active");
   } else {

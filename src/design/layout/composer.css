@@ -39,6 +39,7 @@
 .composer-input textarea:focus-visible { outline: none; }
 
 .composer-foot {
+  display: flex; align-items: center; gap: 6px;
   padding: 6px 2px 0;
 }
 .composer-pill {
