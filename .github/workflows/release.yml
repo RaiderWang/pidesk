@@ -34,8 +34,8 @@ name: Release
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'       # v1.2.3
-      - 'v[0-9]+.[0-9]+.[0-9]+-*'     # v1.2.3-beta.1
+      - 'v*.*.*'                      # v1.2.3
+      - 'v*.*.*-*'                    # v1.2.3-beta.1
   workflow_dispatch:                    # allow manual trigger from Actions UI
     inputs:
       tag:
