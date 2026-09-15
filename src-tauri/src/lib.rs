@@ -191,7 +191,7 @@ pub fn run() {
             // if any — no event timing race, no delayed emit thread.
             let bridge = app.state::<AgentBridge>();
             if let Err(e) = bridge.start_session("default".into(), None, None, app.handle().clone()) {
-                eprintln!("[omp-desktop] failed to start default session: {e}");
+                eprintln!("[pidesk] failed to start default session: {e}");
             }
             Ok(())
         })

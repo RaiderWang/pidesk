@@ -5,11 +5,12 @@
 // Wrapped in an IIFE so `useTweaks` doesn't leak into document scope.
 (function () {
 
-const STORAGE_KEY = "omp-desktop:tweaks";
+const STORAGE_KEY = "pidesk:tweaks";
+const LEGACY_STORAGE_KEY = "omp-desktop:tweaks";
 
 function _load(defaults) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
     if (!raw) return defaults;
     return { ...defaults, ...JSON.parse(raw) };
   } catch {

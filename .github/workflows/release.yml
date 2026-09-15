@@ -127,10 +127,10 @@ jobs:
           # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
-          tagName: ${{ github.ref_name || inputs.tag }}
-          releaseName: 'PiDesk ${{ github.ref_name || inputs.tag }}'
+          tagName: ${{ inputs.tag || github.ref_name }}
+          releaseName: 'PiDesk ${{ inputs.tag || github.ref_name }}'
           releaseBody: |
-            ## PiDesk ${{ github.ref_name || inputs.tag }}
+            ## PiDesk ${{ inputs.tag || github.ref_name }}
 
             ### Installation
             | Platform | File |
@@ -146,5 +146,5 @@ jobs:
             - [oh-my-pi](https://github.com/can1357/oh-my-pi) (`omp`) must be installed
               and available on your `PATH`.
           releaseDraft: false
-          prerelease: ${{ contains(github.ref_name || inputs.tag, '-') }}
+          prerelease: ${{ contains(inputs.tag || github.ref_name, '-') }}
           args: ${{ matrix.args }}

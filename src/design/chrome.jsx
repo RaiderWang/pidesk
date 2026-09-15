@@ -59,7 +59,7 @@ function WindowChrome({ project, peer, onCmd }) {
 // ── Project tabs ─────────────────────────────────────────────────────
 function TabBar({ projects, activeId, onSelect, onClose, peer, onNew, onNewProject, onNewStandalone, onHistory, onManageModels, appVersion, theme }) {
   const version = appVersion || window.PIDESK_APP_VERSION || window.OMP_APP_VERSION || "0.2.1";
-  const themeName = theme || "aurora";
+  const themeName = theme || "daylight";
   const versionLabel = `v${version}-${themeName}`;
 
   const [menuOpen, setMenuOpen] = React.useState(false);

@@ -102,8 +102,8 @@ installed at `%LOCALAPPDATA%\omp\omp.exe` and added to PATH by the installer.
 
 ```bash
 # Clone
-git clone https://github.com/yourname/omp-desktop
-cd omp-desktop
+git clone https://github.com/RaiderWang/pidesk.git
+cd pidesk
 
 # Install Tauri CLI (dev dependency only)
 npm install
@@ -122,7 +122,7 @@ Dev mode auto-opens the WebView DevTools in debug builds.
 ## Project Structure
 
 ```
-omp-desktop/
+pidesk/
 ├── src/                        # Frontend (served by Tauri asset server)
 │   ├── index.html              # Entry point — declares script load order
 │   ├── app-live.jsx            # React root: state + handlers + render
@@ -143,7 +143,7 @@ omp-desktop/
 │   │
 │   └── design/                 # UI components, split by domain
 │       ├── ui/
-│       │   ├── icons.jsx           # OMP Icon Pack v1 + TOOL_META
+│       │   ├── icons.jsx           # PiDesk Icon Pack v1 + TOOL_META
 │       │   ├── sparks.jsx          # Sparkline, TokenGauge, ActivityRadar
 │       │   ├── markdown.jsx        # MarkdownContent (marked + hljs)
 │       │   └── plan-annotations.jsx # AnnotablePlan + CommentForm

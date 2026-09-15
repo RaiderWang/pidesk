@@ -11,10 +11,10 @@
 
 (function () {
   const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
-    "theme": "aurora",
+    "theme": "daylight",
     "density": "compact",
     "layout": "rail",
-    "accent": "#8AF0C8",
+    "accent": "#1F8A5B",
     "monoChat": false,
     "scanlines": true,
     "showRadar": true,

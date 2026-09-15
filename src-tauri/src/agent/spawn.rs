@@ -64,11 +64,11 @@ fn probe_rpc_ui() -> bool {
             String::from_utf8_lossy(&output.stderr),
         );
         let supported = help_text_supports_rpc_ui(&text);
-        eprintln!("[omp-desktop] rpc-ui probe: supported={supported}");
+        eprintln!("[pidesk] rpc-ui probe: supported={supported}");
         return supported;
     }
     // omp not found on PATH — spawn_omp will surface the real error.
-    eprintln!("[omp-desktop] rpc-ui probe: omp not found, defaulting to rpc");
+    eprintln!("[pidesk] rpc-ui probe: omp not found, defaulting to rpc");
     false
 }
 
@@ -110,7 +110,7 @@ pub(super) fn spawn_omp(cwd: Option<&str>, resume: Option<&str>) -> Result<Child
             Ok(child) => return Ok(child),
             Err(e) => {
                 let msg = format!("{name}: {e}");
-                eprintln!("[omp-desktop] spawn attempt failed: {msg}");
+                eprintln!("[pidesk] spawn attempt failed: {msg}");
                 last_err = msg;
             }
         }

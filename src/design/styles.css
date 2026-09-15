@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════
    PiDesk — design tokens
-   Three themes: aurora (default dark), phosphor (terminal), daylight.
+   Three themes: daylight (default light), aurora (dark), phosphor (terminal).
    Density: cozy / compact / dense (rem scale + line-height).
    ═══════════════════════════════════════════════════════════════════════ */
 
@@ -34,8 +34,8 @@
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* ── Aurora (default) ──────────────────────────────────────────────────── */
-:root, .theme-aurora {
+/* ── Aurora (dark) ─────────────────────────────────────────────────────── */
+.theme-aurora {
   --bg-app: #060709;
   --bg-window: #0B0D14;
   --bg-surface: #11141D;
@@ -130,8 +130,8 @@
   color-scheme: dark;
 }
 
-/* ── Daylight (light) ──────────────────────────────────────────────────── */
-.theme-daylight {
+/* ── Daylight (default light) ──────────────────────────────────────────── */
+:root, .theme-daylight {
   --bg-app: #E5E2D9;
   --bg-window: #F6F3EB;
   --bg-surface: #FFFFFF;
@@ -403,7 +403,8 @@ input, textarea { font: inherit; color: inherit; background: transparent; border
   font-weight: 600;
 }
 .theme-phosphor .btn.primary { color: #001000; }
-.theme-daylight .btn.primary { color: #FAF7EF; }
+.theme-daylight .btn.primary,
+.theme-daylight .btn.primary:hover { color: #FAF7EF; }
 .btn.primary:hover { background: var(--accent-deep); border-color: var(--accent-deep); color: #06241B; }
 .btn.outlined { border-color: var(--line); }
 .btn.outlined:hover { border-color: var(--line-bright); }
