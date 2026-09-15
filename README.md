@@ -1,8 +1,10 @@
-# Oh My Pi Desktop
+# PiDesk
 
-A Tauri 2 desktop shell for [oh-my-pi](https://github.com/can1357/oh-my-pi) (`omp`).
+A fast, lightweight Tauri 2 desktop shell for [oh-my-pi](https://github.com/can1357/oh-my-pi) (`omp`).
 Wraps the `omp --mode rpc` coding agent as a managed child process and serves the
 React UI as a connected, live interface — no browser, no Electron, ~8 MB binary.
+
+> **Note**: PiDesk is an independent project evolved from [apoc/omp-desktop](https://github.com/apoc/omp-desktop).
 
 ## Features
 
@@ -329,3 +331,11 @@ the live-wiring changes.
 **Windows 11 target** — Uses `color-mix(in oklab, …)` which requires WebView2 ≥ 101
 (Windows 11 default). The frameless window (`decorations: false`) relies on DWM for
 corner rounding.
+
+---
+
+## License & Attribution
+
+PiDesk is open source under the [MIT License](LICENSE).  
+Original work Copyright (c) 2026 Miroslav Drbal ([apoc/omp-desktop](https://github.com/apoc/omp-desktop)).  
+Modifications and enhancements Copyright (c) 2026 Rick Wang.

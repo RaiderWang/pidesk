@@ -319,7 +319,7 @@ function ModelManagerModal({ open, onClose, onModelUpdated }) {
                         <div style={{ flex: 1 }} />
 
                         <button className="btn ghost" style={{ height: 22, fontSize: "var(--d-text-xs)", padding: "0 6px", gap: 4 }}
-                          onClick={() => setEditingModel({ providerKey: pKey, isNew: true, model: { id: "", name: "", contextWindow: 200000, maxTokens: 8192, reasoning: false } })}>
+                          onClick={() => setEditingModel({ providerKey: pKey, isNew: true, model: { id: "", name: "", contextWindow: 200000, maxTokens: 8192, reasoning: false, input: ["text"] } })}>
                           <Icon name="plus" size={10} color="var(--accent)" /> Add Model
                         </button>
                         <button className="btn ghost" style={{ height: 22, fontSize: "var(--d-text-xs)", padding: "0 6px" }}
@@ -373,6 +373,11 @@ function ModelManagerModal({ open, onClose, onModelUpdated }) {
                               {m.reasoning && (
                                 <span className="chip mono" style={{ fontSize: 10, padding: "1px 5px", color: "var(--lilac)", borderColor: "var(--lilac)" }}>
                                   reasoning
+                                </span>
+                              )}
+                              {((Array.isArray(m.input) && m.input.includes("image")) || m.images || m.vision) && (
+                                <span className="chip mono" style={{ fontSize: 10, padding: "1px 5px", color: "var(--cyan)", borderColor: "color-mix(in oklab, var(--cyan) 40%, transparent)" }}>
+                                  vision
                                 </span>
                               )}
                             </div>
@@ -470,6 +475,11 @@ function EditModelModal({ item, pKeys, onClose, onSave }) {
   const [ctx, setCtx]                 = React.useState(item.model?.contextWindow ?? 200000);
   const [maxTok, setMaxTok]           = React.useState(item.model?.maxTokens ?? 8192);
   const [reasoning, setReasoning]     = React.useState(!!item.model?.reasoning);
+  const [vision, setVision]           = React.useState(
+    Array.isArray(item.model?.input)
+      ? item.model.input.includes("image")
+      : (!!item.model?.images || !!item.model?.vision)
+  );
   const [err, setErr]                 = React.useState("");
 
   const handleSubmit = (e) => {
@@ -482,6 +492,7 @@ function EditModelModal({ item, pKeys, onClose, onSave }) {
       contextWindow: Number(ctx) || 200000,
       maxTokens: Number(maxTok) || 8192,
       reasoning: !!reasoning,
+      input: vision ? ["text", "image"] : ["text"],
     }, item.isNew, item.oldId);
   };
 
@@ -532,6 +543,11 @@ function EditModelModal({ item, pKeys, onClose, onSave }) {
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "var(--d-text-xs)", color: "var(--fg-2)", cursor: "pointer", marginTop: 4 }}>
             <input type="checkbox" checked={reasoning} onChange={e => setReasoning(e.target.checked)} />
             Support reasoning / thinking effort
+          </label>
+
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "var(--d-text-xs)", color: "var(--fg-2)", cursor: "pointer", marginTop: 2 }}>
+            <input type="checkbox" checked={vision} onChange={e => setVision(e.target.checked)} />
+            Support vision / image input
           </label>
 
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10 }}>

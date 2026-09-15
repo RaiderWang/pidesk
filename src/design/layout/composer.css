@@ -83,3 +83,136 @@
 .slash-row:last-child { border-bottom: 0; }
 .slash-glyph { width: 18px; color: var(--fg-3); font-family: var(--font-mono); }
 
+/* ── Model vision warning banner ────────────────────────────────── */
+.composer-model-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--d-text-xs);
+  color: var(--amber);
+  background: color-mix(in oklab, var(--amber) 10%, var(--bg-elevated));
+  border: 1px solid color-mix(in oklab, var(--amber) 40%, var(--line));
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  animation: fadeIn 150ms var(--ease-out);
+}
+.composer-model-warning .warning-text {
+  flex: 1;
+  line-height: 1.4;
+  text-wrap: balance;
+}
+.composer-model-warning .warning-action {
+  height: 22px;
+  padding: 0 8px;
+  font-size: var(--d-text-xs);
+  color: var(--amber);
+  border: 1px solid color-mix(in oklab, var(--amber) 30%, var(--line));
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.composer-model-warning .warning-action:hover {
+  background: color-mix(in oklab, var(--amber) 20%, transparent);
+  border-color: var(--amber);
+}
+.composer-model-warning .warning-close {
+  width: 20px;
+  height: 20px;
+  color: var(--fg-4);
+  margin-left: 2px;
+}
+.composer-model-warning .warning-close:hover {
+  color: var(--fg);
+}
+
+/* ── Image attachments preview strip ────────────────────────────── */
+.composer-attachments {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px 8px;
+  overflow-x: auto;
+}
+.composer-thumb-wrap {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  border-radius: 8px;
+  border: 1px solid var(--line-bright);
+  background: var(--bg-surface);
+  overflow: hidden;
+  flex-shrink: 0;
+  transition: border-color 140ms;
+}
+.composer-thumb-wrap:hover {
+  border-color: var(--accent);
+}
+.composer-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.composer-thumb-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  border: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity 120ms, transform 120ms;
+}
+.composer-thumb-remove:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+.composer-thumb-size {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  font-size: 9px;
+  line-height: 1;
+  background: rgba(0, 0, 0, 0.65);
+  color: #ddd;
+  padding: 1px 3px;
+  border-radius: 3px;
+  pointer-events: none;
+}
+.composer-add-more {
+  width: 54px;
+  height: 54px;
+  border-radius: 8px;
+  border: 1px dashed var(--line);
+  background: transparent;
+  color: var(--fg-4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 120ms, color 120ms, background 120ms;
+}
+.composer-add-more:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--bg-hover);
+}
+.btn.unsupported-vision {
+  opacity: 0.7;
+}
+.btn.unsupported-vision:hover {
+  opacity: 1;
+  color: var(--amber);
+}
+

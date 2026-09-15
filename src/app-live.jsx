@@ -89,7 +89,7 @@ function App() {
   useThemeEffect(t);
   useCommandShortcut(setBridgeOpen, setBridgeView);
 
-  // Global shortcuts: Ctrl+H for history, Ctrl+M for model management
+  // Global shortcuts: Ctrl+H for history, Ctrl+M for model management, Ctrl+O for open project, Ctrl+T for standalone session
   React.useEffect(() => {
     const onKey = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "h") {
@@ -98,6 +98,12 @@ function App() {
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "m") {
         e.preventDefault();
         setModelManagerOpen(prev => !prev);
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "o") {
+        e.preventDefault();
+        handleNewProject();
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "t") {
+        e.preventDefault();
+        handleNewStandalone();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -127,9 +133,10 @@ function App() {
   );
 
   // ── Handlers ──────────────────────────────────────────────────────────────
-  const handleSend = text => {
+  const handleSend = (text, images = []) => {
     const hasAnnotations = Object.keys(planAnnotations).length > 0;
-    if (!text.trim() && !hasAnnotations) return;
+    const hasImages = images && images.length > 0;
+    if (!text.trim() && !hasAnnotations && !hasImages) return;
     let msg = text.trim();
     if (planMode) {
       if (hasAnnotations) {
@@ -153,9 +160,9 @@ function App() {
     if (streaming) {
       bridge?.steer(msg);
     } else if (bridge?.isConnected) {
-      bridge.send(msg);
+      bridge.send(msg, images);
     } else {
-      setMessages(prev => [...prev, { kind: "user", time: timeNow(), text: msg }]);
+      setMessages(prev => [...prev, { kind: "user", time: timeNow(), text: msg, images: images ?? [] }]);
     }
   };
 
@@ -222,6 +229,12 @@ function App() {
     // Tab list and activeSessionId are updated via onUpdate from the bridge
   };
 
+  // Open standalone session (no project folder)
+  const handleNewStandalone = async () => {
+    if (!bridge) return;
+    await bridge.openSession(null);
+  };
+
   // Close tab → kills that session's omp process; bridge updates tab list
   const handleCloseTab = id => { bridge?.closeSession(id); };
 
@@ -246,6 +259,8 @@ function App() {
             onSelect={handleSelectTab}
             peer={safePeer}
             onNew={handleNewProject}
+            onNewProject={handleNewProject}
+            onNewStandalone={handleNewStandalone}
             onClose={handleCloseTab}
             onHistory={() => setHistoryOpen(true)}
             onManageModels={() => setModelManagerOpen(true)}

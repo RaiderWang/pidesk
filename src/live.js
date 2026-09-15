@@ -407,11 +407,7 @@
 
     } else if (command === "get_available_models") {
       const rpcModels = (data.models ?? []).map(m => ({
-        id:       m.id,
-        name:     m.name ?? window.MODEL_NAMES?.[m.id] ?? window.formatModelId(m.id),
-        provider: m.provider,
-        note:     m.provider,
-        latency:  0,
+        ..._buildModelEntry(m),
         current:  state.rpcState?.model?.id === m.id || state.model?.id === m.id,
       }));
       _loadCustomModelsFromConfig().then(customData => {
@@ -465,6 +461,7 @@
       note:     m.provider,
       latency:  0,
       current:  true,
+      input:    m.input,
     };
   }
 
@@ -595,10 +592,17 @@
       if (role === "user") {
         const blocks = Array.isArray(msg.content) ? msg.content : [];
         const text = blocks.filter(b => b.type === "text").map(b => b.text ?? "").join("\n").trim();
-        if (text) {
+        const images = blocks.filter(b => b.type === "image").map(b => ({
+          type: "image",
+          data: b.data,
+          mimeType: b.mimeType || "image/png",
+        }));
+        if (text || images.length > 0) {
           const last = state.messages[state.messages.length - 1];
           if (!(last?.kind === "user" && last.text === text)) {
-            state.messages = [...state.messages, { kind: "user", time, text }];
+            state.messages = [...state.messages, { kind: "user", time, text, images }];
+          } else if (images.length > 0 && (!last.images || last.images.length === 0)) {
+            last.images = images;
           }
           notify();
         }
@@ -795,14 +799,7 @@
     state.thinkingLevel = rpcState.thinkingLevel ?? "auto";
 
     if (rpcState.model) {
-      state.model = {
-        id:       rpcState.model.id,
-        name:     rpcState.model.name ?? window.MODEL_NAMES?.[rpcState.model.id] ?? window.formatModelId(rpcState.model.id),
-        provider: rpcState.model.provider,
-        note:     rpcState.model.provider,
-        latency:  0,
-        current:  true,
-      };
+      state.model = _buildModelEntry(rpcState.model);
     }
     if (rpcState.model && state.models.length > 0) {
       state.models = state.models.map(m => ({ ...m, current: m.id === rpcState.model.id }));
@@ -854,6 +851,7 @@
             contextWindow: m.contextWindow,
             maxTokens:     m.maxTokens,
             reasoning:     !!m.reasoning,
+            input:         m.input ?? (m.images ? ["text", "image"] : ["text"]),
           });
         }
       }
@@ -945,7 +943,7 @@
 
     // ── Messaging ────────────────────────────────────────────────────────────
     send(text, images) {
-      const userMsg = { kind: "user", time: timeNow(), text };
+      const userMsg = { kind: "user", time: timeNow(), text, images: images ?? [] };
       state.messages = [...state.messages, userMsg];
       notify();
       _send({ type: "prompt", message: text, images: images ?? [] });
@@ -1031,19 +1029,30 @@
 
     // ── Session management ───────────────────────────────────────────────────
 
-    /** Open a new tab for the given project folder. Returns the new session id. */
+    /** Open a new tab for the given project folder (or standalone if null/empty). Returns the new session id. */
     async openSession(cwd) {
       const id   = `session-${Date.now()}`;
-      const name = cwd ? cwd.replace(/\\/g, "/").split("/").pop() || cwd : "new session";
+      let name = "PiDesk";
+      if (cwd) {
+        name = cwd.replace(/\\/g, "/").split("/").pop() || cwd;
+      } else {
+        const noProjSessions = [...sessionRegistry.values()].filter(s => !s.path);
+        if (noProjSessions.length > 0) {
+          name = `PiDesk (${noProjSessions.length + 1})`;
+        }
+      }
+      const color = cwd ? "var(--lilac)" : "var(--accent)";
       // Register in tab list before starting omp so the tab shows immediately
       // Register with null branch — chip hidden until git resolves
-      sessionRegistry.set(id, { id, name, path: cwd ?? "", color: "var(--lilac)", branch: null });
+      sessionRegistry.set(id, { id, name, path: cwd ?? "", color, branch: null });
       // Spawn omp for this project
-      await window.__TAURI__.core.invoke("start_session", {
-        sessionId: id, cwd: cwd ?? "",
-      });
+      if (window.__TAURI__) {
+        await window.__TAURI__.core.invoke("start_session", {
+          sessionId: id, cwd: cwd ?? "",
+        });
+      }
       // Git: read initial branch and arm the HEAD watcher (fire-and-forget errors)
-      if (cwd) {
+      if (cwd && window.__TAURI__) {
         const branch = await window.__TAURI__.core
           .invoke("start_git_watch", { sessionId: id, path: cwd })
           .catch(() => null);
@@ -1128,12 +1137,12 @@
 
     /** Get application version from Tauri backend. */
     async getAppVersion() {
-      if (!window.__TAURI__) return "0.2.0";
+      if (!window.__TAURI__) return "0.2.1";
       try {
         return await window.__TAURI__.core.invoke("get_app_version");
       } catch (err) {
         console.error("[live] getAppVersion error:", err);
-        return "0.2.0";
+        return "0.2.1";
       }
     },
 
@@ -1177,18 +1186,19 @@
       if (gitUnlisten) { gitUnlisten(); gitListeners.delete(id); }
       sessionRegistry.delete(id);
       sessionSnapshots.delete(id);
+      // If no sessions remain, immediately reset and create a clean default "PiDesk" session
+      if (sessionRegistry.size === 0) {
+        for (const ul of activeListeners) { try { await ul(); } catch (_) {} }
+        activeListeners = [];
+        activeSessionId = null;
+        _resetSessionVars();
+        await this.openSession(null);
+        return;
+      }
+
       if (id === activeSessionId) {
         const remaining = [...sessionRegistry.keys()];
-        if (remaining.length > 0) {
-          await _switchToSession(remaining[remaining.length - 1]);
-        } else {
-          // No sessions left — reset to empty state
-          for (const ul of activeListeners) { try { await ul(); } catch (_) {} }
-          activeListeners = [];
-          activeSessionId = null;
-          _resetSessionVars();
-          notify();
-        }
+        await _switchToSession(remaining[remaining.length - 1]);
       } else {
         notify(); // tab list changed
       }
@@ -1229,7 +1239,7 @@
 
     // Register the "default" session that lib.rs::setup already started
     sessionRegistry.set("default", {
-      id: "default", name: "OMP Desktop", path: "", color: "var(--accent)", branch: null,
+      id: "default", name: "PiDesk", path: "", color: "var(--accent)", branch: null,
     });
 
     // Activate it — registers listener + fetches initial state
@@ -1242,7 +1252,7 @@
     }
 
     window.__TAURI__.core.invoke("get_app_version")
-      .then(v => { window.OMP_APP_VERSION = v; })
+      .then(v => { window.PIDESK_APP_VERSION = v; window.OMP_APP_VERSION = v; })
       .catch(() => {});
 
     console.log("[live] Tauri multi-session mode active");

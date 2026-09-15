@@ -4,17 +4,44 @@
 
 const { Icon } = window;
 
+// ── Model vision capability detection ──────────────────────────────────
+function modelSupportsImages(m) {
+  if (!m) return false;
+  if (Array.isArray(m.input)) {
+    return m.input.includes("image");
+  }
+  const id = (m.id || "").toLowerCase();
+  const name = (m.name || "").toLowerCase();
+  return (
+    id.includes("claude-3") || id.includes("claude-4") || id.includes("claude-sonnet") ||
+    id.includes("claude-opus") || id.includes("claude-haiku") || id.includes("gpt-4o") ||
+    id.includes("gemini") || id.includes("vision") || id.includes("vl") ||
+    name.includes("vision") || name.includes("gpt-4o") || name.includes("gemini")
+  );
+}
+
 // ── The composer (input + plan/steer modes + send) ────────────────────
 function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenModel, currentModel, thinking, onCycleThinking, isStreaming, onAbort, onApprove, annotationCount = 0, microcopy }) {
-  const [text, setText]       = React.useState("");
-  const [activeIdx, setActiveIdx] = React.useState(0);
-  const taRef   = React.useRef(null);
-  const listRef = React.useRef(null);
+  const [text, setText]             = React.useState("");
+  const [activeIdx, setActiveIdx]   = React.useState(0);
+  const [images, setImages]         = React.useState([]);
+  const [modelWarning, setModelWarning] = React.useState(null);
+  const taRef        = React.useRef(null);
+  const listRef      = React.useRef(null);
+  const fileInputRef = React.useRef(null);
   // paste blocks: id → raw content; collapsed in textarea as [paste #N +K lines]
   const pasteBlocksRef   = React.useRef(new Map());
   const pasteCounterRef  = React.useRef(0);
 
   const cmds = window.OMP_DATA?.commands || [];
+  const supportsImages = React.useMemo(() => modelSupportsImages(currentModel), [currentModel]);
+
+  // Clear warning if user switches to a model that supports vision
+  React.useEffect(() => {
+    if (supportsImages && modelWarning) {
+      setModelWarning(null);
+    }
+  }, [supportsImages, modelWarning]);
 
   // Derive slash state inline — no useEffect, no stale flicker
   const slashQ = text.startsWith("/") ? text.slice(1).split(" ")[0].toLowerCase() : null;
@@ -58,21 +85,80 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
     txt.replace(/\[paste #(\d+) \+\d+ lines?\]/g, (match, id) =>
       pasteBlocksRef.current.get(Number(id)) ?? match);
 
+  const handleFiles = (fileList) => {
+    if (!fileList || fileList.length === 0) return;
+    const valid = Array.from(fileList).filter(f => f.type && f.type.startsWith("image/"));
+    if (valid.length === 0) {
+      alert("Please select valid image files (PNG, JPG, JPEG, WEBP, GIF).");
+      return;
+    }
+
+    valid.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target.result;
+        const base64Data = typeof dataUrl === "string" && dataUrl.includes(",")
+          ? dataUrl.split(",")[1]
+          : dataUrl;
+        setImages(prev => [
+          ...prev,
+          {
+            id: 'img_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+            name: file.name || "image.png",
+            size: file.size,
+            mimeType: file.type || "image/png",
+            dataUrl,
+            data: base64Data,
+          }
+        ]);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    if (!supportsImages) {
+      setModelWarning(`Current model "${currentModel?.name || currentModel?.id || "model"}" does not support image input. Please switch to a vision-capable model (e.g. Claude 3.5/3.7 Sonnet).`);
+    }
+  };
+
   const send = () => {
     // If the slash popup is open, Enter executes the highlighted command
     if (showSlash) { execCmd(filtered[clampedIdx]); return; }
-    const canSend = text.trim() || (planMode && annotationCount > 0);
+    const canSend = text.trim() || images.length > 0 || (planMode && annotationCount > 0);
     if (!canSend) return;
-    onSend(expandPastes(text.trim()));
+
+    if (!supportsImages && images.length > 0) {
+      setModelWarning(`Current model "${currentModel?.name || currentModel?.id || "model"}" does not support image input. Please switch models or remove the image before sending.`);
+      return;
+    }
+
+    const payloadImages = images.map(img => ({
+      type: "image",
+      data: img.data,
+      mimeType: img.mimeType,
+    }));
+
+    onSend(expandPastes(text.trim()), payloadImages);
     setText("");
+    setImages([]);
+    setModelWarning(null);
     pasteBlocksRef.current.clear();
     pasteCounterRef.current = 0;
     requestAnimationFrame(() => taRef.current?.focus());
   };
 
   // Collapse long pastes into a token so the textarea stays navigable.
-  // Threshold: more than 5 lines OR more than 500 characters.
+  // Intercept images from clipboard (e.g. Win+Shift+S / screenshots).
   const onPaste = (e) => {
+    const items = e.clipboardData?.items;
+    if (items) {
+      const imageItems = Array.from(items).filter(item => item.type && item.type.startsWith("image/"));
+      if (imageItems.length > 0) {
+        e.preventDefault();
+        const files = imageItems.map(it => it.getAsFile()).filter(Boolean);
+        handleFiles(files);
+        return;
+      }
+    }
     const raw = e.clipboardData?.getData("text/plain") ?? "";
     const lines = raw.split("\n");
     if (lines.length <= 5 && raw.length <= 500) return; // short — let browser handle normally
@@ -105,8 +191,27 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
     if (e.key === "k" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); onOpenCmd(); }
   };
 
+  const hasAttachments = images.length > 0;
+  const showWarningBanner = !!(modelWarning || (!supportsImages && hasAttachments));
+
   return (
-    <div className={`composer ${planMode ? "plan-on" : ""}`}>
+    <div
+      className={`composer ${planMode ? "plan-on" : ""}`}
+      onDragOver={(e) => {
+        if (e.dataTransfer?.types?.includes("Files")) {
+          e.preventDefault();
+        }
+      }}
+      onDrop={(e) => {
+        if (e.dataTransfer?.files?.length > 0) {
+          const imageFiles = Array.from(e.dataTransfer.files).filter(f => f.type && f.type.startsWith("image/"));
+          if (imageFiles.length > 0) {
+            e.preventDefault();
+            handleFiles(imageFiles);
+          }
+        }
+      }}
+    >
       {planMode && (
         <div className="plan-strip">
           <Icon name="plan" size={12} color="var(--amber)" />
@@ -132,11 +237,96 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
         </div>
       )}
 
+      {/* Model vision warning banner */}
+      {showWarningBanner && (
+        <div className="composer-model-warning">
+          <Icon name="warn" size={13} color="var(--amber)" />
+          <span className="warning-text">
+            {modelWarning || `Current model "${currentModel?.name || currentModel?.id || "model"}" does not support image input. Consider switching models.`}
+          </span>
+          <button type="button" className="btn ghost warning-action" onClick={onOpenModel}>
+            <Icon name="bolt" size={11} color="var(--amber)" />
+            switch model
+          </button>
+          {!supportsImages && images.length === 0 && (
+            <button
+              type="button"
+              className="btn ghost warning-action"
+              style={{ color: "var(--fg-3)" }}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              upload anyway
+            </button>
+          )}
+          <button
+            type="button"
+            className="btn icon ghost warning-close"
+            onClick={() => setModelWarning(null)}
+            title="dismiss"
+          >
+            <Icon name="close" size={10} />
+          </button>
+        </div>
+      )}
+
+      {/* Attached images preview strip */}
+      {hasAttachments && (
+        <div className="composer-attachments">
+          {images.map(img => (
+            <div key={img.id} className="composer-thumb-wrap" title={`${img.name} (${Math.round(img.size / 1024)} KB)`}>
+              <img src={img.dataUrl} alt={img.name} className="composer-thumb" />
+              <button
+                type="button"
+                className="composer-thumb-remove"
+                title="remove image"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setImages(prev => prev.filter(item => item.id !== img.id));
+                }}
+              >
+                <Icon name="close" size={9} />
+              </button>
+              <span className="composer-thumb-size mono">{Math.round(img.size / 1024)}k</span>
+            </div>
+          ))}
+          <button
+            type="button"
+            className="composer-add-more"
+            title="add more images"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Icon name="plus" size={12} />
+          </button>
+        </div>
+      )}
+
       <div className="composer-row">
-        <button className="btn icon ghost" title="attach image">
-          <Icon name="image" size={13} />
+        <button
+          type="button"
+          className={`btn icon ghost ${!supportsImages ? "unsupported-vision" : ""}`}
+          title={supportsImages ? "attach image (paste screenshot or drag & drop)" : `Current model "${currentModel?.name || ""}" does not support images (click to switch)`}
+          onClick={() => {
+            if (!supportsImages) {
+              setModelWarning(`Current model "${currentModel?.name || currentModel?.id || "model"}" does not support image input. Please switch to a vision-capable model (e.g. Claude 3.5/3.7 Sonnet).`);
+            } else {
+              fileInputRef.current?.click();
+            }
+          }}
+        >
+          <Icon name="image" size={13} color={!supportsImages ? "var(--fg-4)" : "currentColor"} />
         </button>
-        <button className="btn icon ghost" title="dictate">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          multiple
+          style={{ display: "none" }}
+          onChange={(e) => {
+            handleFiles(e.target.files);
+            e.target.value = "";
+          }}
+        />
+        <button type="button" className="btn icon ghost" title="dictate">
           <Icon name="voice" size={13} />
         </button>
         <div className="composer-input">
@@ -182,7 +372,7 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
               </button>
             )}
             <button className="btn primary" onClick={send}
-              disabled={!(text.trim() || (planMode && annotationCount > 0))}>
+              disabled={!(text.trim() || images.length > 0 || (planMode && annotationCount > 0))}>
               {planMode
                 ? `send feedback${annotationCount > 0 ? ` · ${annotationCount} comment${annotationCount !== 1 ? "s" : ""}` : ""}`
                 : "send"}
@@ -316,21 +506,30 @@ function CommandBridge({
                   manage
                 </button>
               </div>
-              {modelHits.map((m) => (
-                <button key={m.id}
-                  className={`bridge-row ${m.id === currentModelId ? "active" : ""}`}
-                  onClick={() => { onPickModel(m); onClose(); }}>
-                  <span className="bridge-glyph">
-                    {m.id === currentModelId
-                      ? <Icon name="check" size={10} color="var(--accent)" />
-                      : <Icon name="bolt"  size={10} color="var(--cyan)" />}
-                  </span>
-                  <span style={{ color: m.id === currentModelId ? "var(--accent)" : "var(--fg)" }}>{m.name}</span>
-                  <span className="mono" style={{ color: "var(--fg-4)" }}>{m.id}</span>
-                  <span style={{ color: "var(--fg-3)" }}>· {m.note}</span>
-                  <span className="chip muted" style={{ marginLeft: "auto" }}>{m.latency}ms</span>
-                </button>
-              ))}
+              {modelHits.map((m) => {
+                const hasVision = modelSupportsImages(m);
+                return (
+                  <button key={m.id}
+                    className={`bridge-row ${m.id === currentModelId ? "active" : ""}`}
+                    onClick={() => { onPickModel(m); onClose(); }}>
+                    <span className="bridge-glyph">
+                      {m.id === currentModelId
+                        ? <Icon name="check" size={10} color="var(--accent)" />
+                        : <Icon name="bolt"  size={10} color="var(--cyan)" />}
+                    </span>
+                    <span style={{ color: m.id === currentModelId ? "var(--accent)" : "var(--fg)" }}>{m.name}</span>
+                    <span className="mono" style={{ color: "var(--fg-4)" }}>{m.id}</span>
+                    <span style={{ color: "var(--fg-3)" }}>· {m.note}</span>
+                    {hasVision && (
+                      <span className="chip" style={{ color: "var(--cyan)", borderColor: "color-mix(in oklab, var(--cyan) 30%, transparent)", fontSize: "10px", padding: "1px 5px", display: "inline-flex", alignItems: "center", gap: 3 }}>
+                        <Icon name="image" size={9} color="var(--cyan)" />
+                        vision
+                      </span>
+                    )}
+                    <span className="chip muted" style={{ marginLeft: "auto" }}>{m.latency}ms</span>
+                  </button>
+                );
+              })}
               {modelHits.length === 0 && <div className="bridge-empty">no models found</div>}
             </div>
           </div>

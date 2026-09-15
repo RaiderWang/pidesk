@@ -23,7 +23,7 @@
   }/*EDITMODE-END*/;
 
   const NULL_MODEL    = { id: "", name: "–", provider: "", note: "", latency: 0, current: false };
-  const EMPTY_PROJECT = { id: "", name: "OMP Desktop", path: "", color: "var(--accent)", branch: "" };
+  const EMPTY_PROJECT = { id: "", name: "PiDesk", path: "", color: "var(--accent)", branch: "" };
   const NULL_PEER     = { project: "—", title: "no peer session", activity: "edit · idle", tps: 0, todo: { done: 0, total: 1 } };
 
   const INTENT_FRAMING = (intent) =>

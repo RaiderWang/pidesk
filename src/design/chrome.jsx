@@ -57,20 +57,54 @@ function WindowChrome({ project, peer, onCmd }) {
 }
 
 // ── Project tabs ─────────────────────────────────────────────────────
-function TabBar({ projects, activeId, onSelect, onClose, peer, onNew, onHistory, onManageModels, appVersion, theme }) {
-  const version = appVersion || window.OMP_APP_VERSION || "0.2.0";
+function TabBar({ projects, activeId, onSelect, onClose, peer, onNew, onNewProject, onNewStandalone, onHistory, onManageModels, appVersion, theme }) {
+  const version = appVersion || window.PIDESK_APP_VERSION || window.OMP_APP_VERSION || "0.2.1";
   const themeName = theme || "aurora";
   const versionLabel = `v${version}-${themeName}`;
+
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const menuRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!menuOpen) return;
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [menuOpen]);
+
+  const handleOpenFolder = () => {
+    setMenuOpen(false);
+    (onNewProject || onNew)?.();
+  };
+
+  const handleOpenStandalone = () => {
+    setMenuOpen(false);
+    onNewStandalone?.();
+  };
+
   return (
     <div className="tabs">
       {projects.map((p) => {
         const active = p.id === activeId;
+        const hasPath = Boolean(p.path && p.path.trim());
+        const tabIcon = hasPath ? "folder" : "agent";
         return (
           <div key={p.id}
             className={`tab ${active ? "active" : ""}`}
             onClick={() => onSelect(p.id)}>
             <span className="tab-bar-mark" style={{ background: active ? p.color : "transparent" }} />
-            <Icon name="folder" size={11} color={active ? p.color : "var(--fg-4)"} />
+            <Icon name={tabIcon} size={11} color={active ? p.color : "var(--fg-4)"} />
             <span className="tab-name">{p.name}</span>
             {p.id === peer?.projectId && (
               <span className="chip accent" style={{ padding: "1px 6px" }}>split</span>
@@ -79,9 +113,35 @@ function TabBar({ projects, activeId, onSelect, onClose, peer, onNew, onHistory,
           </div>
         );
       })}
-      <button className="tab-add" title="open project" onClick={onNew}>
-        <Icon name="plus" size={11} />
-      </button>
+      <div className="tab-add-wrap" ref={menuRef}>
+        <button
+          className={`tab-add ${menuOpen ? "active" : ""}`}
+          title="New session / Open project"
+          onClick={() => setMenuOpen(v => !v)}
+        >
+          <Icon name="plus" size={11} />
+        </button>
+        {menuOpen && (
+          <div className="tab-dropdown-menu">
+            <button
+              className="tab-dropdown-item"
+              onClick={handleOpenFolder}
+            >
+              <Icon name="folder" size={12} color="var(--accent)" />
+              <span className="tab-dropdown-label">Open Project Folder...</span>
+              <span className="tab-dropdown-hotkey">Ctrl+O</span>
+            </button>
+            <button
+              className="tab-dropdown-item"
+              onClick={handleOpenStandalone}
+            >
+              <Icon name="agent" size={12} color="var(--lilac)" />
+              <span className="tab-dropdown-label">New Session (No Project)</span>
+              <span className="tab-dropdown-hotkey">Ctrl+T</span>
+            </button>
+          </div>
+        )}
+      </div>
       <button className="tab-add" title="conversation history (Ctrl+H)" onClick={onHistory}>
         <Icon name="clock" size={11} />
       </button>
@@ -90,7 +150,7 @@ function TabBar({ projects, activeId, onSelect, onClose, peer, onNew, onHistory,
       </button>
       <div style={{ flex: 1 }} />
       <div className="tabs-right mono">
-        <span style={{ color: "var(--fg-4)" }} title={`OMP Desktop v${version}`}>{versionLabel}</span>
+        <span style={{ color: "var(--fg-4)" }} title={`PiDesk v${version}`}>{versionLabel}</span>
       </div>
     </div>
   );

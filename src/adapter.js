@@ -348,10 +348,15 @@
 
       if (role === "user") {
         const textBlocks = blocks.filter(b => b.type === "text");
-        if (textBlocks.length === 0) continue;  // skip pure tool-result turns
+        const imageBlocks = blocks.filter(b => b.type === "image");
+        if (textBlocks.length === 0 && imageBlocks.length === 0) continue;  // skip pure tool-result turns
         const text = textBlocks.map(b => b.text).join("\n").trim();
-        if (!text) continue;
-        result.push({ kind: "user", time, text });
+        const images = imageBlocks.map(b => ({
+          type: "image",
+          data: b.data,
+          mimeType: b.mimeType || "image/png",
+        }));
+        result.push({ kind: "user", time, text, images });
 
       } else if (role === "assistant") {
         let thought = null;

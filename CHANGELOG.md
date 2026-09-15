@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-15
+
+### Added
+
+- Multi-modal image attachment support in composer (paste & file upload) with preview chips
+- Dropdown menu for session creation: open project folder (`Ctrl+O`) or start standalone session (`Ctrl+T`)
+- Model input capability detection and multi-modal handling
+
+### Changed
+
+- Rebranded project to PiDesk as an independent desktop shell for oh-my-pi
+- Updated application bundle identifier to `com.raiderwang.pidesk` and package name to `pidesk`
+- Automated GitHub Actions release pipeline configured to build and publish PiDesk releases
+
 ## [0.2.0] - 2026-09-14
 
 ### Added

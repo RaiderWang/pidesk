@@ -20,6 +20,13 @@
     if (s === "null" || s === "~") return null;
     if (/^-?\d+$/.test(s)) return parseInt(s, 10);
     if (/^-?\d+\.\d+$/.test(s)) return parseFloat(s);
+    if (s.startsWith("[") && s.endsWith("]")) {
+      try {
+        return JSON.parse(s);
+      } catch {
+        return s.slice(1, -1).split(",").map(x => x.trim().replace(/^['"]|['"]$/g, "")).filter(Boolean);
+      }
+    }
     return s;
   }
 
@@ -60,6 +67,7 @@
     let curProvider = null;
     let inModelsList = false;
     let curModel = null;
+    let curModelPropList = null;
 
     for (let i = 0; i < lines.length; i++) {
       let line = lines[i];
@@ -85,6 +93,7 @@
         curProvider = null;
         inModelsList = false;
         curModel = null;
+        curModelPropList = null;
         continue;
       }
 
@@ -103,6 +112,7 @@
           }
           inModelsList = false;
           curModel = null;
+          curModelPropList = null;
           continue;
         }
       }
@@ -115,13 +125,24 @@
         if (trimmed === "models:" || trimmed.startsWith("models:")) {
           inModelsList = true;
           curModel = null;
+          curModelPropList = null;
           continue;
         }
 
         // Inside models list:
         if (inModelsList) {
+          // Sub-item in a multiline list under current model (e.g. "          - image" under "input:")
+          if (curModel && curModelPropList && trimmed.startsWith("-") && indent > 6) {
+            const itemVal = parseScalar(trimmed.slice(1).trim());
+            if (Array.isArray(curModel[curModelPropList])) {
+              curModel[curModelPropList].push(itemVal);
+            }
+            continue;
+          }
+
           // New model entry starts with "- id:" or "-"
           if (trimmed.startsWith("-")) {
+            curModelPropList = null;
             curModel = {
               id: "",
               name: "",
@@ -146,8 +167,14 @@
           if (curModel && trimmed.includes(":")) {
             const colonIdx = trimmed.indexOf(":");
             const k = trimmed.slice(0, colonIdx).trim();
-            const v = parseScalar(trimmed.slice(colonIdx + 1).trim());
-            curModel[k] = v;
+            const restVal = trimmed.slice(colonIdx + 1).trim();
+            if (restVal === "") {
+              curModelPropList = k;
+              curModel[k] = [];
+            } else {
+              curModelPropList = null;
+              curModel[k] = parseScalar(restVal);
+            }
             continue;
           }
         }
@@ -218,9 +245,13 @@
           if (m.reasoning !== undefined && m.reasoning !== null) {
             lines.push(`        reasoning: ${m.reasoning ? "true" : "false"}`);
           }
+          if (m.input !== undefined && m.input !== null) {
+            const arr = Array.isArray(m.input) ? m.input : [String(m.input)];
+            lines.push(`        input: ${JSON.stringify(arr)}`);
+          }
           // Preserve any extra model keys
           for (const [mk, mv] of Object.entries(m)) {
-            if (!["id", "name", "contextWindow", "maxTokens", "reasoning"].includes(mk) && typeof mv !== "object") {
+            if (!["id", "name", "contextWindow", "maxTokens", "reasoning", "input"].includes(mk) && typeof mv !== "object") {
               lines.push(`        ${mk}: ${formatScalar(mv)}`);
             }
           }

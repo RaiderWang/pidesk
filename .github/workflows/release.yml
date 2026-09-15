@@ -128,9 +128,9 @@ jobs:
           # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           tagName: ${{ github.ref_name || inputs.tag }}
-          releaseName: 'omp-desktop ${{ github.ref_name || inputs.tag }}'
+          releaseName: 'PiDesk ${{ github.ref_name || inputs.tag }}'
           releaseBody: |
-            ## omp-desktop ${{ github.ref_name || inputs.tag }}
+            ## PiDesk ${{ github.ref_name || inputs.tag }}
 
             ### Installation
             | Platform | File |
@@ -145,6 +145,6 @@ jobs:
             ### Requirements
             - [oh-my-pi](https://github.com/can1357/oh-my-pi) (`omp`) must be installed
               and available on your `PATH`.
-          releaseDraft: true        # publish manually after reviewing artefacts
+          releaseDraft: false
           prerelease: ${{ contains(github.ref_name || inputs.tag, '-') }}
           args: ${{ matrix.args }}

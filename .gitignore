@@ -37,6 +37,7 @@ desktop.ini
 
 # Agent-internal plans and superpowers docs (never commit)
 docs/superpowers/
+.agents/
 
 # ── Nucleus MCP index (local tool state) ─────────────────────────────────────
 .nucleus/
