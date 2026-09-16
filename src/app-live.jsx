@@ -379,8 +379,8 @@ function App() {
               { label: "daylight", value: "daylight" },
             ]}
             onChange={v => setTweak({ theme: v, accent:
-              v === "aurora"   ? "#8AF0C8" :
-              v === "phosphor" ? "#C4FF3F" : "#1F8A5B"
+              v === "aurora"   ? "#78E8BE" :
+              v === "phosphor" ? "#39E557" : "#1F8A5B"
             })}
           />
           <TweakRadio label="density" value={t.density}
@@ -392,7 +392,7 @@ function App() {
             onChange={v => setTweak("density", v)}
           />
           <TweakColor label="accent" value={t.accent}
-            options={["#8AF0C8", "#6EE7FF", "#FF7AC6", "#FFC56E", "#B59BFF", "#C4FF3F"]}
+            options={["#78E8BE", "#39E557", "#1F8A5B", "#6EE7FF", "#FF7AC6", "#FFC56E", "#B59BFF"]}
             onChange={v => setTweak("accent", v)}
           />
           <TweakToggle label="mono chat font" value={t.monoChat}

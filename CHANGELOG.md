@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-09-16
+
+### Added
+
+- Enhanced Ollama custom model compatibility, auto-detection, and round-trip YAML persistence (`~/.pi/agent/models.yml`)
+- Improved model switch error feedback with actionable troubleshooting guidance directly in chat
+- Suppressed native browser context menu and page reload shortcuts (`F5`, `Ctrl+R` / `Cmd+R`) for clean desktop app behavior
+
+### Changed
+
+- Polished Daylight theme styling with refined mint/teal/green accents and improved visual hierarchy
+- Refined chat layout, bubbles, tab bar version badges, and typography across panels
+- Optimized model merging logic between built-in provider configurations and custom models
+
 ## [0.2.1] - 2026-09-15
 
 ### Added

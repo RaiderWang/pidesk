@@ -367,7 +367,20 @@
       notify();
       return;
     }
-    if (!resp.success) return;
+    if (!resp.success) {
+      if (resp.command === "set_model") {
+        console.warn("[live] set_model failed:", resp.error);
+        const errMsg = resp.error || "Failed to switch model";
+        state.messages = [...state.messages, {
+          kind: "assistant",
+          time: timeNow(),
+          text: `⚠️ **Model Switch Failed:** ${errMsg}\n\n*Note: If this is a newly added custom model in \`models.yml\`, please open a new tab or restart the session to allow the backend agent to reload the configuration.*`,
+          completed: true,
+        }];
+        notify();
+      }
+      return;
+    }
     const { command, data } = resp;
 
     if (command === "get_state") {
@@ -862,23 +875,24 @@
     }
   }
 
-  function _mergeModels(baseList, { customModels, customProviders }) {
-    const customIds = new Set((customModels || []).map(m => m.id));
-    // Filter out obsolete models that belong to defined custom providers
-    const retained = (baseList || []).filter(m => {
-      if (customProviders && customProviders.has(m.provider)) {
-        return customIds.has(m.id);
+  function _mergeModels(baseList, { customModels }) {
+    const modelKey = m => `${m.provider || ""}/${m.id || ""}`;
+    const customMap = new Map((customModels || []).map(m => [modelKey(m), m]));
+
+    // Retain all base models (including OAuth & builtins), enriching matching ones with custom metadata
+    const merged = (baseList || []).map(m => {
+      const key = modelKey(m);
+      if (customMap.has(key)) {
+        const custom = customMap.get(key);
+        customMap.delete(key);
+        return { ...m, ...custom };
       }
-      return true;
+      return m;
     });
 
-    const retainedIds = new Set(retained.map(m => m.id));
-    const merged = [...retained];
-    for (const cm of (customModels || [])) {
-      if (!retainedIds.has(cm.id)) {
-        merged.push(cm);
-        retainedIds.add(cm.id);
-      }
+    // Append any additional custom models not present in baseList
+    for (const cm of customMap.values()) {
+      merged.push(cm);
     }
     return merged;
   }
@@ -1137,12 +1151,12 @@
 
     /** Get application version from Tauri backend. */
     async getAppVersion() {
-      if (!window.__TAURI__) return "0.2.1";
+      if (!window.__TAURI__) return "0.2.2";
       try {
         return await window.__TAURI__.core.invoke("get_app_version");
       } catch (err) {
         console.error("[live] getAppVersion error:", err);
-        return "0.2.1";
+        return "0.2.2";
       }
     },
 

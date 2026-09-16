@@ -6,18 +6,19 @@
 
 :root {
   /* type */
-  --font-sans: "Geist", "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
-  --font-mono: "JetBrains Mono", "Berkeley Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  --font-display: "Geist", "Inter", -apple-system, sans-serif;
+  --font-sans: "Geist", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Micro Hei", sans-serif;
+  --font-mono: "JetBrains Mono", "Berkeley Mono", ui-monospace, "SF Mono", "Cascadia Code", "Consolas", Menlo, monospace;
+  --font-display: "Geist", "Inter", -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
 
-  /* density (overridden by .density-* on root) */
-  --d-row: 28px;
+  /* density (overridden by .density-* on root) — baseline scaled up by one tier */
+  --d-row: 30px;
   --d-pad: 14px;
   --d-gap: 10px;
-  --d-text:    0.8125rem;
-  --d-text-sm: 0.7188rem;
-  --d-text-xs: 0.6563rem;
-  --d-text-lg: 0.9063rem;
+  --d-text:    0.9063rem; /* ~14.5px standard body (up from 13px) */
+  --d-text-sm: 0.8125rem; /* ~13px subtext/labels (up from 11.5px) */
+  --d-text-xs: 0.75rem;   /* 12px captions/chips (up from 10.5px) */
+  --d-text-lg: 1.0rem;    /* 16px section headers (up from 14.5px) */
+  --d-text-xl: 1.125rem;  /* 18px modal/page headers */
   --d-leading: 1.55;
 
   /* radius / shadow */
@@ -34,104 +35,8 @@
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* ── Aurora (dark) ─────────────────────────────────────────────────────── */
-.theme-aurora {
-  --bg-app: #060709;
-  --bg-window: #0B0D14;
-  --bg-surface: #11141D;
-  --bg-elevated: #161A27;
-  --bg-input: #0D1019;
-  --bg-hover: #1A1F2E;
-  --bg-active: #20263A;
-
-  --line: #1C2030;
-  --line-soft: #161A27;
-  --line-bright: #2A3045;
-
-  --fg: #E6E9F2;
-  --fg-2: #B7BDD0;
-  --fg-3: #7B8298;
-  --fg-4: #545A70;
-  --fg-5: #393E54;
-
-  --accent: #8AF0C8;            /* liquid mint */
-  --accent-deep: #2BD49A;
-  --accent-soft: rgba(138, 240, 200, 0.12);
-  --accent-glow: rgba(138, 240, 200, 0.45);
-
-  --magenta: #FF7AC6;
-  --cyan: #6EE7FF;
-  --amber: #FFC56E;
-  --lilac: #B59BFF;
-  --rose: #FF8896;
-  --lime: #C4FF6E;
-
-  --syntax-comment: #5C6480;
-  --syntax-key: #B59BFF;
-  --syntax-str: #8AF0C8;
-  --syntax-num: #FFC56E;
-  --syntax-fn: #6EE7FF;
-  --syntax-tag: #FF7AC6;
-
-  --diff-add-bg: rgba(138, 240, 200, 0.10);
-  --diff-add-fg: #8AF0C8;
-  --diff-rm-bg: rgba(255, 136, 150, 0.08);
-  --diff-rm-fg: #FF8896;
-
-  --grain-opacity: 0.03;
-  color-scheme: dark;
-}
-
-/* ── Phosphor (terminal CRT) ───────────────────────────────────────────── */
-.theme-phosphor {
-  --bg-app: #000000;
-  --bg-window: #050807;
-  --bg-surface: #07100A;
-  --bg-elevated: #0B1A12;
-  --bg-input: #04090A;
-  --bg-hover: #0F2218;
-  --bg-active: #143025;
-
-  --line: #143020;
-  --line-soft: #0E2017;
-  --line-bright: #1F4632;
-
-  --fg: #B5FF8A;
-  --fg-2: #7CD968;
-  --fg-3: #4F9C49;
-  --fg-4: #386B36;
-  --fg-5: #244524;
-
-  --accent: #C4FF3F;
-  --accent-deep: #9DE21A;
-  --accent-soft: rgba(196, 255, 63, 0.14);
-  --accent-glow: rgba(196, 255, 63, 0.5);
-
-  --magenta: #FF6EAA;
-  --cyan: #58F0E0;
-  --amber: #FFD24A;
-  --lilac: #A98EFF;
-  --rose: #FF8A6E;
-  --lime: #C4FF3F;
-
-  --syntax-comment: #3F7437;
-  --syntax-key: #FFD24A;
-  --syntax-str: #C4FF3F;
-  --syntax-num: #FF6EAA;
-  --syntax-fn: #58F0E0;
-  --syntax-tag: #A98EFF;
-
-  --diff-add-bg: rgba(196, 255, 63, 0.10);
-  --diff-add-fg: #C4FF3F;
-  --diff-rm-bg: rgba(255, 110, 170, 0.08);
-  --diff-rm-fg: #FF6EAA;
-
-  --grain-opacity: 0.06;
-  color-scheme: dark;
-}
-
 /* ── Daylight (default light) ──────────────────────────────────────────── */
-:root, .theme-daylight {
+:root, :root.theme-daylight, .theme-daylight {
   --bg-app: #E5E2D9;
   --bg-window: #F6F3EB;
   --bg-surface: #FFFFFF;
@@ -178,35 +83,134 @@
   color-scheme: light;
 }
 
+/* ── Aurora (modern dark gray) ─────────────────────────────────────────── */
+:root.theme-aurora, .theme-aurora {
+  --bg-app: #18191c;            /* comfortable dark gray background */
+  --bg-window: #1e2025;         /* neutral dark gray window */
+  --bg-surface: #25282e;        /* cards / surfaces */
+  --bg-elevated: #2c3038;       /* popovers / elevated panels */
+  --bg-input: #191b20;          /* inputs / textareas */
+  --bg-hover: #2f333c;
+  --bg-active: #383c47;
+
+  --line: #333742;
+  --line-soft: #282b33;
+  --line-bright: #444957;
+
+  --fg: #F0F2F7;
+  --fg-2: #C5CAD6;
+  --fg-3: #8A92A3;
+  --fg-4: #5D6474;
+  --fg-5: #3E4452;
+
+  --accent: #78E8BE;            /* liquid aurora mint */
+  --accent-deep: #25CF93;
+  --accent-soft: rgba(120, 232, 190, 0.14);
+  --accent-glow: rgba(120, 232, 190, 0.45);
+
+  --magenta: #FF7AC6;
+  --cyan: #6EE7FF;
+  --amber: #FFC56E;
+  --lilac: #B59BFF;
+  --rose: #FF8896;
+  --lime: #C4FF6E;
+
+  --syntax-comment: #6B7288;
+  --syntax-key: #B59BFF;
+  --syntax-str: #78E8BE;
+  --syntax-num: #FFC56E;
+  --syntax-fn: #6EE7FF;
+  --syntax-tag: #FF7AC6;
+
+  --diff-add-bg: rgba(120, 232, 190, 0.12);
+  --diff-add-fg: #78E8BE;
+  --diff-rm-bg: rgba(255, 136, 150, 0.10);
+  --diff-rm-fg: #FF8896;
+
+  --grain-opacity: 0.03;
+  color-scheme: dark;
+}
+
+/* ── Phosphor (modern clean terminal dark) ─────────────────────────────── */
+:root.theme-phosphor, .theme-phosphor {
+  --bg-app: #080c09;            /* deep phosphor night */
+  --bg-window: #0c120e;         /* dark terminal window */
+  --bg-surface: #101913;        /* cards */
+  --bg-elevated: #16221a;       /* elevated cards */
+  --bg-input: #0a0f0b;
+  --bg-hover: #1b2a20;
+  --bg-active: #23372a;
+
+  --line: #1d3324;
+  --line-soft: #14241a;
+  --line-bright: #2b4c36;
+
+  --fg: #C4F7A1;
+  --fg-2: #8FE368;
+  --fg-3: #5EA847;
+  --fg-4: #3F7332;
+  --fg-5: #274720;
+
+  --accent: #39E557;            /* crisp phosphor green */
+  --accent-deep: #22C55E;
+  --accent-soft: rgba(57, 229, 87, 0.14);
+  --accent-glow: rgba(57, 229, 87, 0.45);
+
+  --magenta: #FF6EAA;
+  --cyan: #58F0E0;
+  --amber: #FFD24A;
+  --lilac: #A98EFF;
+  --rose: #FF8A6E;
+  --lime: #39E557;
+
+  --syntax-comment: #43773b;
+  --syntax-key: #FFD24A;
+  --syntax-str: #39E557;
+  --syntax-num: #FF6EAA;
+  --syntax-fn: #58F0E0;
+  --syntax-tag: #A98EFF;
+
+  --diff-add-bg: rgba(57, 229, 87, 0.12);
+  --diff-add-fg: #39E557;
+  --diff-rm-bg: rgba(255, 110, 170, 0.10);
+  --diff-rm-fg: #FF6EAA;
+
+  --grain-opacity: 0.04;
+  color-scheme: dark;
+}
+
 /* ── Density ──────────────────────────────────────────────────────────── */
 .density-cozy {
-  --d-row: 32px;
+  --d-row: 34px;
   --d-pad: 18px;
   --d-gap: 12px;
-  --d-text:    0.8438rem;
-  --d-text-sm: 0.75rem;
-  --d-text-xs: 0.6563rem;
-  --d-text-lg: 0.9375rem;
+  --d-text:    0.9688rem; /* ~15.5px */
+  --d-text-sm: 0.875rem;  /* 14px */
+  --d-text-xs: 0.7813rem; /* 12.5px */
+  --d-text-lg: 1.0625rem; /* 17px */
+  --d-text-xl: 1.1875rem; /* 19px */
   --d-leading: 1.6;
 }
 .density-compact {
-  --d-row: 26px;
+  --d-row: 28px;
   --d-pad: 12px;
   --d-gap: 8px;
-  --d-text:    0.7813rem;
-  --d-text-sm: 0.6875rem;
-  --d-text-xs: 0.625rem;
-  --d-text-lg: 0.875rem;
+  --d-text:    0.9063rem; /* ~14.5px */
+  --d-text-sm: 0.8125rem; /* 13px */
+  --d-text-xs: 0.75rem;   /* 12px */
+  --d-text-lg: 1.0rem;    /* 16px */
+  --d-text-xl: 1.125rem;  /* 18px */
   --d-leading: 1.5;
 }
 .density-dense {
-  --d-row: 22px;
+  --d-row: 24px;
   --d-pad: 8px;
   --d-gap: 6px;
-  --d-text:    0.7188rem;
-  --d-text-sm: 0.6563rem;
-  --d-text-xs: 0.5938rem;
-  --d-text-lg: 0.8125rem;
+  --d-text:    0.8125rem; /* 13px */
+  --d-text-sm: 0.75rem;   /* 12px */
+  --d-text-xs: 0.6875rem; /* 11px */
+  --d-text-lg: 0.9063rem; /* 14.5px */
+  --d-text-xl: 1.0rem;    /* 16px */
   --d-leading: 1.45;
 }
 
@@ -249,19 +253,7 @@ input, textarea { font: inherit; color: inherit; background: transparent; border
   pointer-events: none;
 }
 
-/* ── Phosphor scan-line treatment ─────────────────────────────────────── */
-.theme-phosphor .scanlines::before {
-  content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: repeating-linear-gradient(
-    to bottom,
-    rgba(0, 0, 0, 0) 0px,
-    rgba(0, 0, 0, 0) 2px,
-    rgba(0, 0, 0, 0.18) 3px,
-    rgba(0, 0, 0, 0) 4px
-  );
-  mix-blend-mode: multiply;
-  z-index: 9;
-}
+/* ── Phosphor treatment (clean terminal glow, no scanlines) ───────────── */
 .theme-phosphor .glow-text {
   text-shadow: 0 0 6px var(--accent-glow), 0 0 1px var(--accent);
 }
@@ -347,10 +339,10 @@ input, textarea { font: inherit; color: inherit; background: transparent; border
 /* keyboard chip */
 .kbd {
   display: inline-flex; align-items: center; justify-content: center;
-  min-width: 16px; height: 16px;
+  min-width: 18px; height: 18px;
   padding: 0 4px;
   font-family: var(--font-mono);
-  font-size: 0.5938rem;
+  font-size: var(--d-text-xs);
   color: var(--fg-3);
   background: var(--bg-elevated);
   border: 1px solid var(--line);
@@ -386,7 +378,7 @@ input, textarea { font: inherit; color: inherit; background: transparent; border
 /* button base */
 .btn {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 4px 10px; height: 24px;
+  padding: 4px 10px; height: 26px;
   border-radius: var(--r-1);
   border: 1px solid transparent;
   background: transparent;
@@ -403,6 +395,7 @@ input, textarea { font: inherit; color: inherit; background: transparent; border
   font-weight: 600;
 }
 .theme-phosphor .btn.primary { color: #001000; }
+.theme-aurora .btn.primary { color: #081a14; }
 .theme-daylight .btn.primary,
 .theme-daylight .btn.primary:hover { color: #FAF7EF; }
 .btn.primary:hover { background: var(--accent-deep); border-color: var(--accent-deep); color: #06241B; }

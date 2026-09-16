@@ -58,7 +58,7 @@ function WindowChrome({ project, peer, onCmd }) {
 
 // ── Project tabs ─────────────────────────────────────────────────────
 function TabBar({ projects, activeId, onSelect, onClose, peer, onNew, onNewProject, onNewStandalone, onHistory, onManageModels, appVersion, theme }) {
-  const version = appVersion || window.PIDESK_APP_VERSION || window.OMP_APP_VERSION || "0.2.1";
+  const version = appVersion || window.PIDESK_APP_VERSION || window.OMP_APP_VERSION || "0.2.2";
   const themeName = theme || "daylight";
   const versionLabel = `v${version}-${themeName}`;
 
@@ -163,39 +163,39 @@ function StatusBar({ ctx, model, thinking, todoDone, todoTotal, onTodo, onModel,
     <div className="status">
       <span className="status-cell"><span className="dot live" /> connected</span>
       <span className="status-sep">·</span>
-      <button className="status-cell btn ghost" onClick={onModel} style={{ height: 20, padding: "0 6px" }}>
+      <button className="status-cell btn ghost" onClick={onModel} style={{ height: 22, padding: "0 6px" }}>
         <span style={{ color: "var(--accent)" }}>{model.name}</span>
         <Icon name="chev" size={9} color="var(--fg-4)" />
       </button>
       <span className="status-sep">·</span>
       <span className="status-cell"><Icon name="thinking" size={10} color="var(--lilac)" /> {thinkLabel}</span>
       <span className="status-sep">·</span>
-      <span className="status-cell mono">
+      <span className="status-cell">
         <span style={{ color: "var(--fg-3)" }}>{ctx.label}</span>
         <span className="status-bar-tube">
           <span className="status-bar-fill" style={{ width: `${ctx.pct}%` }} />
         </span>
-        <span style={{ color: "var(--fg-4)" }}>{(+ctx.pct).toFixed(1)}%</span>
+        <span className="mono" style={{ color: "var(--fg-4)" }}>{(+ctx.pct).toFixed(1)}%</span>
       </span>
       <span className="status-sep">·</span>
-      <span className="status-cell mono"><span style={{ color: "var(--fg-3)" }}>cost</span> {ctx.cost}</span>
+      <span className="status-cell"><span style={{ color: "var(--fg-3)" }}>cost</span> <span className="mono">{ctx.cost}</span></span>
       <span className="status-sep">·</span>
-      <span className="status-cell mono"><span style={{ color: "var(--fg-3)" }}>{ctx.tokensPerSec}</span> t/s</span>
+      <span className="status-cell"><span className="mono" style={{ color: "var(--fg-3)" }}>{ctx.tokensPerSec}</span> t/s</span>
       <div style={{ flex: 1 }} />
-      <button className="status-cell btn ghost" onClick={onTodo} style={{ height: 20, padding: "0 6px" }}>
+      <button className="status-cell btn ghost" onClick={onTodo} style={{ height: 22, padding: "0 6px" }}>
         <Icon name="plan" size={11} color="var(--accent)" />
-        <span style={{ color: "var(--accent)" }}>todo {todoDone}/{todoTotal}</span>
+        <span style={{ color: "var(--accent)" }}>todo <span className="mono">{todoDone}/{todoTotal}</span></span>
       </button>
       <span className="status-sep">·</span>
       <button className="status-cell btn ghost" onClick={() => onAutosave?.(!autosave)}
-        style={{ height: 20, padding: "0 6px" }} title="toggle autosave">
-        <span className="mono" style={{ color: autosave ? "var(--fg-3)" : "var(--fg-5)" }}>
+        style={{ height: 22, padding: "0 6px" }} title="toggle autosave">
+        <span style={{ color: autosave ? "var(--fg-3)" : "var(--fg-5)" }}>
           autosave {autosave ? "on" : "off"}
         </span>
       </button>
       <span className="status-sep">·</span>
-      <button className="status-cell btn ghost" onClick={onTweaks} title="tweaks" style={{ height: 20, padding: "0 6px" }}>
-        <Icon name="cog" size={11} color="var(--fg-3)" />
+      <button className="status-cell btn ghost" onClick={onTweaks} title="外观与布局调整" style={{ height: 22, padding: "0 6px" }}>
+        <Icon name="cog" size={12} color="var(--fg-3)" />
       </button>
     </div>
   );
@@ -222,7 +222,7 @@ function SessionMinimap({ messages, hoveredIdx, onHover, onClick }) {
     <div className="minimap">
       <div className="minimap-head">
         <Icon name="minimap" size={11} color="var(--fg-3)" />
-        <span className="mono" style={{ color: "var(--fg-3)" }}>session</span>
+        <span style={{ color: "var(--fg-3)", fontWeight: 500 }}>session</span>
         <span className="mono" style={{ marginLeft: "auto", color: "var(--fg-4)" }}>{messages.length}</span>
       </div>
       <div className="minimap-grid">
@@ -284,8 +284,8 @@ function PeerSession({ peer }) {
     <div className="peer">
       <div className="peer-head">
         <span className="dot live" style={{ background: "var(--cyan)", boxShadow: "0 0 0 0 var(--cyan)" }} />
-        <span className="mono" style={{ color: "var(--cyan)" }}>{peer.project}</span>
-        <span className="mono" style={{ marginLeft: "auto", color: "var(--fg-4)" }}>{peer.tps}t/s</span>
+        <span style={{ color: "var(--cyan)", fontWeight: 500 }}>{peer.project}</span>
+        <span className="mono" style={{ marginLeft: "auto", color: "var(--fg-4)" }}>{peer.tps} t/s</span>
       </div>
       <div className="peer-title selectable">{peer.title}</div>
       <div className="peer-row">
@@ -294,8 +294,8 @@ function PeerSession({ peer }) {
           {peer.activity}
         </span>
       </div>
-      <div className="peer-row mono" style={{ color: "var(--fg-3)" }}>
-        todo {peer.todo.done}/{peer.todo.total}
+      <div className="peer-row" style={{ color: "var(--fg-3)" }}>
+        todo <span className="mono">{peer.todo.done}/{peer.todo.total}</span>
         <span className="status-bar-tube" style={{ marginLeft: 6, flex: 1 }}>
           <span className="status-bar-fill" style={{ width: `${(peer.todo.done / peer.todo.total) * 100}%`, background: "var(--cyan)" }} />
         </span>
@@ -315,7 +315,7 @@ function AmbientRail({ ctx, activity, peer, messages, microcopy, onClose, sparkl
   return (
     <aside className="rail">
       <div className="rail-head">
-        <span className="mono" style={{ color: "var(--fg-3)" }}>ambient</span>
+        <span style={{ color: "var(--fg-3)" }}>ambient</span>
         <button className="btn icon ghost" onClick={onClose} title="hide rail">
           <Icon name="close" size={10} />
         </button>
@@ -326,9 +326,9 @@ function AmbientRail({ ctx, activity, peer, messages, microcopy, onClose, sparkl
           label={ctx.label} sub={`cost ${ctx.cost} · ${ctx.tokensPerSec} t/s`} />
         <div className="rail-spark">
           <Sparkline values={sparkVals} width={210} height={28} />
-          <div className="rail-spark-foot mono">
+          <div className="rail-spark-foot">
             <span style={{ color: "var(--fg-4)" }}>throughput</span>
-            <span style={{ color: "var(--accent)" }}>{ctx.tokensPerSec} t/s</span>
+            <span className="mono" style={{ color: "var(--accent)" }}>{ctx.tokensPerSec} t/s</span>
           </div>
         </div>
       </div>
@@ -336,8 +336,8 @@ function AmbientRail({ ctx, activity, peer, messages, microcopy, onClose, sparkl
       <div className="rail-card glass">
         <div className="rail-card-head">
           <Icon name="radar" size={11} color="var(--accent)" />
-          <span className="mono" style={{ color: "var(--fg-2)" }}>agent radar</span>
-          <span className="chip muted mono" style={{ marginLeft: "auto" }}>last 60s</span>
+          <span style={{ color: "var(--fg-2)" }}>agent radar</span>
+          <span className="chip muted" style={{ marginLeft: "auto" }}>last 60s</span>
         </div>
         <ActivityRadar activity={activity} tps={ctx.tokensPerSec} />
         <div className="legend">
@@ -352,7 +352,7 @@ function AmbientRail({ ctx, activity, peer, messages, microcopy, onClose, sparkl
       <div className="rail-card glass">
         <div className="rail-card-head">
           <Icon name="split" size={11} color="var(--cyan)" />
-          <span className="mono" style={{ color: "var(--fg-2)" }}>peer session</span>
+          <span style={{ color: "var(--fg-2)" }}>peer session</span>
           <span className="chip" style={{ marginLeft: "auto", color: "var(--cyan)", borderColor: "color-mix(in oklab, var(--cyan) 30%, var(--line))" }}>split</span>
         </div>
         <PeerSession peer={peer} />
@@ -361,7 +361,7 @@ function AmbientRail({ ctx, activity, peer, messages, microcopy, onClose, sparkl
       <div className="rail-card glass" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 120 }}>
         <div className="rail-card-head">
           <Icon name="minimap" size={11} color="var(--fg-3)" />
-          <span className="mono" style={{ color: "var(--fg-2)" }}>minimap</span>
+          <span style={{ color: "var(--fg-2)" }}>minimap</span>
         </div>
         <SessionMinimap messages={messages} hoveredIdx={hoveredMsgIdx} onHover={onMinimapHover} onClick={onMinimapClick} />
       </div>

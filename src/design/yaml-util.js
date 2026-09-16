@@ -1,6 +1,7 @@
 /* ═════════════════════════════════════════════════════════════════════
-   yaml-util.js — Lightweight YAML parser & generator for models.yml
+   yaml-util.js — Robust YAML parser & generator for models.yml
    Tailored for oh-my-pi / pi-coding-agent models configuration.
+   Supports auth: oauth/apiKey/none, nested compat, headers & modelOverrides.
    ═════════════════════════════════════════════════════════════════════ */
 
 (function () {
@@ -54,7 +55,9 @@
    *       baseUrl: string,
    *       apiKey: string,
    *       api: string,
-   *       models: [ { id, name, contextWindow, maxTokens, reasoning, ... } ]
+   *       auth?: "apiKey" | "oauth" | "none",
+   *       models: [ { id, name, contextWindow, maxTokens, reasoning, ... } ],
+   *       ...extraNestedProps
    *     }
    *   }
    * }
@@ -63,18 +66,14 @@
     const result = { providers: {} };
     if (!rawYaml || typeof rawYaml !== "string") return result;
 
-    const lines = rawYaml.split(/\r?\n/);
-    let curProvider = null;
-    let inModelsList = false;
-    let curModel = null;
-    let curModelPropList = null;
+    const rawLines = rawYaml.split(/\r?\n/);
+    const lines = [];
 
-    for (let i = 0; i < lines.length; i++) {
-      let line = lines[i];
+    for (let i = 0; i < rawLines.length; i++) {
+      let line = rawLines[i];
       // Strip comments
       const commentIdx = line.indexOf("#");
       if (commentIdx !== -1) {
-        // Only strip if not inside quotes
         const before = line.slice(0, commentIdx);
         const singleQuotes = (before.match(/'/g) || []).length;
         const doubleQuotes = (before.match(/"/g) || []).length;
@@ -82,114 +81,168 @@
           line = before;
         }
       }
-
       if (!line.trim()) continue;
+      lines.push({ indent: line.search(/\S/), text: line.trim() });
+    }
 
-      const indent = line.search(/\S/);
-      const trimmed = line.trim();
+    if (lines.length === 0) return result;
 
-      // Top level: providers:
-      if (indent === 0 && trimmed.startsWith("providers:")) {
-        curProvider = null;
-        inModelsList = false;
-        curModel = null;
-        curModelPropList = null;
-        continue;
-      }
+    let index = 0;
 
-      // Provider key level (indent ~2: "  custom-proxy:")
-      if (indent >= 2 && indent <= 4 && trimmed.endsWith(":") && !trimmed.startsWith("-") && !inModelsList) {
-        const pKey = trimmed.slice(0, -1).trim();
-        if (pKey !== "models") {
-          curProvider = pKey;
-          if (!result.providers[curProvider]) {
-            result.providers[curProvider] = {
-              baseUrl: "",
-              apiKey: "",
-              api: "openai-completions",
-              models: []
-            };
-          }
-          inModelsList = false;
-          curModel = null;
-          curModelPropList = null;
-          continue;
-        }
-      }
+    function parseBlock(minIndent) {
+      if (index >= lines.length) return null;
+      const first = lines[index];
+      if (first.indent < minIndent) return null;
 
-      // Within a provider:
-      if (curProvider && result.providers[curProvider]) {
-        const prov = result.providers[curProvider];
-
-        // "models:" section start
-        if (trimmed === "models:" || trimmed.startsWith("models:")) {
-          inModelsList = true;
-          curModel = null;
-          curModelPropList = null;
-          continue;
-        }
-
-        // Inside models list:
-        if (inModelsList) {
-          // Sub-item in a multiline list under current model (e.g. "          - image" under "input:")
-          if (curModel && curModelPropList && trimmed.startsWith("-") && indent > 6) {
-            const itemVal = parseScalar(trimmed.slice(1).trim());
-            if (Array.isArray(curModel[curModelPropList])) {
-              curModel[curModelPropList].push(itemVal);
-            }
-            continue;
-          }
-
-          // New model entry starts with "- id:" or "-"
-          if (trimmed.startsWith("-")) {
-            curModelPropList = null;
-            curModel = {
-              id: "",
-              name: "",
-              contextWindow: 128000,
-              maxTokens: 8192
-            };
-            prov.models.push(curModel);
-
-            const rest = trimmed.slice(1).trim();
-            if (rest) {
-              const colonIdx = rest.indexOf(":");
-              if (colonIdx !== -1) {
-                const k = rest.slice(0, colonIdx).trim();
-                const v = parseScalar(rest.slice(colonIdx + 1).trim());
-                curModel[k] = v;
-              }
-            }
-            continue;
-          }
-
-          // Model properties (indent > list indent)
-          if (curModel && trimmed.includes(":")) {
-            const colonIdx = trimmed.indexOf(":");
-            const k = trimmed.slice(0, colonIdx).trim();
-            const restVal = trimmed.slice(colonIdx + 1).trim();
-            if (restVal === "") {
-              curModelPropList = k;
-              curModel[k] = [];
-            } else {
-              curModelPropList = null;
-              curModel[k] = parseScalar(restVal);
-            }
-            continue;
-          }
-        }
-
-        // Provider properties (baseUrl, apiKey, api, headers, etc.)
-        if (!inModelsList && trimmed.includes(":")) {
-          const colonIdx = trimmed.indexOf(":");
-          const k = trimmed.slice(0, colonIdx).trim();
-          const v = parseScalar(trimmed.slice(colonIdx + 1).trim());
-          prov[k] = v;
-        }
+      if (first.text.startsWith("-")) {
+        return parseSequence(first.indent);
+      } else {
+        return parseMapping(first.indent);
       }
     }
 
-    return result;
+    function parseSequence(seqIndent) {
+      const arr = [];
+      while (index < lines.length) {
+        const cur = lines[index];
+        if (cur.indent < seqIndent) break;
+        if (cur.indent > seqIndent) {
+          index++;
+          continue;
+        }
+        if (!cur.text.startsWith("-")) break;
+
+        const afterDash = cur.text.slice(1).trim();
+        index++;
+
+        if (!afterDash) {
+          const child = parseBlock(seqIndent + 1);
+          arr.push(child !== null ? child : {});
+        } else if (afterDash.includes(":")) {
+          const colonIdx = afterDash.indexOf(":");
+          const k = afterDash.slice(0, colonIdx).trim();
+          const vRaw = afterDash.slice(colonIdx + 1).trim();
+          const itemObj = {};
+
+          if (vRaw === "") {
+            const child = parseBlock(seqIndent + 2);
+            itemObj[k] = child !== null ? child : {};
+          } else {
+            itemObj[k] = parseScalar(vRaw);
+          }
+
+          while (index < lines.length) {
+            const next = lines[index];
+            if (next.indent <= seqIndent) break;
+            if (next.text.startsWith("-")) break;
+
+            const nColon = next.text.indexOf(":");
+            if (nColon !== -1) {
+              const nk = next.text.slice(0, nColon).trim();
+              const nvRaw = next.text.slice(nColon + 1).trim();
+              index++;
+              if (nvRaw === "") {
+                const subChild = parseBlock(next.indent + 1);
+                itemObj[nk] = subChild !== null ? subChild : {};
+              } else {
+                itemObj[nk] = parseScalar(nvRaw);
+              }
+            } else {
+              index++;
+            }
+          }
+          arr.push(itemObj);
+        } else {
+          arr.push(parseScalar(afterDash));
+        }
+      }
+      return arr;
+    }
+
+    function parseMapping(mapIndent) {
+      const obj = {};
+      while (index < lines.length) {
+        const cur = lines[index];
+        if (cur.indent < mapIndent) break;
+        if (cur.indent > mapIndent) {
+          index++;
+          continue;
+        }
+        if (cur.text.startsWith("-")) break;
+
+        const colonIdx = cur.text.indexOf(":");
+        if (colonIdx === -1) {
+          index++;
+          continue;
+        }
+
+        const key = cur.text.slice(0, colonIdx).trim();
+        const valRaw = cur.text.slice(colonIdx + 1).trim();
+        index++;
+
+        if (valRaw === "") {
+          if (index < lines.length && lines[index].indent > cur.indent) {
+            const child = parseBlock(lines[index].indent);
+            obj[key] = child !== null ? child : {};
+          } else {
+            obj[key] = {};
+          }
+        } else {
+          obj[key] = parseScalar(valRaw);
+        }
+      }
+      return obj;
+    }
+
+    const root = parseBlock(0) || {};
+    const rawProviders = root.providers || {};
+    const normalizedProviders = {};
+
+    for (const [pKey, pVal] of Object.entries(rawProviders)) {
+      if (typeof pVal !== "object" || pVal === null) continue;
+      normalizedProviders[pKey] = {
+        baseUrl: pVal.baseUrl !== undefined ? String(pVal.baseUrl) : "",
+        apiKey: pVal.apiKey !== undefined ? String(pVal.apiKey) : "",
+        api: pVal.api !== undefined ? String(pVal.api) : "openai-completions",
+        models: Array.isArray(pVal.models) ? pVal.models : [],
+        ...pVal
+      };
+    }
+
+    return { providers: normalizedProviders };
+  }
+
+  /**
+   * Helper to dump arbitrary nested mappings.
+   */
+  function dumpYamlMap(map, indentLevel) {
+    const lines = [];
+    const pad = " ".repeat(indentLevel);
+    for (const [k, v] of Object.entries(map)) {
+      if (v === undefined) continue;
+      if (v === null) {
+        lines.push(`${pad}${k}: null`);
+      } else if (typeof v === "object" && !Array.isArray(v)) {
+        if (Object.keys(v).length === 0) {
+          lines.push(`${pad}${k}: {}`);
+        } else {
+          lines.push(`${pad}${k}:`);
+          lines.push(...dumpYamlMap(v, indentLevel + 2));
+        }
+      } else if (Array.isArray(v)) {
+        if (v.length === 0) {
+          lines.push(`${pad}${k}: []`);
+        } else {
+          lines.push(`${pad}${k}:`);
+          for (const item of v) {
+            lines.push(`${pad}  - ${formatScalar(item)}`);
+          }
+        }
+      } else {
+        lines.push(`${pad}${k}: ${formatScalar(v)}`);
+      }
+    }
+    return lines;
   }
 
   /**
@@ -209,19 +262,54 @@
       const prov = providers[pKey] || {};
       lines.push(`  ${pKey}:`);
 
-      if (prov.baseUrl !== undefined) {
+      if (prov.baseUrl !== undefined && prov.baseUrl !== "") {
         lines.push(`    baseUrl: ${formatScalar(prov.baseUrl)}`);
       }
-      if (prov.apiKey !== undefined) {
-        lines.push(`    apiKey: ${formatScalar(prov.apiKey)}`);
+
+      // Handle auth mode: oauth / none / apiKey
+      if (prov.auth === "oauth") {
+        lines.push(`    auth: oauth`);
+        // For OAuth, only dump apiKey if user explicitly provided a non-empty key
+        if (prov.apiKey && typeof prov.apiKey === "string" && prov.apiKey.trim()) {
+          lines.push(`    apiKey: ${formatScalar(prov.apiKey)}`);
+        }
+      } else if (prov.auth === "none") {
+        lines.push(`    auth: none`);
+        if (prov.apiKey && typeof prov.apiKey === "string" && prov.apiKey.trim()) {
+          lines.push(`    apiKey: ${formatScalar(prov.apiKey)}`);
+        }
+      } else {
+        if (prov.apiKey !== undefined && prov.apiKey !== null) {
+          lines.push(`    apiKey: ${formatScalar(prov.apiKey)}`);
+        }
+        if (prov.auth && prov.auth !== "apiKey") {
+          lines.push(`    auth: ${formatScalar(prov.auth)}`);
+        }
       }
-      if (prov.api !== undefined) {
+
+      if (prov.api !== undefined && prov.api !== "") {
         lines.push(`    api: ${formatScalar(prov.api)}`);
       }
 
-      // Any extra non-model properties
+      // Preserve any extra provider properties (compat, headers, modelOverrides, etc.)
       for (const [k, v] of Object.entries(prov)) {
-        if (!["baseUrl", "apiKey", "api", "models"].includes(k) && typeof v !== "object") {
+        if (["baseUrl", "apiKey", "api", "auth", "models"].includes(k)) continue;
+        if (v === undefined) continue;
+        if (typeof v === "object" && v !== null) {
+          if (Array.isArray(v)) {
+            if (v.length === 0) lines.push(`    ${k}: []`);
+            else {
+              lines.push(`    ${k}:`);
+              for (const item of v) lines.push(`      - ${formatScalar(item)}`);
+            }
+          } else {
+            if (Object.keys(v).length === 0) lines.push(`    ${k}: {}`);
+            else {
+              lines.push(`    ${k}:`);
+              lines.push(...dumpYamlMap(v, 6));
+            }
+          }
+        } else {
           lines.push(`    ${k}: ${formatScalar(v)}`);
         }
       }
@@ -236,10 +324,10 @@
           if (m.name) {
             lines.push(`        name: ${formatScalar(m.name)}`);
           }
-          if (m.contextWindow !== undefined && m.contextWindow !== null) {
+          if (m.contextWindow !== undefined && m.contextWindow !== null && m.contextWindow !== "") {
             lines.push(`        contextWindow: ${m.contextWindow}`);
           }
-          if (m.maxTokens !== undefined && m.maxTokens !== null) {
+          if (m.maxTokens !== undefined && m.maxTokens !== null && m.maxTokens !== "") {
             lines.push(`        maxTokens: ${m.maxTokens}`);
           }
           if (m.reasoning !== undefined && m.reasoning !== null) {
@@ -249,9 +337,14 @@
             const arr = Array.isArray(m.input) ? m.input : [String(m.input)];
             lines.push(`        input: ${JSON.stringify(arr)}`);
           }
-          // Preserve any extra model keys
+          // Preserve any extra model keys (compat, headers, etc.)
           for (const [mk, mv] of Object.entries(m)) {
-            if (!["id", "name", "contextWindow", "maxTokens", "reasoning", "input"].includes(mk) && typeof mv !== "object") {
+            if (["id", "name", "contextWindow", "maxTokens", "reasoning", "input"].includes(mk)) continue;
+            if (mv === undefined) continue;
+            if (typeof mv === "object" && mv !== null) {
+              lines.push(`        ${mk}:`);
+              lines.push(...dumpYamlMap(mv, 10));
+            } else {
               lines.push(`        ${mk}: ${formatScalar(mv)}`);
             }
           }

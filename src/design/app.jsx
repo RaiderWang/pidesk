@@ -120,7 +120,7 @@ function App() {
             onCmd={() => setBridgeOpen(true)} />
           <TabBar projects={data.projects} activeId={activeTabId}
             onSelect={setActiveTabId} peer={data.peer} onNew={() => {}}
-            appVersion={window.PIDESK_APP_VERSION || window.OMP_APP_VERSION || "0.2.1"} theme={t.theme} />
+            appVersion={window.PIDESK_APP_VERSION || window.OMP_APP_VERSION || "0.2.2"} theme={t.theme} />
 
           <div className={`stage ${showRail ? "with-rail" : ""}`}>
             <main className="session">
@@ -201,8 +201,8 @@ function App() {
             ]}
             onChange={(v) => {
               setTweak({ theme: v, accent:
-                v === "aurora"   ? "#8AF0C8" :
-                v === "phosphor" ? "#C4FF3F" : "#1F8A5B"
+                v === "aurora"   ? "#78E8BE" :
+                v === "phosphor" ? "#39E557" : "#1F8A5B"
               });
             }}
           />
@@ -219,7 +219,7 @@ function App() {
           <TweakColor
             label="accent"
             value={t.accent}
-            options={["#8AF0C8", "#6EE7FF", "#FF7AC6", "#FFC56E", "#B59BFF", "#C4FF3F"]}
+            options={["#78E8BE", "#39E557", "#1F8A5B", "#6EE7FF", "#FF7AC6", "#FFC56E", "#B59BFF"]}
             onChange={(v) => setTweak("accent", v)}
           />
           <TweakToggle label="mono chat font" value={t.monoChat}

@@ -14,6 +14,23 @@
 
   <!-- Syntax highlighting theme (atom-one-dark) -->
   <link rel="stylesheet" href="highlight-theme.css" />
+
+  <script>
+    // Disable native browser right-click context menu
+    window.addEventListener('contextmenu', function (e) {
+      e.preventDefault();
+    }, true);
+
+    // Disable browser refresh shortcuts (F5, Ctrl+R, Command+R and force-reload variants)
+    window.addEventListener('keydown', function (e) {
+      if (
+        e.key === 'F5' ||
+        ((e.ctrlKey || e.metaKey) && (e.key === 'r' || e.key === 'R'))
+      ) {
+        e.preventDefault();
+      }
+    }, true);
+  </script>
 </head>
 <body>
   <div id="root"></div>

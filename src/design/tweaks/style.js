@@ -14,13 +14,13 @@ const __TWEAKS_STYLE = `
     -webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%);
     border:1px solid var(--line-bright);border-radius:var(--r-3,14px);
     box-shadow:var(--shadow-pop);
-    font:var(--d-text-sm,11.5px)/1.4 var(--font-sans,ui-sans-serif,system-ui,sans-serif);
+    font:var(--d-text-sm,13px)/1.4 var(--font-sans,ui-sans-serif,system-ui,sans-serif);
     overflow:hidden}
 
   .twk-hd{display:flex;align-items:center;justify-content:space-between;
     padding:10px 8px 10px 14px;cursor:move;user-select:none;
     border-bottom:1px solid var(--line)}
-  .twk-hd b{font-size:12px;font-weight:600;letter-spacing:.01em;color:var(--fg)}
+  .twk-hd b{font-size:var(--d-text-sm,13px);font-weight:600;letter-spacing:.01em;color:var(--fg)}
 
   .twk-x{appearance:none;border:0;background:transparent;color:var(--fg-3);
     width:22px;height:22px;border-radius:var(--r-1,6px);cursor:default;font-size:13px;line-height:1}
@@ -43,7 +43,7 @@ const __TWEAKS_STYLE = `
   .twk-lbl>span:first-child{font-weight:500;color:var(--fg-2)}
   .twk-val{color:var(--fg-4);font-variant-numeric:tabular-nums}
 
-  .twk-sect{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  .twk-sect{font-size:var(--d-text-xs,12px);font-weight:600;letter-spacing:.06em;text-transform:uppercase;
     color:var(--fg-4);padding:10px 0 0}
   .twk-sect:first-child{padding-top:0}
 

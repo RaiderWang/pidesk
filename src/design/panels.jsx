@@ -89,7 +89,7 @@ function PlanKanban({ kanban, planMeta, onClose, onAbort }) {
                 <KanbanCol key={col.id} col={col} idx={idx} mode={phase} />
               ))
             : (
-              <div style={{ padding: "32px 24px", color: "var(--fg-4)", fontFamily: "var(--font-mono)", fontSize: "var(--d-text-sm)" }}>
+              <div style={{ padding: "32px 24px", color: "var(--fg-4)", fontSize: "var(--d-text-sm)" }}>
                 waiting for agent to write tasks…
               </div>
             )

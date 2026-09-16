@@ -46,12 +46,12 @@ const TokenGauge = ({ used, total, pct, label, sub }) => {
           transform="rotate(-90 28 28)"
           style={{ filter: `drop-shadow(0 0 4px ${tone})`, transition: "stroke-dasharray 600ms var(--ease-out)" }}
         />
-        <text x="28" y="31" textAnchor="middle" fontSize="11" fontFamily="var(--font-mono)" fill="var(--fg)">
+        <text x="28" y="31.5" textAnchor="middle" fontSize="11.5" fontWeight="600" fontFamily="var(--font-mono)" fill="var(--fg)">
           {(+pct).toFixed(1)}%
         </text>
       </svg>
       <div>
-        <div style={{ fontSize: "var(--d-text-sm)", color: "var(--fg-2)", fontFamily: "var(--font-mono)" }}>{label}</div>
+        <div style={{ fontSize: "var(--d-text-sm)", color: "var(--fg-2)", fontWeight: 500 }}>{label}</div>
         <div style={{ fontSize: "var(--d-text-xs)", color: "var(--fg-4)" }}>{sub}</div>
       </div>
     </div>

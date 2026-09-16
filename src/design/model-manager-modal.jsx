@@ -6,6 +6,28 @@
 
 const { Icon, YamlUtil } = window;
 
+const BUILTIN_OAUTH_PROVIDERS = new Set([
+  "openai-codex",
+  "anthropic",
+  "github-copilot",
+  "google-antigravity",
+  "google-gemini-cli",
+  "cursor",
+  "devin",
+  "kimi-code",
+  "zai",
+  "zai-coding-plan",
+  "zhipu-coding-plan",
+  "alibaba-coding-plan",
+  "minimax-code",
+  "minimax-code-cn",
+  "qwen-portal",
+  "gitlab-duo",
+  "perplexity",
+  "xai-oauth",
+  "openrouter",
+]);
+
 function ModelManagerModal({ open, onClose, onModelUpdated }) {
   const [tab, setTab]                     = React.useState("form"); // "form" | "yaml"
   const [filePath, setFilePath]           = React.useState("");
@@ -87,7 +109,7 @@ function ModelManagerModal({ open, onClose, onModelUpdated }) {
     setSaving(true);
     try {
       await window.OMP_BRIDGE?.writeModelsConfig(yamlToSave);
-      showToast("Models config saved & backed up to models.yml.bak");
+      showToast("Models config saved! Note: active sessions may need a new tab to reload models.");
       await window.OMP_BRIDGE?.refreshModels();
       onModelUpdated?.();
     } catch (err) {
@@ -275,7 +297,7 @@ function ModelManagerModal({ open, onClose, onModelUpdated }) {
                     {pKeys.length} {pKeys.length === 1 ? "provider" : "providers"}
                   </span>
                   <button className="btn ghost outlined" style={{ height: 26, fontSize: "var(--d-text-xs)", gap: 4 }}
-                    onClick={() => setEditingProv({ key: "custom-proxy", isNew: true, provider: { baseUrl: "http://localhost:20128/v1", apiKey: "", api: "openai-completions" } })}>
+                    onClick={() => setEditingProv({ key: "", isNew: true, provider: { baseUrl: "", apiKey: "", api: "openai-completions" } })}>
                     <Icon name="plus" size={10} color="var(--accent)" /> Add Provider
                   </button>
                 </div>
@@ -312,6 +334,20 @@ function ModelManagerModal({ open, onClose, onModelUpdated }) {
                         <span className="chip muted mono" style={{ fontSize: "var(--d-text-xs)" }}>
                           {prov.api || "openai-completions"}
                         </span>
+                        {prov.auth === "oauth" ? (
+                          <span className="chip mono" style={{ fontSize: "var(--d-text-xs)", color: "var(--cyan)", borderColor: "color-mix(in oklab, var(--cyan) 40%, transparent)" }}>
+                            oauth
+                          </span>
+                        ) : prov.auth === "none" ? (
+                          <span className="chip muted mono" style={{ fontSize: "var(--d-text-xs)" }}>
+                            no-auth
+                          </span>
+                        ) : null}
+                        {BUILTIN_OAUTH_PROVIDERS.has(pKey.toLowerCase()) && prov.auth !== "oauth" && prov.apiKey ? (
+                          <span className="chip mono" title="API Key shadows OAuth login token in omp" style={{ fontSize: "var(--d-text-xs)", color: "var(--amber)", borderColor: "var(--amber)" }}>
+                            ⚠️ shadows oauth
+                          </span>
+                        ) : null}
                         <span className="mono" style={{ color: "var(--fg-4)", fontSize: "var(--d-text-xs)" }}>
                           {prov.baseUrl || "—"}
                         </span>
@@ -565,18 +601,49 @@ function EditProviderModal({ item, onClose, onSave }) {
   const [key, setKey]         = React.useState(item.key || "");
   const [baseUrl, setBaseUrl] = React.useState(item.provider?.baseUrl || "");
   const [apiKey, setApiKey]   = React.useState(item.provider?.apiKey || "");
+  const initialAuth = item.provider?.auth
+    || (item.provider?.apiKey ? "apiKey" : (BUILTIN_OAUTH_PROVIDERS.has((item.key || "").toLowerCase()) ? "oauth" : "apiKey"));
+  const [auth, setAuth]       = React.useState(initialAuth);
   const [api, setApi]         = React.useState(item.provider?.api || "openai-completions");
   const [err, setErr]         = React.useState("");
+
+  const isKnownOAuth = BUILTIN_OAUTH_PROVIDERS.has(key.trim().toLowerCase());
+
+  const handleKeyChange = (val) => {
+    setKey(val);
+    const trimmed = val.trim().toLowerCase();
+    if (item.isNew && BUILTIN_OAUTH_PROVIDERS.has(trimmed) && !apiKey.trim()) {
+      setAuth("oauth");
+      setBaseUrl("");
+    }
+  };
+
+  const handleAuthChange = (newAuth) => {
+    setAuth(newAuth);
+    if (newAuth === "oauth") {
+      setBaseUrl("");
+    }
+  };
 
   const handleSubmit = (e) => {
     e?.preventDefault();
     if (!key.trim()) { setErr("Provider ID is required"); return; }
-    onSave(key.trim(), {
+    const provData = {
       ...item.provider,
       baseUrl: baseUrl.trim(),
-      apiKey: apiKey.trim(),
       api: api.trim() || "openai-completions",
-    }, item.isNew, item.key);
+    };
+    if (auth === "oauth") {
+      provData.auth = "oauth";
+      delete provData.apiKey;
+    } else if (auth === "none") {
+      provData.auth = "none";
+      delete provData.apiKey;
+    } else {
+      provData.apiKey = apiKey.trim();
+      delete provData.auth;
+    }
+    onSave(key.trim(), provData, item.isNew, item.key);
   };
 
   return (
@@ -592,18 +659,56 @@ function EditProviderModal({ item, onClose, onSave }) {
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "var(--d-text-xs)", color: "var(--fg-3)" }}>
-            Provider ID (e.g. custom-proxy):
-            <input className="bridge-input mono" value={key} onChange={e => setKey(e.target.value)} required placeholder="custom-proxy" />
+            Provider ID (e.g. custom-proxy, cursor, anthropic):
+            <input className="bridge-input mono" value={key} onChange={e => handleKeyChange(e.target.value)} required placeholder="e.g. custom-proxy, cursor" />
           </label>
 
           <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "var(--d-text-xs)", color: "var(--fg-3)" }}>
-            API Base URL (e.g. http://localhost:20128/v1):
-            <input className="bridge-input mono" value={baseUrl} onChange={e => setBaseUrl(e.target.value)} placeholder="http://..." />
+            Auth Mode:
+            <select
+              value={auth}
+              onChange={e => handleAuthChange(e.target.value)}
+              className="bridge-input mono"
+              style={{ height: 28, padding: "0 8px", background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: 4, color: "var(--fg)" }}>
+              <option value="apiKey">API Key (Standard)</option>
+              <option value="oauth">OAuth (Use omp login credentials)</option>
+              <option value="none">None (Keyless / Local Proxy)</option>
+            </select>
           </label>
 
+          {auth === "oauth" ? (
+            <div style={{ padding: "8px 10px", background: "color-mix(in oklab, var(--cyan) 10%, var(--bg-surface))", border: "1px solid color-mix(in oklab, var(--cyan) 30%, transparent)", borderRadius: 6, color: "var(--fg-2)", fontSize: "var(--d-text-xs)", lineHeight: 1.4 }}>
+              ℹ️ Using OAuth authentication. omp will automatically load session tokens from <span className="mono">~/.omp/agent/agent.db</span>. No API Key is needed.
+            </div>
+          ) : auth === "none" ? (
+            <div style={{ padding: "8px 10px", background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: 6, color: "var(--fg-3)", fontSize: "var(--d-text-xs)", lineHeight: 1.4 }}>
+              ℹ️ No authentication headers will be sent (useful for local models or unauthenticated endpoints).
+            </div>
+          ) : (
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "var(--d-text-xs)", color: "var(--fg-3)" }}>
+              API Key (optional):
+              <input type="password" className="bridge-input mono" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="sk-..." />
+            </label>
+          )}
+
+          {isKnownOAuth && auth === "apiKey" && apiKey.trim() && (
+            <div style={{ padding: "8px 10px", background: "color-mix(in oklab, var(--amber) 15%, var(--bg-surface))", border: "1px solid var(--amber)", borderRadius: 6, color: "var(--amber)", fontSize: "var(--d-text-xs)", lineHeight: 1.4 }}>
+              ⚠️ <strong>{key.trim()}</strong> is a built-in OAuth provider in <span className="mono">omp</span>.
+              In omp, an API Key has higher priority and will shadow your OAuth login token in <span className="mono">agent.db</span>.
+              To use your login credentials instead, switch Auth Mode to <strong>OAuth</strong>.
+            </div>
+          )}
+
+          {isKnownOAuth && auth === "apiKey" && !apiKey.trim() && (
+            <div style={{ padding: "8px 10px", background: "color-mix(in oklab, var(--cyan) 10%, var(--bg-surface))", border: "1px solid var(--line)", borderRadius: 6, color: "var(--fg-3)", fontSize: "var(--d-text-xs)", lineHeight: 1.4 }}>
+              💡 <strong>{key.trim()}</strong> is a built-in OAuth provider in <span className="mono">omp</span>.
+              If you logged in with <span className="mono">omp login</span>, switch Auth Mode to <strong>OAuth</strong> to use those credentials.
+            </div>
+          )}
+
           <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "var(--d-text-xs)", color: "var(--fg-3)" }}>
-            API Key (optional):
-            <input type="password" className="bridge-input mono" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="sk-..." />
+            {auth === "oauth" ? "API Base URL (optional, leave blank for official endpoint):" : "API Base URL (e.g. http://localhost:20128/v1):"}
+            <input className="bridge-input mono" value={baseUrl} onChange={e => setBaseUrl(e.target.value)} placeholder={auth === "oauth" ? "Leave blank for official endpoint" : "http://..."} />
           </label>
 
           <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "var(--d-text-xs)", color: "var(--fg-3)" }}>
