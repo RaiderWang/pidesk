@@ -131,25 +131,25 @@
   color-scheme: dark;
 }
 
-/* ── Phosphor (modern clean terminal dark) ─────────────────────────────── */
+/* ── Phosphor (modern slate terminal dark) ─────────────────────────────── */
 :root.theme-phosphor, .theme-phosphor {
-  --bg-app: #080c09;            /* deep phosphor night */
-  --bg-window: #0c120e;         /* dark terminal window */
-  --bg-surface: #101913;        /* cards */
-  --bg-elevated: #16221a;       /* elevated cards */
-  --bg-input: #0a0f0b;
-  --bg-hover: #1b2a20;
-  --bg-active: #23372a;
+  --bg-app: #242826;            /* comfortable slate terminal gray */
+  --bg-window: #2b302e;         /* neutral slate gray window */
+  --bg-surface: #333936;        /* cards / surfaces */
+  --bg-elevated: #3b423f;       /* popovers / elevated panels */
+  --bg-input: #202422;          /* inputs / textareas */
+  --bg-hover: #3c4340;
+  --bg-active: #464e4a;
 
-  --line: #1d3324;
-  --line-soft: #14241a;
-  --line-bright: #2b4c36;
+  --line: #414945;
+  --line-soft: #323835;
+  --line-bright: #525c57;
 
-  --fg: #C4F7A1;
-  --fg-2: #8FE368;
-  --fg-3: #5EA847;
-  --fg-4: #3F7332;
-  --fg-5: #274720;
+  --fg: #D2F8B8;
+  --fg-2: #A0E878;
+  --fg-3: #78B868;
+  --fg-4: #5B8653;
+  --fg-5: #425A3F;
 
   --accent: #39E557;            /* crisp phosphor green */
   --accent-deep: #22C55E;
@@ -163,7 +163,7 @@
   --rose: #FF8A6E;
   --lime: #39E557;
 
-  --syntax-comment: #43773b;
+  --syntax-comment: #68975E;
   --syntax-key: #FFD24A;
   --syntax-str: #39E557;
   --syntax-num: #FF6EAA;
@@ -175,7 +175,7 @@
   --diff-rm-bg: rgba(255, 110, 170, 0.10);
   --diff-rm-fg: #FF6EAA;
 
-  --grain-opacity: 0.04;
+  --grain-opacity: 0.03;
   color-scheme: dark;
 }
 

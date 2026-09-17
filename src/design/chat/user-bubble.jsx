@@ -2,7 +2,16 @@
 
 function UserBubble({ msg, idx, highlighted }) {
   const [lightboxImg, setLightboxImg] = React.useState(null);
+  const [copied, setCopied] = React.useState(false);
   const images = msg.images || [];
+
+  function handleCopy() {
+    const text = msg.text || "";
+    navigator.clipboard?.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {});
+  }
 
   return (
     <div className={`row user fade-up${highlighted ? " mm-hot" : ""}`} data-msg-idx={idx}>
@@ -28,6 +37,16 @@ function UserBubble({ msg, idx, highlighted }) {
 
         {msg.text && <div className="user-text">{msg.text}</div>}
 
+        <div className="msg-actions">
+          <button
+            className="msg-act-btn"
+            title={copied ? "copied!" : (window.t ? window.t("action.copy", null, "copy as markdown") : "copy as markdown")}
+            onClick={handleCopy}
+          >
+            <window.Icon name={copied ? "check" : "copy"} size={12} />
+          </button>
+        </div>
+
         {lightboxImg && (
           <div className="lightbox-scrim" onClick={() => setLightboxImg(null)}>
             <div className="lightbox-content" onClick={e => e.stopPropagation()}>
@@ -44,4 +63,3 @@ function UserBubble({ msg, idx, highlighted }) {
 }
 
 Object.assign(window, { UserBubble });
-

@@ -23,8 +23,20 @@ const CompactRow = React.memo(function CompactRow({ msg }) {
     : n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2)}M`
     : n >= 1_000     ? `${(n / 1_000).toFixed(1)}k`
     : String(n);
-  const tok      = fmtTok(msg.tokensBefore);
-  const hasBody  = !!msg.summary && !pending && !error;
+  const tokBefore = fmtTok(msg.tokensBefore);
+  const tokAfter  = fmtTok(msg.tokensAfter);
+  const hasBody   = !!msg.summary && !pending && !error;
+  const t = window.t;
+
+  // Build the token-stats chip label:
+  //   both present → "26.2k → 24.1k"
+  //   only before  → "26.2k before"  (tokensAfter not yet back-filled)
+  //   neither      → null (chip hidden)
+  const tokLabel = (tokBefore && tokAfter)
+    ? (t ? t("chat.compactRange", { before: tokBefore, after: tokAfter }, `${tokBefore} → ${tokAfter}`) : `${tokBefore} → ${tokAfter}`)
+    : tokBefore
+      ? (t ? t("chat.before", { tok: tokBefore }, `${tokBefore} before`) : `${tokBefore} before`)
+      : null;
 
   return (
     <div className="row tool fade-up">
@@ -43,20 +55,20 @@ const CompactRow = React.memo(function CompactRow({ msg }) {
             color: COLOR,
             background: `color-mix(in oklab, ${COLOR} 14%, transparent)`,
             borderColor: `color-mix(in oklab, ${COLOR} 30%, var(--line))`,
-          }}>compact</span>
+          }}>{t ? t("chat.compact", null, "compact") : "compact"}</span>
           <span className="tool-title">
-            {pending ? "compacting context\u2026"
-              : error   ? "compaction failed"
-              : (msg.shortSummary || "context compacted")}
+            {pending ? (t ? t("chat.compacting", null, "compacting context\u2026") : "compacting context\u2026")
+              : error   ? (msg.errorReason || (t ? t("chat.compactFailed", null, "compaction failed") : "compaction failed"))
+              : (msg.shortSummary || (t ? t("chat.compacted", null, "context compacted") : "context compacted"))}
           </span>
           <div className="tool-card-spacer" />
           {pending && (
             <span className="chip accent" style={{ animation: "pulseDot 1.4s infinite" }}>
-              <span className="dot live" />{" "}running
+              <span className="dot live" />{" "}{t ? t("chat.running", null, "running") : "running"}
             </span>
           )}
-          {!pending && !error && tok && (
-            <span className="chip muted mono">{tok} before</span>
+          {!pending && !error && tokLabel && (
+            <span className="chip muted mono">{tokLabel}</span>
           )}
           {error && <span className="chip" style={{ color: "var(--rose)" }}>failed</span>}
           {hasBody && <_CV_Icon name={open ? "chev" : "chevR"} size={10} color="var(--fg-4)" />}
@@ -71,7 +83,7 @@ const CompactRow = React.memo(function CompactRow({ msg }) {
   );
 });
 
-function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, onAskAnswer }) {
+function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, onAskAnswer, onBranch }) {
   const scrollRef    = React.useRef(null);
   const atBottomRef  = React.useRef(true);   // assume start at bottom
   const prevCountRef = React.useRef(0);
@@ -123,7 +135,8 @@ function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, 
           return <_CV_AssistantBubble_M key={m._id ?? i} idx={i} highlighted={hl} msg={m}
             annotable={i === lastAsstIdx}
             annotations={annotations}
-            onAnnotate={onAnnotate} />;
+            onAnnotate={onAnnotate}
+            onBranch={onBranch} />;
         })}
         <div style={{ height: 24 }} />
       </div>

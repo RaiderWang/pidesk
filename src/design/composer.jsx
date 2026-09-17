@@ -242,11 +242,11 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
         <div className="composer-model-warning">
           <Icon name="warn" size={13} color="var(--amber)" />
           <span className="warning-text">
-            {modelWarning || `Current model "${currentModel?.name || currentModel?.id || "model"}" does not support image input. Consider switching models.`}
+            {modelWarning || (window.t ? window.t("composer.warn.vision", { model: currentModel?.name || currentModel?.id || "model" }) : `Current model "${currentModel?.name || currentModel?.id || "model"}" does not support image input. Consider switching models.`)}
           </span>
           <button type="button" className="btn ghost warning-action" onClick={onOpenModel}>
             <Icon name="bolt" size={11} color="var(--amber)" />
-            switch model
+            {window.t ? window.t("composer.warn.switchModel", null, "switch model") : "switch model"}
           </button>
           {!supportsImages && images.length === 0 && (
             <button
@@ -255,14 +255,14 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
               style={{ color: "var(--fg-3)" }}
               onClick={() => fileInputRef.current?.click()}
             >
-              upload anyway
+              {window.t ? window.t("composer.warn.uploadAnyway", null, "upload anyway") : "upload anyway"}
             </button>
           )}
           <button
             type="button"
             className="btn icon ghost warning-close"
             onClick={() => setModelWarning(null)}
-            title="dismiss"
+            title={window.t ? window.t("composer.warn.dismiss", null, "dismiss") : "dismiss"}
           >
             <Icon name="close" size={10} />
           </button>
@@ -304,10 +304,12 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
         <button
           type="button"
           className={`btn icon ghost ${!supportsImages ? "unsupported-vision" : ""}`}
-          title={supportsImages ? "attach image (paste screenshot or drag & drop)" : `Current model "${currentModel?.name || ""}" does not support images (click to switch)`}
+          title={supportsImages
+            ? (window.t ? window.t("composer.attach", null, "attach image (paste screenshot or drag & drop)") : "attach image (paste screenshot or drag & drop)")
+            : (window.t ? window.t("composer.unsupportedVision", { model: currentModel?.name || "" }) : `Current model "${currentModel?.name || ""}" does not support images (click to switch)`)}
           onClick={() => {
             if (!supportsImages) {
-              setModelWarning(`Current model "${currentModel?.name || currentModel?.id || "model"}" does not support image input. Please switch to a vision-capable model (e.g. Claude 3.5/3.7 Sonnet).`);
+              setModelWarning(window.t ? window.t("composer.warn.vision", { model: currentModel?.name || currentModel?.id || "model" }) : `Current model "${currentModel?.name || currentModel?.id || "model"}" does not support image input. Please switch to a vision-capable model.`);
             } else {
               fileInputRef.current?.click();
             }
@@ -326,7 +328,7 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
             e.target.value = "";
           }}
         />
-        <button type="button" className="btn icon ghost" title="dictate">
+        <button type="button" className="btn icon ghost" title={window.t ? window.t("composer.dictate", null, "dictate") : "dictate"}>
           <Icon name="voice" size={13} />
         </button>
         <div className="composer-input">
@@ -335,10 +337,10 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
             rows="1"
             placeholder={
               planMode && !isStreaming
-                ? (microcopy?.planTip ?? "describe what to build, or give feedback on the plan…")
+                ? (window.t ? window.t("composer.placeholder.plan", null, microcopy?.planTip) : (microcopy?.planTip ?? "describe what to build, or give feedback on the plan…"))
                 : isStreaming
-                  ? microcopy?.streamingTip
-                  : (microcopy?.paletteTip ?? "what should we ship?  ·  / for commands  ·  ⌘K for the bridge")
+                  ? (window.t ? window.t("composer.placeholder.streaming", null, microcopy?.streamingTip) : microcopy?.streamingTip)
+                  : (window.t ? window.t("composer.placeholder.default", null, microcopy?.paletteTip) : (microcopy?.paletteTip ?? "what should we ship?  ·  / for commands  ·  ⌘K for the bridge"))
             }
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -347,7 +349,7 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
             className="selectable"
           />
         </div>
-        <button className="btn outlined" title="open command bridge (⌘K)" onClick={onOpenCmd}>
+        <button className="btn outlined" title={window.t ? window.t("composer.bridgeKbd", null, "open command bridge (⌘K)") : "open command bridge (⌘K)"} onClick={onOpenCmd}>
           <Icon name="command" size={11} />
           <span className="kbd" style={{ marginLeft: 2 }}>K</span>
         </button>
@@ -356,11 +358,11 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
             {text.trim() && (
               <button className="btn outlined" onClick={send}
                 style={{ color: "var(--amber)", borderColor: "color-mix(in oklab, var(--amber) 40%, var(--line))" }}>
-                <Icon name="arrow" size={10} color="var(--amber)" /> steer
+                <Icon name="arrow" size={10} color="var(--amber)" /> {window.t ? window.t("composer.steer", null, "steer") : "steer"}
               </button>
             )}
             <button className="btn danger" onClick={onAbort}>
-              <Icon name="stop" size={10} /> abort <span className="kbd">⎋</span>
+              <Icon name="stop" size={10} /> {window.t ? window.t("composer.abort", null, "abort") : "abort"} <span className="kbd">⎋</span>
             </button>
           </>
         ) : (
@@ -368,14 +370,14 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
             {planMode && (
               <button className="btn outlined" onClick={onApprove}
                 style={{ color: "var(--amber)", borderColor: "color-mix(in oklab, var(--amber) 40%, var(--line))" }}>
-                <Icon name="play" size={10} color="var(--amber)" /> approve
+                <Icon name="play" size={10} color="var(--amber)" /> {window.t ? window.t("composer.approve", null, "approve") : "approve"}
               </button>
             )}
             <button className="btn primary" onClick={send}
               disabled={!(text.trim() || images.length > 0 || (planMode && annotationCount > 0))}>
               {planMode
-                ? `send feedback${annotationCount > 0 ? ` · ${annotationCount} comment${annotationCount !== 1 ? "s" : ""}` : ""}`
-                : "send"}
+                ? `${window.t ? window.t("composer.sendFeedback", null, "send feedback") : "send feedback"}${annotationCount > 0 ? ` · ${window.t ? window.t(annotationCount === 1 ? "composer.comment" : "composer.comments", { count: annotationCount }, `${annotationCount} comment${annotationCount !== 1 ? "s" : ""}`) : `${annotationCount} comments`}` : ""}`
+                : (window.t ? window.t("composer.send", null, "send") : "send")}
               {" "}<Icon name="arrow" size={11} />
             </button>
           </>
@@ -390,15 +392,21 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
         </button>
         <button className="composer-pill" onClick={onCycleThinking}>
           <Icon name="thinking" size={11} color="var(--lilac)" />
-          <span style={{ color: "var(--fg-2)" }}>thinking · {thinking}</span>
+          <span style={{ color: "var(--fg-2)" }}>
+            {window.t ? window.t("composer.thinking", { level: thinking }, `thinking · ${thinking}`) : `thinking · ${thinking}`}
+          </span>
         </button>
         <button className={`composer-pill ${planMode ? "on" : ""}`} onClick={onTogglePlan}>
           <Icon name="plan" size={11} color={planMode ? "var(--amber)" : "var(--fg-3)"} />
-          <span style={{ color: planMode ? "var(--amber)" : "var(--fg-2)" }}>plan mode</span>
+          <span style={{ color: planMode ? "var(--amber)" : "var(--fg-2)" }}>
+            {window.t ? window.t("composer.planMode", null, "plan mode") : "plan mode"}
+          </span>
         </button>
         <div style={{ flex: 1 }} />
         <span className="mono" style={{ color: "var(--fg-4)", fontSize: "var(--d-text-xs)" }}>
-          {isStreaming && text.trim() ? "↵ steer · ⎋ abort" : "↵ send · ⇧↵ newline · ⎋ abort"}
+          {isStreaming && text.trim()
+            ? (window.t ? window.t("composer.hints.steer", null, "↵ steer · ⎋ abort") : "↵ steer · ⎋ abort")
+            : (window.t ? window.t("composer.hints.normal", null, "↵ send · ⇧↵ newline · ⎋ abort") : "↵ send · ⇧↵ newline · ⎋ abort")}
         </span>
       </div>
     </div>
@@ -611,7 +619,7 @@ function CommandBridge({
         <div className="bridge-input-row">
           <Icon name="command" size={14} color="var(--accent)" />
           <input ref={inputRef} className="bridge-input mono"
-            placeholder="cross the bridge — type to filter…" value={q}
+            placeholder={window.t ? window.t("composer.bridge.searchPlaceholder", null, "cross the bridge — type to filter…") : "cross the bridge — type to filter…"} value={q}
             onChange={(e) => setQ(e.target.value)} />
           <span className="kbd">esc</span>
         </div>

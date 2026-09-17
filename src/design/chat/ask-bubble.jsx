@@ -38,16 +38,16 @@ function AskBubble({ msg, idx, highlighted, onAnswer }) {
       </div>
       <div className="ass-body">
         <div className="ass-meta">
-          <span className="mono" style={{ color: "var(--amber)" }}>Ask</span>
+          <span className="mono" style={{ color: "var(--amber)" }}>{window.t ? window.t("chat.ask", null, "Ask") : "Ask"}</span>
           <span className="chip muted">{msg.time}</span>
           {msg.answered && (
             <span className="chip" style={{ color: "var(--accent)", borderColor: "color-mix(in oklab, var(--accent) 30%, var(--line))" }}>
-              answered
+              {window.t ? window.t("chat.answered", null, "answered") : "answered"}
             </span>
           )}
           {msg.cancelled && (
             <span className="chip" style={{ color: "var(--fg-4)", borderColor: "var(--line-bright)" }}>
-              cancelled
+              {window.t ? window.t("chat.cancelled", null, "cancelled") : "cancelled"}
             </span>
           )}
         </div>

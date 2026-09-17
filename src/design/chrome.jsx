@@ -6,7 +6,7 @@
    - Ambient rail: TokenGauge, ActivityRadar, Minimap, Peer session
    ═════════════════════════════════════════════════════════════════════ */
 
-const { Icon, TokenGauge, ActivityRadar, Sparkline, TOOL_META } = window;
+const { Icon, TokenGauge, ActivityRadar, Sparkline, TOOL_META, AgentActivity } = window;
 
 // ── Platform detection ────────────────────────────────────────────────
 const IS_WIN = typeof navigator !== "undefined" &&
@@ -39,7 +39,7 @@ function WindowChrome({ project, peer, onCmd }) {
 
       <div className="chrome-right">
         <button className="btn ghost outlined" onClick={onCmd}>
-          <Icon name="command" size={11} /> bridge{" "}
+          <Icon name="command" size={11} /> {window.t ? window.t("chrome.bridge", null, "bridge") : "bridge"}{" "}
           <span className="kbd">{IS_WIN ? "^K" : "⌘K"}</span>
         </button>
 
@@ -58,7 +58,7 @@ function WindowChrome({ project, peer, onCmd }) {
 
 // ── Project tabs ─────────────────────────────────────────────────────
 function TabBar({ projects, activeId, onSelect, onClose, peer, onNew, onNewProject, onNewStandalone, onHistory, onManageModels, appVersion, theme }) {
-  const version = appVersion || window.PIDESK_APP_VERSION || window.OMP_APP_VERSION || "0.2.2";
+  const version = appVersion || window.PIDESK_APP_VERSION || window.OMP_APP_VERSION || "0.2.3";
   const themeName = theme || "daylight";
   const versionLabel = `v${version}-${themeName}`;
 
@@ -116,7 +116,7 @@ function TabBar({ projects, activeId, onSelect, onClose, peer, onNew, onNewProje
       <div className="tab-add-wrap" ref={menuRef}>
         <button
           className={`tab-add ${menuOpen ? "active" : ""}`}
-          title="New session / Open project"
+          title={window.t ? window.t("chrome.tabs.new", null, "New session / Open project") : "New session / Open project"}
           onClick={() => setMenuOpen(v => !v)}
         >
           <Icon name="plus" size={11} />
@@ -128,7 +128,7 @@ function TabBar({ projects, activeId, onSelect, onClose, peer, onNew, onNewProje
               onClick={handleOpenFolder}
             >
               <Icon name="folder" size={12} color="var(--accent)" />
-              <span className="tab-dropdown-label">Open Project Folder...</span>
+              <span className="tab-dropdown-label">{window.t ? window.t("chrome.tabs.openFolder", null, "Open Project Folder...") : "Open Project Folder..."}</span>
               <span className="tab-dropdown-hotkey">Ctrl+O</span>
             </button>
             <button
@@ -136,16 +136,16 @@ function TabBar({ projects, activeId, onSelect, onClose, peer, onNew, onNewProje
               onClick={handleOpenStandalone}
             >
               <Icon name="agent" size={12} color="var(--lilac)" />
-              <span className="tab-dropdown-label">New Session (No Project)</span>
+              <span className="tab-dropdown-label">{window.t ? window.t("chrome.tabs.newSession", null, "New Session (No Project)") : "New Session (No Project)"}</span>
               <span className="tab-dropdown-hotkey">Ctrl+T</span>
             </button>
           </div>
         )}
       </div>
-      <button className="tab-add" title="conversation history (Ctrl+H)" onClick={onHistory}>
+      <button className="tab-add" title={window.t ? window.t("chrome.tabs.history", null, "conversation history (Ctrl+H)") : "conversation history (Ctrl+H)"} onClick={onHistory}>
         <Icon name="clock" size={11} />
       </button>
-      <button className="tab-add" title="manage models (Ctrl+M)" onClick={onManageModels}>
+      <button className="tab-add" title={window.t ? window.t("chrome.tabs.models", null, "manage models (Ctrl+M)") : "manage models (Ctrl+M)"} onClick={onManageModels}>
         <Icon name="cpu" size={11} />
       </button>
       <div style={{ flex: 1 }} />
@@ -158,12 +158,19 @@ function TabBar({ projects, activeId, onSelect, onClose, peer, onNew, onNewProje
 
 // ── Status bar (footer): connection, model, tokens, todos, extension ─
 function StatusBar({ ctx, model, thinking, todoDone, todoTotal, onTodo, onModel, onTweaks, autosave, onAutosave }) {
-  const thinkLabel = { off: "off", minimal: "min", low: "low", medium: "med", high: "high", xhigh: "max" }[thinking] ?? "—";
+  const thinkLabel = {
+    off: window.t ? window.t("chrome.status.thinking.off", null, "off") : "off",
+    minimal: window.t ? window.t("chrome.status.thinking.minimal", null, "min") : "min",
+    low: window.t ? window.t("chrome.status.thinking.low", null, "low") : "low",
+    medium: window.t ? window.t("chrome.status.thinking.medium", null, "med") : "med",
+    high: window.t ? window.t("chrome.status.thinking.high", null, "high") : "high",
+    xhigh: window.t ? window.t("chrome.status.thinking.xhigh", null, "max") : "max",
+  }[thinking] ?? "—";
   return (
     <div className="status">
-      <span className="status-cell"><span className="dot live" /> connected</span>
+      <span className="status-cell"><span className="dot live" /> {window.t ? window.t("chrome.status.connected", null, "connected") : "connected"}</span>
       <span className="status-sep">·</span>
-      <button className="status-cell btn ghost" onClick={onModel} style={{ height: 22, padding: "0 6px" }}>
+      <button className="status-cell btn ghost" onClick={onModel} style={{ height: 22, padding: "0 6px", fontSize: "var(--d-text-xs)" }}>
         <span style={{ color: "var(--accent)" }}>{model.name}</span>
         <Icon name="chev" size={9} color="var(--fg-4)" />
       </button>
@@ -178,23 +185,23 @@ function StatusBar({ ctx, model, thinking, todoDone, todoTotal, onTodo, onModel,
         <span className="mono" style={{ color: "var(--fg-4)" }}>{(+ctx.pct).toFixed(1)}%</span>
       </span>
       <span className="status-sep">·</span>
-      <span className="status-cell"><span style={{ color: "var(--fg-3)" }}>cost</span> <span className="mono">{ctx.cost}</span></span>
+      <span className="status-cell"><span style={{ color: "var(--fg-3)" }}>{window.t ? window.t("chrome.status.cost", null, "cost") : "cost"}</span> <span className="mono">{ctx.cost}</span></span>
       <span className="status-sep">·</span>
       <span className="status-cell"><span className="mono" style={{ color: "var(--fg-3)" }}>{ctx.tokensPerSec}</span> t/s</span>
       <div style={{ flex: 1 }} />
-      <button className="status-cell btn ghost" onClick={onTodo} style={{ height: 22, padding: "0 6px" }}>
+      <button className="status-cell btn ghost" onClick={onTodo} style={{ height: 22, padding: "0 6px", fontSize: "var(--d-text-xs)" }}>
         <Icon name="plan" size={11} color="var(--accent)" />
-        <span style={{ color: "var(--accent)" }}>todo <span className="mono">{todoDone}/{todoTotal}</span></span>
+        <span style={{ color: "var(--accent)" }}>{window.t ? window.t("chrome.status.todo", null, "todo") : "todo"} <span className="mono">{todoDone}/{todoTotal}</span></span>
       </button>
       <span className="status-sep">·</span>
       <button className="status-cell btn ghost" onClick={() => onAutosave?.(!autosave)}
-        style={{ height: 22, padding: "0 6px" }} title="toggle autosave">
+        style={{ height: 22, padding: "0 6px", fontSize: "var(--d-text-xs)" }} title={window.t ? window.t("chrome.status.toggleAutosave", null, "toggle autosave") : "toggle autosave"}>
         <span style={{ color: autosave ? "var(--fg-3)" : "var(--fg-5)" }}>
-          autosave {autosave ? "on" : "off"}
+          {window.t ? window.t("chrome.status.autosave", null, "autosave") : "autosave"} {autosave ? (window.t ? window.t("chrome.status.autosaveOn", null, "on") : "on") : (window.t ? window.t("chrome.status.autosaveOff", null, "off") : "off")}
         </span>
       </button>
       <span className="status-sep">·</span>
-      <button className="status-cell btn ghost" onClick={onTweaks} title="外观与布局调整" style={{ height: 22, padding: "0 6px" }}>
+      <button className="status-cell btn ghost" onClick={onTweaks} title={window.t ? window.t("chrome.status.tweaks", null, "外观与布局调整") : "外观与布局调整"} style={{ height: 22, padding: "0 6px", fontSize: "var(--d-text-xs)" }}>
         <Icon name="cog" size={12} color="var(--fg-3)" />
       </button>
     </div>
@@ -278,12 +285,14 @@ function SessionMinimap({ messages, hoveredIdx, onHover, onClick }) {
 }
 
 // ── Peer session widget — shows the OTHER agent, when split is on ────
-function PeerSession({ peer }) {
+function PeerSession({ peer, onFocus, onClear }) {
   const meta = TOOL_META[peer.activity?.split(" · ")[0]] || TOOL_META.edit;
+  const todoPct = peer.todo.total > 0 ? (peer.todo.done / peer.todo.total) * 100 : 0;
   return (
     <div className="peer">
       <div className="peer-head">
-        <span className="dot live" style={{ background: "var(--cyan)", boxShadow: "0 0 0 0 var(--cyan)" }} />
+        <span className={`dot ${peer.isStreaming ? "live" : ""}`}
+          style={{ background: "var(--cyan)", boxShadow: peer.isStreaming ? undefined : "none" }} />
         <span style={{ color: "var(--cyan)", fontWeight: 500 }}>{peer.project}</span>
         <span className="mono" style={{ marginLeft: "auto", color: "var(--fg-4)" }}>{peer.tps} t/s</span>
       </div>
@@ -297,26 +306,72 @@ function PeerSession({ peer }) {
       <div className="peer-row" style={{ color: "var(--fg-3)" }}>
         todo <span className="mono">{peer.todo.done}/{peer.todo.total}</span>
         <span className="status-bar-tube" style={{ marginLeft: 6, flex: 1 }}>
-          <span className="status-bar-fill" style={{ width: `${(peer.todo.done / peer.todo.total) * 100}%`, background: "var(--cyan)" }} />
+          <span className="status-bar-fill" style={{ width: `${todoPct}%`, background: "var(--cyan)" }} />
         </span>
-        <button className="btn ghost" style={{ marginLeft: 6, height: 18, padding: "0 6px", fontSize: "var(--d-text-xs)" }}>focus →</button>
+        {onFocus && (
+          <button className="btn ghost" onClick={onFocus}
+            style={{ marginLeft: 6, height: 18, padding: "0 6px", fontSize: "var(--d-text-xs)" }}>
+            {window.t ? window.t("chrome.rail.focus", null, "focus →") : "focus →"}
+          </button>
+        )}
+        {onClear && (
+          <button className="btn ghost" onClick={onClear}
+            title={window.t ? window.t("chrome.rail.unpin", null, "unpin peer") : "unpin peer"}
+            style={{ height: 18, padding: "0 4px", fontSize: "var(--d-text-xs)", color: "var(--fg-4)" }}>
+            <Icon name="close" size={8} color="var(--fg-4)" />
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
+// ── Peer picker — shown when no peer is pinned and ≥1 other session exists ─
+function PeerPicker({ sessions, activeSessionId, onSetPeer }) {
+  const others = sessions.filter(s => s.id !== activeSessionId);
+  if (others.length === 0) {
+    return (
+      <div style={{ color: "var(--fg-5)", fontSize: "var(--d-text-xs)", padding: "8px 0" }}>
+        {window.t ? window.t("chrome.rail.peerEmpty", null, "Open a second tab to monitor it here.") : "Open a second tab to monitor it here."}
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <div style={{ color: "var(--fg-4)", fontSize: "var(--d-text-xs)", marginBottom: 4 }}>
+        {window.t ? window.t("chrome.rail.peerHint", null, "Pin a session to monitor here") : "Pin a session to monitor here"}
+      </div>
+      {others.map(s => (
+        <button key={s.id} className="btn ghost"
+          onClick={() => onSetPeer?.(s.id)}
+          style={{ display: "flex", alignItems: "center", gap: 6, height: 24, padding: "0 6px",
+                   fontSize: "var(--d-text-xs)", width: "100%", justifyContent: "flex-start" }}>
+          <Icon name={s.path ? "folder" : "agent"} size={10} color={s.color} />
+          <span style={{ color: "var(--fg-2)", flex: 1, textAlign: "left", overflow: "hidden",
+                         textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+          <Icon name="link" size={9} color="var(--fg-4)" />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ── Right rail: ambient peripherals stacked ──────────────────────────
-function AmbientRail({ ctx, activity, peer, messages, microcopy, onClose, sparklineValues, hoveredMsgIdx, onMinimapHover, onMinimapClick }) {
+function AmbientRail({ ctx, activity, peer, peerSessionId, sessions, activeSessionId,
+    onSetPeer, onClearPeer, onFocusPeer,
+    messages, microcopy, onClose, sparklineValues, hoveredMsgIdx, onMinimapHover, onMinimapClick,
+    isStreaming, turnStartMs, runningTools, recentTools }) {
   // Use live tps samples. Before the first turn, sparklineValues is all zeros
   // which renders as a flat baseline — honest, not fake random data.
   const sparkVals = (sparklineValues && sparklineValues.length > 0)
     ? sparklineValues
     : Array(30).fill(0);
+  const hasPeer = peerSessionId && peer && peer.project !== "—";
   return (
     <aside className="rail">
       <div className="rail-head">
-        <span style={{ color: "var(--fg-3)" }}>ambient</span>
-        <button className="btn icon ghost" onClick={onClose} title="hide rail">
+        <span style={{ color: "var(--fg-3)" }}>{window.t ? window.t("chrome.rail.ambient", null, "ambient") : "ambient"}</span>
+        <button className="btn icon ghost" onClick={onClose} title={window.t ? window.t("chrome.rail.hide", null, "hide rail") : "hide rail"}>
           <Icon name="close" size={10} />
         </button>
       </div>
@@ -327,17 +382,21 @@ function AmbientRail({ ctx, activity, peer, messages, microcopy, onClose, sparkl
         <div className="rail-spark">
           <Sparkline values={sparkVals} width={210} height={28} />
           <div className="rail-spark-foot">
-            <span style={{ color: "var(--fg-4)" }}>throughput</span>
+            <span style={{ color: "var(--fg-4)" }}>{window.t ? window.t("chrome.rail.throughput", null, "throughput") : "throughput"}</span>
             <span className="mono" style={{ color: "var(--accent)" }}>{ctx.tokensPerSec} t/s</span>
           </div>
         </div>
       </div>
 
       <div className="rail-card glass">
+        <AgentActivity isStreaming={isStreaming} turnStartMs={turnStartMs} runningTools={runningTools} recentTools={recentTools} />
+      </div>
+
+      <div className="rail-card glass">
         <div className="rail-card-head">
           <Icon name="radar" size={11} color="var(--accent)" />
-          <span style={{ color: "var(--fg-2)" }}>agent radar</span>
-          <span className="chip muted" style={{ marginLeft: "auto" }}>last 60s</span>
+          <span style={{ color: "var(--fg-2)" }}>{window.t ? window.t("chrome.rail.radar", null, "agent radar") : "agent radar"}</span>
+          <span className="chip muted" style={{ marginLeft: "auto" }}>{window.t ? window.t("chrome.rail.last60s", null, "last 60s") : "last 60s"}</span>
         </div>
         <ActivityRadar activity={activity} tps={ctx.tokensPerSec} />
         <div className="legend">
@@ -352,10 +411,22 @@ function AmbientRail({ ctx, activity, peer, messages, microcopy, onClose, sparkl
       <div className="rail-card glass">
         <div className="rail-card-head">
           <Icon name="split" size={11} color="var(--cyan)" />
-          <span style={{ color: "var(--fg-2)" }}>peer session</span>
-          <span className="chip" style={{ marginLeft: "auto", color: "var(--cyan)", borderColor: "color-mix(in oklab, var(--cyan) 30%, var(--line))" }}>split</span>
+          <span style={{ color: "var(--fg-2)" }}>{window.t ? window.t("chrome.rail.peer", null, "peer session") : "peer session"}</span>
+          {hasPeer ? (
+            <span className="chip" style={{ marginLeft: "auto", color: "var(--cyan)",
+              borderColor: "color-mix(in oklab, var(--cyan) 30%, var(--line))" }}>
+              {peer.isStreaming
+                ? (window.t ? window.t("chrome.rail.peerLive", null, "live") : "live")
+                : (window.t ? window.t("chrome.rail.peerPinned", null, "pinned") : "pinned")}
+            </span>
+          ) : (
+            <span className="chip muted" style={{ marginLeft: "auto" }}>—</span>
+          )}
         </div>
-        <PeerSession peer={peer} />
+        {hasPeer
+          ? <PeerSession peer={peer} onFocus={onFocusPeer} onClear={onClearPeer} />
+          : <PeerPicker sessions={sessions} activeSessionId={activeSessionId} onSetPeer={onSetPeer} />
+        }
       </div>
 
       <div className="rail-card glass" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 120 }}>
@@ -369,4 +440,4 @@ function AmbientRail({ ctx, activity, peer, messages, microcopy, onClose, sparkl
   );
 }
 
-Object.assign(window, { WindowChrome, TabBar, StatusBar, AmbientRail, SessionMinimap, PeerSession });
+Object.assign(window, { WindowChrome, TabBar, StatusBar, AmbientRail, SessionMinimap, PeerSession, PeerPicker });

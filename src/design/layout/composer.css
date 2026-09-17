@@ -31,11 +31,14 @@
   min-height: 22px; max-height: 180px;
   overflow-y: hidden;
   resize: none;
-  font: inherit; font-size: var(--d-text);
+  font: inherit; font-size: var(--d-text-sm);
   color: var(--fg);
   line-height: 1.5;
 }
-.composer-input textarea::placeholder { color: var(--fg-4); }
+.composer-input textarea::placeholder {
+  color: var(--fg-4);
+  font-size: var(--d-text-sm);
+}
 .composer-input textarea:focus-visible { outline: none; }
 
 .composer-foot {

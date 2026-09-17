@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-09-17
+
+### Added
+
+- **Agent activity status card**: live heartbeat indicator in the ambient rail shows whether the agent is idle, thinking, or executing tools — displays running tool names, targets, and ticking elapsed timers so long-running operations are always visible; timers turn amber after 30 s to flag potentially stuck steps; includes a rolling trail of the last 3 completed actions so brief tool calls remain visible
+- **Peer Session monitoring**: pin another session to the ambient rail to watch its live activity, TPS, tool usage, and todo progress without switching tabs — interactive picker when no peer is set, auto-clear when switching to the peer tab
+- **Bilingual Internationalization (i18n)**: integrated English and Simplified Chinese localization system (`src/i18n.js`) across UI controls, headers, settings, history, and toasts
+- **Message Action Bar**: bottom-right action bar on message bubbles with Markdown copy and session branching from assistant turns
+- Chinese README (`README.zh-CN.md`) with cross-links between English and Chinese documentation
+- **Delete session**: trash icon in the history panel lets you permanently remove a saved session from disk — two-click confirmation (trash → "Delete?" → confirm) prevents accidents; the row is removed optimistically from the list immediately
+
+### Fixed
+
+- `/compact` now immediately refreshes the ambient context gauge instead of waiting for the next conversation turn
+- Compact card displays both before and after token counts (`26.2k → 24.1k`) instead of only the pre-compact count; pre-compact count is now snapshotted from the ambient gauge at send time so it's always accurate regardless of the backend response
+- Compact failure now shows the actual error reason from the backend (e.g. "Nothing to compact") instead of a generic "compaction failed"
+
 ## [0.2.2] - 2026-09-16
 
 ### Added

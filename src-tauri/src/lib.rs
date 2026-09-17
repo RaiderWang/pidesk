@@ -143,6 +143,76 @@ fn open_url_external(url: String) -> Result<(), String> {
     open::that(&url).map_err(|e| e.to_string())
 }
 
+/// Copy an omp session file to a new branched sub-directory so a forked tab
+/// can start from the same history without sharing a file with the original.
+///
+/// `source_path` must be the full path to an existing `.jsonl` session file.
+/// Returns the full path to the new copy, ready to pass as `resume` to
+/// `start_session`.
+#[tauri::command]
+fn copy_session_file(
+    source_path: String,
+    max_messages: Option<usize>,
+) -> Result<String, String> {
+    saved_sessions::copy_session_file(&source_path, max_messages)
+}
+
+/// Permanently delete a saved session from disk.
+///
+/// `path` must be the full path to the session's `.jsonl` file (as returned
+/// by `list_saved_sessions`). The entire parent directory (the per-session
+/// sub-folder) is removed. A safety check ensures the directory is inside
+/// the sessions root before deletion proceeds.
+#[tauri::command]
+fn delete_saved_session(path: String, app: tauri::AppHandle) -> Result<(), String> {
+    saved_sessions::delete_saved_session(&path, &app)
+}
+
+/// Relocate an HTML export file that omp wrote to a user-chosen location
+/// via the native save dialog.
+///
+/// `source_path` is the absolute path to the HTML file omp already wrote.
+/// Returns `true` when the file was copied, `false` when the user
+/// cancelled the dialog.  Same main-thread dispatch pattern as
+/// `open_project` — see that doc-comment for the threading rationale.
+#[tauri::command]
+async fn save_html_export(source_path: String, app: tauri::AppHandle) -> Result<bool, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let src = std::path::Path::new(&source_path);
+    if !src.exists() {
+        return Err(format!("export file not found: {source_path}"));
+    }
+    let default_name = src
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "session-export.html".to_owned());
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    app.dialog()
+        .file()
+        .set_title("Export Session")
+        .add_filter("HTML", &["html"])
+        .set_file_name(&default_name)
+        .save_file(move |result| {
+            let _ = tx.send(result);
+        });
+    let picked = tauri::async_runtime::spawn_blocking(move || rx.recv())
+        .await
+        .map_err(|e| format!("join error: {e}"))?
+        .map_err(|e| format!("channel error: {e}"))?;
+    let Some(picked) = picked else {
+        return Ok(false);
+    };
+    let dest = picked
+        .into_path()
+        .map_err(|e| format!("invalid path: {e}"))?;
+    std::fs::copy(src, &dest).map_err(|e| format!("copy error: {e}"))?;
+    // Clean up the original file omp wrote in the project directory.
+    let _ = std::fs::remove_file(src);
+    Ok(true)
+}
+
 /// Get the application version from package metadata.
 #[tauri::command]
 fn get_app_version(app: tauri::AppHandle) -> String {
@@ -175,6 +245,9 @@ pub fn run() {
             models_config::write_models_config,
             models_config::open_models_file,
             models_config::open_models_folder,
+            copy_session_file,
+            delete_saved_session,
+            save_html_export,
             get_app_version,
         ])
         .setup(|app| {

@@ -11,6 +11,7 @@ const {
 
 // EDITMODE block — tweak defaults
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "locale": "en",
   "theme": "daylight",
   "density": "compact",
   "layout": "rail",
@@ -120,7 +121,7 @@ function App() {
             onCmd={() => setBridgeOpen(true)} />
           <TabBar projects={data.projects} activeId={activeTabId}
             onSelect={setActiveTabId} peer={data.peer} onNew={() => {}}
-            appVersion={window.PIDESK_APP_VERSION || window.OMP_APP_VERSION || "0.2.2"} theme={t.theme} />
+            appVersion={window.PIDESK_APP_VERSION || window.OMP_APP_VERSION || "0.2.3"} theme={t.theme} />
 
           <div className={`stage ${showRail ? "with-rail" : ""}`}>
             <main className="session">

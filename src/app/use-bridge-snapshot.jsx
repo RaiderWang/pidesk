@@ -26,6 +26,13 @@ function useBridgeSnapshot(bridge, setters) {
       if (snap.thinkingLevel) setters.setThinkingLevel(snap.thinkingLevel);
       setters.setSessions(snap.sessions ?? []);
       if (snap.activeSessionId) setters.setActiveSessionId(snap.activeSessionId);
+      // Peer session — optional setters (safe for callers that don't use peer)
+      if (snap.peer !== undefined)          setters.setPeer?.(snap.peer);
+      if (snap.peerSessionId !== undefined) setters.setPeerSessionId?.(snap.peerSessionId);
+      // Agent activity — running tools + turn clock
+      setters.setRunningTools?.(snap.runningTools ?? []);
+      setters.setRecentTools?.(snap.recentTools ?? []);
+      setters.setTurnStartMs?.(snap.turnStartMs ?? null);
     });
     return unsub;
   }, [bridge]);

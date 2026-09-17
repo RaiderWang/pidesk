@@ -1,5 +1,7 @@
 # PiDesk
 
+**Languages:** [English](README.md) · [简体中文](README.zh-CN.md)
+
 A fast, lightweight Tauri 2 desktop shell for [oh-my-pi](https://github.com/can1357/oh-my-pi) (`omp`).
 Wraps the `omp --mode rpc` coding agent as a managed child process and serves the
 React UI as a connected, live interface — no browser, no Electron, ~8 MB binary.
@@ -14,6 +16,7 @@ React UI as a connected, live interface — no browser, no Electron, ~8 MB binar
 - `/new` command starts a fresh session (history kept on disk)
 - Conversation history panel (`Ctrl+H` / `⌘H` / `/history`) to browse, search, and resume past sessions in new tabs
 - Model picker with two-view command bridge; cycle or pick directly from the status bar
+- Custom model manager (`Ctrl+M` / `/models`): Add, edit, or configure providers in `models.yml` with visual form and raw YAML views, supporting API key, OAuth credential reuse, and local keyless endpoints
 - Thinking-level control: cycle through `off / minimal / low / medium / high / xhigh` (per-model — omp picks the supported subset)
 - Streaming token display with tokens/sec sparkline and context-window gauge
 
@@ -119,83 +122,53 @@ Dev mode auto-opens the WebView DevTools in debug builds.
 
 ---
 
-## Project Structure
+## Model Management: OAuth & Custom Models
 
-```
-pidesk/
-├── src/                        # Frontend (served by Tauri asset server)
-│   ├── index.html              # Entry point — declares script load order
-│   ├── app-live.jsx            # React root: state + handlers + render
-│   ├── live.js                 # Tauri IPC bridge + OMP_BRIDGE + OMP_DATA
-│   ├── adapter.js              # Pure RPC→UI data transforms (no side effects)
-│   ├── model-names.js          # Model ID → display name lookup table
-│   ├── platform.css            # Tauri-native overrides (no padding/shadow/radius)
-│   ├── react.development.js    # React 18 (local, no CDN)
-│   ├── react-dom.development.js
-│   ├── babel.min.js            # @babel/standalone for JSX transform
-│   ├── marked.min.js           # Markdown renderer
-│   ├── highlight.min.js        # Syntax highlighting (atom-one-dark theme)
-│   ├── highlight-theme.css
-│   │
-│   ├── app/                    # App-root helpers (extracted from app-live.jsx)
-│   │   ├── constants.js        # TWEAK_DEFAULTS, NULL_MODEL, framing strings
-│   │   └── use-bridge-snapshot.jsx  # Custom hooks: bridge subscription, theme, ⌘K
-│   │
-│   └── design/                 # UI components, split by domain
-│       ├── ui/
-│       │   ├── icons.jsx           # PiDesk Icon Pack v1 + TOOL_META
-│       │   ├── sparks.jsx          # Sparkline, TokenGauge, ActivityRadar
-│       │   ├── markdown.jsx        # MarkdownContent (marked + hljs)
-│       │   └── plan-annotations.jsx # AnnotablePlan + CommentForm
-│       ├── chat/
-│       │   ├── user-bubble.jsx
-│       │   ├── assistant-bubble.jsx # AssistantBubble + InlinePlan
-│       │   ├── eval-cell.jsx        # Syntax-highlighted kernel cell
-│       │   ├── tool-card.jsx        # ToolCard + ScrubbableDiff
-│       │   └── chat-view.jsx        # Auto-scroll wiring + bubble routing
-│       ├── tweaks/
-│       │   ├── style.js             # __TWEAKS_STYLE template
-│       │   ├── use-tweaks.js        # useTweaks hook
-│       │   ├── panel.jsx            # TweaksPanel + TweakSection + TweakRow
-│       │   └── controls.jsx         # Slider/Toggle/Radio/Select/etc.
-│       ├── layout/                  # CSS by visual layer (chained @import)
-│       │   ├── _index.css
-│       │   ├── chrome.css           # App + window chrome + Tabs
-│       │   ├── stage.css            # Stage layout + session column
-│       │   ├── chat.css             # Chat surface, inline plan, tool cards
-│       │   ├── composer.css         # Composer + slash palette
-│       │   ├── rail.css             # Status bar + ambient rail + minimap
-│       │   └── overlays.css         # ⌘K bridge + kanban + plan annotations
-│       ├── chrome.jsx               # WindowChrome, TabBar, StatusBar, AmbientRail, SessionMinimap
-│       ├── composer.jsx             # Composer + CommandBridge (⌘K palette)
-│       ├── panels.jsx               # PlanKanban (kanban view)
-│       ├── layout.css               # Single @import → layout/_index.css
-│       └── styles.css               # Visual tokens (colours, spacing, type)
-│
-├── src-tauri/                  # Rust backend
-│   ├── src/
-│   │   ├── main.rs             # Binary entry point
-│   │   ├── lib.rs              # Tauri setup, command registration
-│   │   └── agent/              # AgentBridge module
-│   │       ├── mod.rs              # Public surface: AgentBridge struct + impl
-│   │       ├── inner.rs            # BridgeInner per-session record
-│   │       ├── spawn.rs            # spawn_omp + Windows CREATE_NO_WINDOW flag
-│   │       └── reader.rs           # stdout/stderr reader threads, read_until_capped
-│   ├── Cargo.toml
-│   ├── tauri.conf.json         # Window config + strict CSP
-│   └── capabilities/
-│       └── default.json        # Tauri capability grants
-│
-├── docs/
-│   └── plans/                  # Design documents
-├── screenshots/                # README assets
-├── test-rpc.mjs                # Dev utility: probe omp RPC directly (Node/Bun)
-├── .gitattributes
-├── .gitignore
-├── README.md
-├── CLAUDE.md
-└── package.json
-```
+PiDesk provides a unified, two-tier model management system that integrates **built-in / OAuth login providers** with **user-defined custom models**.
+
+### 1. Built-in & OAuth Login Models (`omp login <provider>`)
+
+When you log in to providers such as **Cursor**, **Anthropic**, **OpenAI Codex**, or **GitHub Copilot** using `omp login <provider>` in your terminal:
+- **Credential Storage**: Session credentials and refresh tokens are stored securely in SQLite at `~/.omp/agent/agent.db`.
+- **Model Catalogue**: The agent exposes its full catalogue of models (e.g. 100+ Cursor models, Claude 3.5/3.7 Sonnet, GPT-4o) dynamically through RPC.
+- **Where to Access**: All authenticated OAuth models appear directly in the **Switch Model** picker in PiDesk (click the model name in the bottom status bar, or press `Ctrl+K` / `⌘K` and select *switch model*).
+- **Why they are not in `models.yml`**: OAuth models are managed by `omp`'s internal auth storage and are **not** written to `models.yml`. This keeps your custom configuration file clean and avoids upstream version drift.
+
+### 2. Custom Models (`models.yml` / `Ctrl+M`)
+
+PiDesk's visual **Model Manager** (`Ctrl+M`, `/models`, or click **manage** in the model picker) is fully generic and supports **any third-party compatible model** — including commercial API providers (DeepSeek, OpenRouter, SiliconFlow, Groq, Together), self-hosted runtimes (Ollama, vLLM, LM Studio, LocalAI), or custom reverse proxies:
+- **Config Path**: Reads and writes `~/.omp/agent/models.yml` (automatically backed up to `models.yml.bak` on save).
+- **Dual Editing**: Supports both a structured visual form view and direct raw YAML editing with syntax validation.
+- **Protocols Supported**: Compatible with `openai-completions` (OpenAI format), `anthropic-messages`, and `gemini` endpoints.
+- **Preserved Schema**: Preserves complex nested structures such as `compat`, `headers`, and `modelOverrides`.
+
+### 3. Authentication Modes & Credential Precedence
+
+When configuring a provider in the Model Manager, choose the appropriate **Auth Mode**:
+
+| Auth Mode | Use Case | Key Behavior |
+|-----------|----------|--------------|
+| **`apiKey` (Standard)** | Commercial APIs, gateways & authenticated proxies (e.g. DeepSeek, OpenRouter) | Sends `Authorization: Bearer <key>`. Required for standard API keys. |
+| **`oauth` (Login Credentials)** | Extending an OAuth provider | Reuses tokens from `~/.omp/agent/agent.db`. Suppresses `apiKey` so your login token is preserved. |
+| **`none` (Keyless)** | Keyless local runtimes or open endpoints (e.g. local Ollama, vLLM, local proxies) | No authentication headers sent. |
+
+> [!WARNING]
+> **Credential Shadowing Precedence in `omp`**:  
+> In `omp`, an explicit `apiKey` in `models.yml` takes precedence over stored OAuth tokens in `agent.db`. If you configure an OAuth provider (like `cursor` or `anthropic`) with an API key, it will shadow and override your OAuth login session. To use your login credentials, always select **`OAuth`** mode.
+
+### 4. Base URL Configuration
+
+- **OAuth Providers (e.g., `cursor`)**: Leave **API Base URL blank** to automatically use the official endpoint (e.g. `https://api2.cursor.sh` for Cursor). Only specify a custom `baseUrl` if you are routing traffic through a dedicated local HTTP/2 proxy.
+- **Third-Party & Compatible Providers**: Specify the endpoint URL for any compatible provider or reverse proxy, for example:
+  - Commercial / Aggregator APIs: `https://api.deepseek.com/v1`, `https://openrouter.ai/api/v1`
+  - Self-hosted / Local runtimes: `http://localhost:11434/v1` (Ollama), `http://localhost:8000/v1` (vLLM)
+  - Custom reverse proxies / Gateways: `http://localhost:20128/v1`
+
+### 5. Runtime Model Reloading
+
+`omp` agent sessions load and cache model configurations upon startup:
+- Newly added or modified models in `models.yml` take effect when opening a **new tab** or restarting the session.
+- If an active session cannot switch to a newly added model, PiDesk provides in-chat guidance prompting you to open a new tab.
 
 ---
 
@@ -303,14 +276,16 @@ notify()
 
 ## Tweaks
 
-Open the Tweaks panel (the floating panel in the bottom-right) to adjust:
+Open the Tweaks panel (via the cog icon in the bottom-right status bar) to adjust:
 
 | Setting | Options |
 |---------|---------|
+| Language | English · 简体中文 (instant live switch, persisted locally) |
 | Theme | aurora · phosphor · daylight |
 | Density | cozy · compact · dense |
-| Accent colour | 6 presets + custom |
+| Accent colour | 7 presets + custom |
 | Mono chat font | toggle |
+| Font size | 75% – 150% slider |
 | Layout | rail · split · focus |
 
 ---

@@ -8,8 +8,8 @@ const { Icon, TOOL_META } = window;
 // ── Phase pill ────────────────────────────────────────────────────────
 function PhasePill({ phase }) {
   const map = {
-    running: { color: "var(--cyan)",   icon: "play",  label: "running" },
-    done:    { color: "var(--accent)", icon: "check", label: "done"    },
+    running: { color: "var(--cyan)",   icon: "play",  label: window.t ? window.t("plan.phase.running", null, "running") : "running" },
+    done:    { color: "var(--accent)", icon: "check", label: window.t ? window.t("plan.phase.done", null, "done") : "done"    },
   };
   const m = map[phase] ?? map.running;
   return (
@@ -43,7 +43,9 @@ function PlanKanban({ kanban, planMeta, onClose, onAbort }) {
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <Icon name="plan" size={16} color="var(--accent)" />
               <span style={{ fontSize: "var(--d-text-lg)", fontWeight: 600 }}>
-                {phase === "done" ? "plan complete" : "executing plan"}
+                {phase === "done"
+                  ? (window.t ? window.t("plan.complete", null, "plan complete") : "plan complete")
+                  : (window.t ? window.t("plan.executing", null, "executing plan") : "executing plan")}
               </span>
               <PhasePill phase={phase} />
               <span className="chip muted mono">
@@ -57,7 +59,7 @@ function PlanKanban({ kanban, planMeta, onClose, onAbort }) {
               </div>
             )}
           </div>
-          <button className="btn ghost icon" onClick={onClose} title="close (esc)">
+          <button className="btn ghost icon" onClick={onClose} title={window.t ? window.t("plan.close", null, "close (esc)") : "close (esc)"}>
             <Icon name="close" size={11} />
           </button>
         </div>

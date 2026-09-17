@@ -71,6 +71,33 @@
   border: 1px solid color-mix(in oklab, var(--accent) 25%, var(--line-bright));
 }
 .user-meta { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; font-size: var(--d-text-xs); }
+
+/* ── Message action buttons (copy / branch) — right-bottom, accent colour ── */
+.msg-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+  margin-top: 6px;
+  opacity: 0;
+  transition: opacity 150ms;
+}
+.row:hover .msg-actions { opacity: 1; }
+
+.msg-act-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 3px 5px;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  transition: background 120ms;
+}
+.msg-act-btn:hover {
+  background: color-mix(in oklab, var(--accent) 14%, transparent);
+}
 .user-text {
   font-size: var(--d-text);
   color: var(--fg);

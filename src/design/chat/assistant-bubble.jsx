@@ -37,7 +37,20 @@ function InlinePlan({ plan }) {
   );
 }
 
-function AssistantBubble({ msg, idx, highlighted, annotable, annotations, onAnnotate }) {
+function AssistantBubble({ msg, idx, highlighted, annotable, annotations, onAnnotate, onBranch }) {
+  const [copied, setCopied] = React.useState(false);
+
+  function handleCopy() {
+    const text = (msg.blocks || [])
+      .filter(b => b.type === "text")
+      .map(b => b.text)
+      .join("\n\n");
+    navigator.clipboard?.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {});
+  }
+
   return (
     <div className={`row assistant fade-up${highlighted ? " mm-hot" : ""}`} data-msg-idx={idx}>
       <div className="ass-rail">
@@ -81,6 +94,24 @@ function AssistantBubble({ msg, idx, highlighted, annotable, annotations, onAnno
           }
           return null;
         })}
+        <div className="msg-actions">
+          <button
+            className="msg-act-btn"
+            title={copied ? "copied!" : (window.t ? window.t("action.copy", null, "copy as markdown") : "copy as markdown")}
+            onClick={handleCopy}
+          >
+            <_ChatIcon name={copied ? "check" : "copy"} size={12} />
+          </button>
+          {onBranch && !msg.streaming && (
+            <button
+              className="msg-act-btn"
+              title={window.t ? window.t("cmd.branch.fromHere", null, "branch from here") : "branch from here"}
+              onClick={() => onBranch(idx)}
+            >
+              <_ChatIcon name="branch" size={12} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

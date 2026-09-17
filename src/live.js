@@ -25,7 +25,6 @@
       { name: "compact",  hint: "compact context window",             icon: "▤", group: "Session" },
       { name: "new",      hint: "start a fresh session (history kept on disk)", icon: "↺", group: "Session" },
       { name: "history",  hint: "browse and resume saved sessions",   icon: "clock", group: "Session" },
-      { name: "branch",   hint: "fork the session from current head", icon: "⑂", group: "Session" },
       { name: "model",    hint: "switch model",                       icon: "◉", group: "Agent"   },
       { name: "models",   hint: "manage custom models (models.yml)",  icon: "cpu", group: "Agent" },
       { name: "thinking", hint: "cycle thinking level",               icon: "✶", group: "Agent"   },
@@ -67,6 +66,9 @@
     rpcState:       null,
     sessionCost:    null,
     currentTps:     0,
+    runningTools:   [],   // [{id, tool, target, startMs}] — currently executing tools
+    recentTools:    [],   // [{id, tool, target, durationMs}] — last N completed tools (rolling trail)
+    turnStartMs:    null, // raw timestamp when current turn started (for elapsed display)
   };
 
   let streamingBubble = null;
@@ -75,6 +77,7 @@
   let tpsSamples      = Array(30).fill(0);
   let turnStartTime   = null;
   let activityLog     = [];           // [{ts, toolName}], pruned to 60s
+  let _compactBackfillId = null; // compact msg id awaiting tokensAfter back-fill
   let _msgSeq = 0;  // monotonic counter — stable React keys for message bubbles
 
   // ── Minimap / message-history trim ───────────────────────────────────────
@@ -90,6 +93,26 @@
 
   let activeSessionId  = null;
   let activeListeners  = [];          // unlisten functions for current session
+
+  // ── Peer session ─────────────────────────────────────────────────────────
+  // "Pin" another session so its live activity is visible in the ambient
+  // rail card while you work in the active session. Lightweight listener:
+  // only tracks activity, TPS, todo progress, and streaming status — no
+  // full message history, just enough for the PeerSession widget.
+  let peerSessionId   = null;
+  let peerListeners   = [];
+  let peerTurnStart   = null;
+  let _peerNotifyTimer = null;
+  const PEER_MAX_TOOLS = 15;
+  const peerState = {
+    activity:    "idle",
+    tps:         0,
+    todo:        { done: 0, total: 0 },
+    isStreaming:  false,
+    title:       "",
+    recentTools: [],   // [{id, tool, target, status, duration, time, _startMs}]
+    thought:     null, // current thinking text while streaming
+  };
 
   // ── ID-keyed response correlation ─────────────────────────────────────────
   // Used by _sendWithResponse to correlate commands that need a typed reply.
@@ -166,6 +189,13 @@
       // Tab list — derived from session registry, not per-session state
       sessions:        [...sessionRegistry.values()],
       activeSessionId,
+      // Peer — null when no session is pinned
+      peer:            _buildPeerData(),
+      peerSessionId,
+      // Agent activity — running tools + turn clock for the status card
+      runningTools:    state.runningTools,
+      recentTools:     state.recentTools,
+      turnStartMs:     state.turnStartMs,
     };
     subscribers.forEach(cb => cb(snap));
 
@@ -176,6 +206,7 @@
     window.OMP_DATA.planMeta  = state.planMeta;
     window.OMP_DATA.ctx       = state.ctx;
     window.OMP_DATA.activity  = state.activity;
+    window.OMP_DATA.peer      = _buildPeerData();
   }
 
   // Reset all per-session volatile state (called before loading a new session)
@@ -195,12 +226,16 @@
       rpcState:      null,
       sessionCost:   null,
       currentTps:    0,
+      runningTools:  [],
+      recentTools:   [],
+      turnStartMs:   null,
     });
     streamingBubble = null;
     pendingAskBubble = null;
     activeToolCards = new Map();
     tpsSamples      = Array(30).fill(0);
     turnStartTime   = null;
+    _compactBackfillId = null;
     activityLog     = [];
   }
 
@@ -222,6 +257,9 @@
       rpcState:      state.rpcState,
       sessionCost:   state.sessionCost,
       currentTps:    state.currentTps,
+      runningTools:  [...state.runningTools],
+      recentTools:   [...state.recentTools],
+      turnStartMs:   state.turnStartMs,
       // volatile vars
       streamingBubble,
       activeToolCards: new Map(activeToolCards),
@@ -248,6 +286,9 @@
       rpcState:      snap.rpcState,
       sessionCost:   snap.sessionCost,
       currentTps:    snap.currentTps,
+      runningTools:  snap.runningTools ?? [],
+      recentTools:   snap.recentTools ?? [],
+      turnStartMs:   snap.turnStartMs ?? null,
     });
     streamingBubble = snap.streamingBubble;
     activeToolCards = snap.activeToolCards;
@@ -257,9 +298,169 @@
     return true;
   }
 
+  // ── Peer session helpers ────────────────────────────────────────────────
+  function _buildPeerData() {
+    if (!peerSessionId) return null;
+    const entry = sessionRegistry.get(peerSessionId);
+    if (!entry) return null;
+    return {
+      projectId:   peerSessionId,
+      project:     entry.name,
+      activity:    peerState.activity || "idle",
+      tps:         peerState.tps,
+      todo:        { ...peerState.todo },
+      title:       peerState.title || "—",
+      isStreaming:  peerState.isStreaming,
+      recentTools: peerState.recentTools,
+      thought:     peerState.thought,
+    };
+  }
+
+  function _sendTo(sessionId, cmd) {
+    if (!window.__TAURI__ || !sessionId) return;
+    window.__TAURI__.core
+      .invoke("send_command", { sessionId, json: JSON.stringify(cmd) })
+      .catch(e => console.error("[live] sendTo error:", e));
+  }
+
+  async function _startPeerListening(id) {
+    _stopPeerListening();
+    if (!window.__TAURI__ || !id) return;
+    Object.assign(peerState, {
+      activity: "idle", tps: 0,
+      todo: { done: 0, total: 0 },
+      isStreaming: false, title: "",
+      recentTools: [], thought: null,
+    });
+    peerTurnStart = null;
+    const { listen } = window.__TAURI__.event;
+    const ulLine = await listen(`agent://line/${id}`, ev => _handlePeerLine(ev.payload));
+    const ulExit = await listen(`agent://exit/${id}`, () => {
+      peerState.isStreaming = false;
+      peerState.activity = "exited";
+      _debouncedPeerNotify();
+    });
+    peerListeners = [ulLine, ulExit];
+    // Fetch initial state so the card shows current todo/streaming status
+    _sendTo(id, { type: "get_state" });
+  }
+
+  function _stopPeerListening() {
+    for (const ul of peerListeners) { try { ul(); } catch (_) {} }
+    peerListeners = [];
+    if (_peerNotifyTimer) { clearTimeout(_peerNotifyTimer); _peerNotifyTimer = null; }
+  }
+
+  // Throttled peer notify — at most 10 updates/sec to avoid flooding React
+  function _debouncedPeerNotify() {
+    if (_peerNotifyTimer) return;
+    _peerNotifyTimer = setTimeout(() => {
+      _peerNotifyTimer = null;
+      window.OMP_DATA.peer = _buildPeerData();
+      notify();
+    }, 100);
+  }
+
+  function _handlePeerLine(rawLine) {
+    let obj;
+    try { obj = JSON.parse(rawLine); } catch { return; }
+    if (!obj || typeof obj !== "object") return;
+    const { type } = obj;
+    let changed = false;
+
+    // Re-fetch state when peer omp restarts
+    if (type === "ready") {
+      _sendTo(peerSessionId, { type: "get_state" });
+      return;
+    }
+
+    if (type === "turn_start") {
+      peerState.isStreaming = true;
+      peerState.thought = null;
+      peerTurnStart = Date.now();
+      changed = true;
+    } else if (type === "turn_end") {
+      peerState.isStreaming = false;
+      peerState.thought = null;
+      const usage = obj.message?.usage;
+      if (peerTurnStart && usage?.output) {
+        const elapsed = (Date.now() - peerTurnStart) / 1000;
+        if (elapsed > 0) peerState.tps = Math.round(usage.output / elapsed);
+      }
+      peerTurnStart = null;
+      changed = true;
+    } else if (type === "tool_execution_start") {
+      const tool = window.normalizeToolName(obj.toolName ?? "");
+      const args = (typeof obj.args === "object" && obj.args) ? obj.args : {};
+      const target = args.path ?? args.pattern ?? args.command ?? args.query ?? "";
+      const short = target ? String(target).split(/[\\/]/).pop() : "";
+      peerState.activity = short ? `${tool} · ${short}` : tool;
+      // Append to recentTools (rolling window)
+      peerState.recentTools = [
+        ...peerState.recentTools.slice(-(PEER_MAX_TOOLS - 1)),
+        { id: obj.toolCallId, tool, target: short || String(target), status: "running",
+          duration: null, time: timeNow(), _startMs: Date.now() },
+      ];
+      changed = true;
+    } else if (type === "tool_execution_end") {
+      // Update the matching tool entry's status and duration
+      const now = Date.now();
+      peerState.recentTools = peerState.recentTools.map(t =>
+        t.id === obj.toolCallId
+          ? { ...t, status: "ok", duration: t._startMs ? now - t._startMs : null }
+          : t
+      );
+      if (obj.toolName === "todo_write") {
+        const phases = obj.result?.details?.phases ?? obj.result?.phases ?? [];
+        if (phases.length > 0) {
+          let done = 0, total = 0;
+          for (const p of phases) {
+            for (const t of p.tasks) { total++; if (t.status === "completed" || t.status === "abandoned") done++; }
+          }
+          peerState.todo = { done, total };
+        }
+      }
+      changed = true;
+    } else if (type === "message_update" && obj.message) {
+      const blocks = Array.isArray(obj.message.content) ? obj.message.content : [];
+      let foundThought = false;
+      for (const b of blocks) {
+        if (b.type === "thinking" && b.thinking?.trim()) {
+          peerState.thought = b.thinking.trim();
+          foundThought = true;
+        }
+        if (b.type === "text" && b.text?.trim()) {
+          peerState.title = b.text.trim().slice(0, 120);
+          changed = true;
+        }
+      }
+      if (foundThought) changed = true;
+    } else if (type === "response" && obj.command === "get_state" && obj.success && obj.data) {
+      const d = obj.data;
+      if (d.todoPhases?.length > 0) {
+        let done = 0, total = 0;
+        for (const p of d.todoPhases) {
+          for (const t of p.tasks) { total++; if (t.status === "completed" || t.status === "abandoned") done++; }
+        }
+        peerState.todo = { done, total };
+      }
+      if (d.isStreaming != null) peerState.isStreaming = d.isStreaming;
+      if (d.sessionName) peerState.title = d.sessionName;
+      changed = true;
+    }
+
+    if (changed) _debouncedPeerNotify();
+  }
+
   // ── Session switching ─────────────────────────────────────────────────────
   async function _switchToSession(id) {
     if (!window.__TAURI__) return;
+
+    // Auto-clear peer if switching to the peer tab (redundant to monitor yourself)
+    if (id === peerSessionId) {
+      _stopPeerListening();
+      peerSessionId = null;
+    }
 
     // Snapshot current session so we can restore it when switching back
     _saveCurrentSession();
@@ -359,12 +560,24 @@
       }
       if (idx !== -1) {
         const d = resp.data ?? {};
+        const compactMsgId = state.messages[idx]?.id;
+        // tokensBefore was pre-filled from contextUsage when the compact
+        // message was created. Only override it when omp returns a valid
+        // positive value (some omp versions return 0).
+        const rpcBefore = d.tokensBefore > 0 ? d.tokensBefore : undefined;
         const update = resp.success
-          ? { status: "done", shortSummary: d.shortSummary || null, summary: d.summary || null, tokensBefore: d.tokensBefore }
-          : { status: "error" };
+          ? { status: "done", shortSummary: d.shortSummary || null, summary: d.summary || null, ...(rpcBefore != null ? { tokensBefore: rpcBefore } : {}) }
+          : { status: "error", errorReason: resp.error || null };
         state.messages = state.messages.map((m, i) => i === idx ? { ...m, ...update } : m);
+        if (resp.success && compactMsgId) _compactBackfillId = compactMsgId;
       }
       notify();
+      // After a successful compact the context window shrank — refresh
+      // rpcState so the ambient gauge updates immediately rather than
+      // waiting for the next turn_end.
+      if (resp.success) {
+        _send({ type: "get_state" });
+      }
       return;
     }
     if (!resp.success) {
@@ -568,12 +781,16 @@
     if (type === "turn_start") {
       turnStartTime = now;
       state.isStreaming = true;
+      state.turnStartMs = now;
+      state.runningTools = [];
       notify();
       return;
     }
 
     if (type === "turn_end") {
       state.isStreaming = false;
+      state.turnStartMs = null;
+      state.runningTools = [];
       streamingBubble = null;
       const usage = ev.message?.usage;
       if (turnStartTime) {
@@ -716,6 +933,14 @@
       const idx  = state.messages.length;
       activeToolCards.set(ev.toolCallId, idx);
       state.messages = [...state.messages, card];
+      // Track running tool for the agent activity card
+      const toolName = window.normalizeToolName(ev.toolName ?? "");
+      const args = (typeof ev.args === "object" && ev.args) ? ev.args : {};
+      const rawTarget = args.path ?? args.pattern ?? args.command ?? args.query ?? "";
+      const shortTarget = rawTarget ? String(rawTarget).split(/[\\/]/).pop() : "";
+      state.runningTools = [...state.runningTools, {
+        id: ev.toolCallId, tool: toolName, target: shortTarget || String(rawTarget), startMs: now,
+      }];
       // Flush any pending ask bubble AFTER the tool card so chat order is
       // [tool_card, ask_bubble] — omp emits select before tool_execution_start.
       if (pendingAskBubble) {
@@ -747,6 +972,16 @@
     }
 
     if (type === "tool_execution_end") {
+      // Move the finished tool into the recent-tools trail (keep last 3)
+      const RECENT_MAX = 3;
+      const finished = state.runningTools.find(t => t.id === ev.toolCallId);
+      state.runningTools = state.runningTools.filter(t => t.id !== ev.toolCallId);
+      if (finished) {
+        state.recentTools = [...state.recentTools, {
+          id: finished.id, tool: finished.tool, target: finished.target,
+          durationMs: now - finished.startMs,
+        }].slice(-RECENT_MAX);
+      }
       const idx = activeToolCards.get(ev.toolCallId);
       if (idx !== undefined) {
         const card = state.messages[idx];
@@ -809,6 +1044,10 @@
       streamingBubble = null;
       state.messages = state.messages.filter(m => !m.streaming);
     }
+    if (!state.isStreaming) {
+      state.turnStartMs  = null;
+      state.runningTools = [];
+    }
     state.thinkingLevel = rpcState.thinkingLevel ?? "auto";
 
     if (rpcState.model) {
@@ -828,6 +1067,23 @@
     if (rpcState.sessionName && activeSessionId && sessionRegistry.has(activeSessionId)) {
       const entry = sessionRegistry.get(activeSessionId);
       sessionRegistry.set(activeSessionId, { ...entry, name: rpcState.sessionName });
+    }
+
+    // Back-fill tokensAfter for a just-completed compact message.
+    // The compact response itself only carries tokensBefore; the post-compact
+    // token count comes from the get_state response that we trigger right
+    // after a successful compact. _compactBackfillId ensures we only patch the
+    // right message and only once (prevents stale back-fills from later
+    // get_state calls after new turns have grown the context again).
+    if (_compactBackfillId != null) {
+      const afterTokens = rpcState?.contextUsage?.tokens;
+      if (afterTokens != null) {
+        const cid = _compactBackfillId;
+        _compactBackfillId = null;
+        state.messages = state.messages.map(m =>
+          m.kind === "compact" && m.id === cid ? { ...m, tokensAfter: afterTokens } : m
+        );
+      }
     }
 
     _refreshCtx();
@@ -975,12 +1231,163 @@
     cycleThinking()    { _send({ type: "cycle_thinking_level" }); },
     compact() {
       const id  = "cmpct-" + (_nextCmdId++);
-      state.messages = [...state.messages, { kind: "compact", status: "pending", id, time: timeNow() }];
+      // Snapshot current context usage as the "before" value so the card
+      // always shows a meaningful number even if omp's compact response
+      // returns tokensBefore: 0 (observed in some omp versions).
+      const preTokens = state.rpcState?.contextUsage?.tokens ?? null;
+      state.messages = [...state.messages, { kind: "compact", status: "pending", id, time: timeNow(), tokensBefore: preTokens }];
       notify();
       _send({ type: "compact", id });
     },
     newSession()       { _send({ type: "new_session" }); },
-    exportHtml()       { _send({ type: "export_html" }); },
+    /** Fork the active session into a new tab by copying the session file.
+     *  If `fromMsgIdx` is a number, only the conversation up to (and including)
+     *  that UI message index is kept — messages after it are discarded so the
+     *  new tab can diverge from an earlier point.  When omitted or null the
+     *  entire session is copied (branch from HEAD). */
+    async branch(fromMsgIdx = null) {
+      if (!window.__TAURI__) return;
+      const activeEntry = sessionRegistry.get(activeSessionId);
+      const cwd = activeEntry?.path ?? "";
+
+      // Locate the current session's .jsonl on disk.
+      let sourcePath = null;
+      try {
+        const sessions = await window.__TAURI__.core.invoke("list_saved_sessions", { cwd: cwd || null });
+        const sessionFile = state.rpcState?.sessionFile;
+        if (sessionFile && sessions?.length) {
+          const match = sessions.find(s => s.id === sessionFile);
+          if (match) sourcePath = match.path;
+        }
+        if (!sourcePath && sessions?.length) {
+          sourcePath = sessions[0].path; // scan returns newest-first
+        }
+      } catch (e) {
+        console.warn("[live] branch: listSavedSessions failed:", e);
+      }
+
+      if (!sourcePath) {
+        state.messages = [...state.messages, {
+          kind: "assistant", time: timeNow(),
+          blocks: [{ type: "text", text: "⚠️ **Branch failed:** no saved session found for this project yet. Complete at least one turn so omp persists the session, then try again." }],
+          thought: null, lead: null, streaming: false, completed: true,
+        }];
+        notify();
+        return;
+      }
+
+      // Map the UI message index to a .jsonl message-event count.
+      // In the session file, only user/assistant turns are "message" events;
+      // tool cards, ask bubbles, and compact rows are NOT separate events.
+      let maxMessages = null;
+      if (fromMsgIdx !== null && fromMsgIdx >= 0) {
+        maxMessages = 0;
+        for (let i = 0; i <= fromMsgIdx && i < state.messages.length; i++) {
+          const k = state.messages[i].kind;
+          if (k === "user" || k === "assistant") maxMessages++;
+        }
+        if (maxMessages === 0) maxMessages = null; // fallback to full copy
+      }
+
+      try {
+        const newPath = await window.__TAURI__.core.invoke("copy_session_file", { sourcePath, maxMessages });
+
+        const id = `session-${Date.now()}`;
+        const baseName = activeEntry?.name ?? "session";
+        const label = maxMessages !== null ? `${baseName} (fork @${maxMessages})` : `${baseName} (fork)`;
+        sessionRegistry.set(id, {
+          id, name: label, path: cwd, color: "var(--lilac)", branch: null,
+        });
+        await window.__TAURI__.core.invoke("start_session", { sessionId: id, cwd, resume: newPath });
+
+        if (cwd) {
+          const branchName = await window.__TAURI__.core
+            .invoke("start_git_watch", { sessionId: id, path: cwd })
+            .catch(() => null);
+          const entry = sessionRegistry.get(id);
+          if (entry) sessionRegistry.set(id, { ...entry, branch: branchName ?? null });
+          const { listen } = window.__TAURI__.event;
+          const unlisten = await listen(`git://branch/${id}`, ev => {
+            const e = sessionRegistry.get(id);
+            if (e) sessionRegistry.set(id, { ...e, branch: ev.payload });
+            notify();
+          });
+          gitListeners.set(id, unlisten);
+        }
+
+        await _switchToSession(id);
+      } catch (err) {
+        console.error("[live] branch failed:", err);
+        state.messages = [...state.messages, {
+          kind: "assistant", time: timeNow(),
+          blocks: [{ type: "text", text: `⚠️ **Branch failed:** ${err?.message ?? String(err)}` }],
+          thought: null, lead: null, streaming: false, completed: true,
+        }];
+        notify();
+      }
+    },
+    exportHtml() {
+      (async () => {
+        try {
+          const data = await _sendWithResponse({ type: "export_html" }, 30000);
+
+          // omp writes the HTML file to disk itself and returns { path: "filename.html" }.
+          // Construct the full path from the session's cwd + returned filename.
+          const filename = data?.path ?? null;
+          if (!filename) {
+            state.messages = [...state.messages, {
+              kind: "assistant", time: timeNow(),
+              blocks: [{ type: "text", text: "⚠️ **Export failed:** omp did not return an export file path." }],
+              thought: null, lead: null, streaming: false, completed: true,
+            }];
+            notify();
+            return;
+          }
+
+          const activeEntry = sessionRegistry.get(activeSessionId);
+          const cwd = activeEntry?.path || "";
+          // If the path omp returned is already absolute, use it directly;
+          // otherwise join it with the session's working directory.
+          const isAbsolute = /^[A-Za-z]:[\\/]|^\//.test(filename);
+          const sourcePath = isAbsolute ? filename : (cwd ? `${cwd}/${filename}` : filename);
+
+          const saved = await window.__TAURI__.core.invoke("save_html_export", { sourcePath });
+          if (saved) {
+            state.messages = [...state.messages, {
+              kind: "assistant", time: timeNow(),
+              blocks: [{ type: "text", text: "✅ Session exported to HTML." }],
+              thought: null, lead: null, streaming: false, completed: true,
+            }];
+          }
+          notify();
+        } catch (err) {
+          console.warn("[live] exportHtml failed:", err);
+          state.messages = [...state.messages, {
+            kind: "assistant", time: timeNow(),
+            blocks: [{ type: "text", text: `⚠️ **Export failed:** ${err?.message ?? String(err)}` }],
+            thought: null, lead: null, streaming: false, completed: true,
+          }];
+          notify();
+        }
+      })();
+    },
+
+    // ── Peer session ──────────────────────────────────────────────────────
+    get peerSessionId() { return peerSessionId; },
+    /** Pin another session as the peer to monitor in the ambient rail. */
+    setPeer(id) {
+      if (!id || id === activeSessionId || !sessionRegistry.has(id)) return;
+      peerSessionId = id;
+      _startPeerListening(id);
+    },
+    /** Unpin the peer session. */
+    clearPeer() {
+      _stopPeerListening();
+      peerSessionId = null;
+      window.OMP_DATA.peer = null;
+      notify();
+    },
+
     async refreshModels() {
       _initFetch();
       const customData = await _loadCustomModelsFromConfig();
@@ -1052,7 +1459,15 @@
       } else {
         const noProjSessions = [...sessionRegistry.values()].filter(s => !s.path);
         if (noProjSessions.length > 0) {
-          name = `PiDesk (${noProjSessions.length + 1})`;
+          // Parse existing names to find the highest number — avoids
+          // collisions after closing earlier tabs (e.g. close PiDesk,
+          // PiDesk(2) remains, next should be PiDesk(3) not PiDesk(2)).
+          let maxNum = 1; // bare "PiDesk" counts as 1
+          for (const s of noProjSessions) {
+            const m = s.name.match(/^PiDesk\s*\((\d+)\)$/);
+            if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
+          }
+          name = `PiDesk (${maxNum + 1})`;
         }
       }
       const color = cwd ? "var(--lilac)" : "var(--accent)";
@@ -1105,6 +1520,16 @@
       }
     },
 
+    /**
+     * Permanently delete a saved session from disk.
+     * `path` is the full path to the session's `.jsonl` file (from listSavedSessions).
+     * The entire parent session folder is removed.
+     */
+    async deleteSavedSession(path) {
+      if (!window.__TAURI__) return;
+      await window.__TAURI__.core.invoke("delete_saved_session", { path });
+    },
+
     /** Read models.yml configuration from disk. */
     async readModelsConfig() {
       if (!window.__TAURI__) return { path: "", content: "", exists: false };
@@ -1151,12 +1576,12 @@
 
     /** Get application version from Tauri backend. */
     async getAppVersion() {
-      if (!window.__TAURI__) return "0.2.2";
+      if (!window.__TAURI__) return "0.2.3";
       try {
         return await window.__TAURI__.core.invoke("get_app_version");
       } catch (err) {
         console.error("[live] getAppVersion error:", err);
-        return "0.2.2";
+        return "0.2.3";
       }
     },
 
@@ -1200,6 +1625,11 @@
       if (gitUnlisten) { gitUnlisten(); gitListeners.delete(id); }
       sessionRegistry.delete(id);
       sessionSnapshots.delete(id);
+      // Clear peer if closing the peer session
+      if (id === peerSessionId) {
+        _stopPeerListening();
+        peerSessionId = null;
+      }
       // If no sessions remain, immediately reset and create a clean default "PiDesk" session
       if (sessionRegistry.size === 0) {
         for (const ul of activeListeners) { try { await ul(); } catch (_) {} }
@@ -1240,6 +1670,11 @@
         sparkline:       state.sparkline,
         sessions:        [...sessionRegistry.values()],
         activeSessionId,
+        peer:            _buildPeerData(),
+        peerSessionId,
+        runningTools:    state.runningTools,
+        recentTools:     state.recentTools,
+        turnStartMs:     state.turnStartMs,
       });
       return () => subscribers.delete(cb);
     },

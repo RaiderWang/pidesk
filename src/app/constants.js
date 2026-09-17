@@ -11,11 +11,12 @@
 
 (function () {
   const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
-    "theme": "daylight",
-    "density": "compact",
-    "layout": "rail",
-    "accent": "#1F8A5B",
-    "monoChat": false,
+    "locale":    "en",
+    "theme":     "daylight",
+    "density":   "compact",
+    "layout":    "rail",
+    "accent":    "#1F8A5B",
+    "monoChat":  false,
     "scanlines": true,
     "showRadar": true,
     "fontSize":  100,

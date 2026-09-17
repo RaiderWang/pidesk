@@ -168,6 +168,136 @@ fn parse_session_file(path: &Path) -> Option<SavedSession> {
     })
 }
 
+// ── Session deletion ──────────────────────────────────────────────────────────
+
+/// Core deletion logic — separated from the `AppHandle` dependency so it
+/// can be exercised in unit tests.
+///
+/// `path`           – full path to a `.jsonl` session file.
+/// `sessions_root`  – resolved sessions root (used for the safety check); if
+///                    `None` the safety check is skipped (root doesn't exist).
+pub(crate) fn delete_saved_session_inner(
+    path: &str,
+    sessions_root: Option<&Path>,
+) -> Result<(), String> {
+    let file_path = Path::new(path);
+
+    if !file_path.exists() {
+        return Err(format!("session file not found: {path}"));
+    }
+
+    let session_dir = file_path
+        .parent()
+        .ok_or_else(|| "cannot determine session directory from path".to_owned())?;
+
+    // Safety: verify the session_dir is a descendant of the sessions root.
+    // Canonicalize both sides to resolve any symlinks / relative segments.
+    if let Some(root) = sessions_root {
+        if root.exists() {
+            let dir_canon  = session_dir.canonicalize().map_err(|e| format!("canonicalize dir: {e}"))?;
+            let root_canon = root        .canonicalize().map_err(|e| format!("canonicalize root: {e}"))?;
+            if !dir_canon.starts_with(&root_canon) {
+                return Err(
+                    "session directory is outside the sessions root — refusing to delete"
+                        .to_owned(),
+                );
+            }
+        }
+    }
+
+    fs::remove_dir_all(session_dir).map_err(|e| format!("delete failed: {e}"))
+}
+
+/// Delete a saved session by removing its parent directory from disk.
+///
+/// `path` must be the full path to an existing `.jsonl` session file
+/// (as returned by [`scan_saved_sessions`]).  The parent directory
+/// (the per-session sub-folder inside the sessions root) is removed
+/// with all of its contents.
+pub fn delete_saved_session(path: &str, app: &AppHandle) -> Result<(), String> {
+    let sessions_root = sessions_root_dir(app);
+    delete_saved_session_inner(path, sessions_root.as_deref())
+}
+
+// ── Session branching ─────────────────────────────────────────────────────────
+
+/// Copy an omp session `.jsonl` file into a new sub-directory so that a
+/// branching tab can start from the same history without sharing a file with
+/// the original session.  Both tabs will diverge independently once omp
+/// starts writing new turns.
+///
+/// `source_path` must be the full path to an existing `.jsonl` session file.
+/// A sibling directory named `branch-<unix_ms>` is created alongside the
+/// source's parent directory (i.e. inside the same sessions root), the file
+/// is copied there under the same base name, and the new full path is
+/// returned so the caller can pass it to `start_session` as `resume`.
+///
+/// When `max_messages` is `Some(n)`, only the first `n` `"type":"message"`
+/// events (plus all non-message metadata lines) are written.  This lets the
+/// frontend branch from an arbitrary point in the conversation instead of
+/// always copying the full history.
+pub fn copy_session_file(
+    source_path: &str,
+    max_messages: Option<usize>,
+) -> Result<String, String> {
+    let src = std::path::Path::new(source_path);
+    if !src.exists() {
+        return Err(format!("source not found: {source_path}"));
+    }
+    // src is <sessions_root>/<session_dir>/<file>.jsonl
+    // parent()       → <sessions_root>/<session_dir>/
+    // parent().parent() → <sessions_root>/
+    let sessions_root = src
+        .parent()
+        .and_then(std::path::Path::parent)
+        .ok_or_else(|| "cannot determine sessions root from path".to_owned())?;
+    let file_name = src
+        .file_name()
+        .ok_or_else(|| "source path has no file name".to_owned())?;
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let new_dir = sessions_root.join(format!("branch-{ts}"));
+    std::fs::create_dir_all(&new_dir).map_err(|e| format!("mkdir: {e}"))?;
+    let dest = new_dir.join(file_name);
+
+    if let Some(max) = max_messages {
+        // Truncated copy — keep metadata events and the first `max` message events.
+        let file = File::open(src).map_err(|e| format!("open: {e}"))?;
+        let reader = BufReader::new(file);
+        let mut output_lines: Vec<String> = Vec::new();
+        let mut msg_count = 0usize;
+        for line_res in reader.lines() {
+            let Ok(line) = line_res else { continue };
+            if line.is_empty() {
+                continue;
+            }
+            let is_message = serde_json::from_str::<serde_json::Value>(&line)
+                .ok()
+                .and_then(|v| v.get("type")?.as_str().map(|t| t == "message"))
+                .unwrap_or(false);
+            if is_message {
+                msg_count += 1;
+                if msg_count > max {
+                    break;
+                }
+            }
+            output_lines.push(line);
+        }
+        let mut content = output_lines.join("\n");
+        if !content.is_empty() {
+            content.push('\n');
+        }
+        std::fs::write(&dest, content.as_bytes()).map_err(|e| format!("write: {e}"))?;
+    } else {
+        // Full copy — branch from HEAD.
+        std::fs::copy(src, &dest).map_err(|e| format!("copy: {e}"))?;
+    }
+
+    Ok(dest.to_string_lossy().into_owned())
+}
+
 /// Scan `~/.omp/agent/sessions/` for saved `.jsonl` session files.
 /// If `cwd_filter` is provided, only sessions whose `cwd` matches are returned.
 pub fn scan_saved_sessions(
@@ -283,5 +413,135 @@ mod tests {
         assert_eq!(session.updated_at.as_deref(), Some("2026-09-04T01:00:00.000Z"));
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    // ── copy_session_file tests ───────────────────────────────────────────────
+
+    /// Happy path: copy succeeds and the new file contains the same content.
+    #[test]
+    fn copy_session_file_success() {
+        // Layout: <tmp>/sessions_root/session_dir/sess.jsonl
+        let root  = make_test_dir("copy_root");
+        let s_dir = root.join("session_dir");
+        fs::create_dir_all(&s_dir).unwrap();
+        let src = s_dir.join("sess.jsonl");
+        File::create(&src).unwrap().write_all(b"line1\nline2").unwrap();
+
+        let result = copy_session_file(src.to_str().unwrap(), None);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        let dest = std::path::PathBuf::from(result.unwrap());
+        assert!(dest.exists(), "copied file should exist");
+        assert_eq!(
+            fs::read_to_string(&dest).unwrap(),
+            "line1\nline2",
+            "content must match"
+        );
+        // Destination must be a sibling of session_dir, not inside it.
+        let dest_parent = dest.parent().unwrap();
+        assert_eq!(dest_parent.parent().unwrap(), root, "new dir is inside sessions_root");
+        assert!(
+            dest_parent.file_name().unwrap().to_str().unwrap().starts_with("branch-"),
+            "new dir should be named branch-<ts>"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// Source does not exist → error.
+    #[test]
+    fn copy_session_file_missing_source() {
+        let result = copy_session_file("/nonexistent_root/dir/session.jsonl", None);
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().contains("source not found"),
+            "error should mention source not found"
+        );
+    }
+
+    /// A bare filename with no parent/grandparent triggers a path error after
+    /// "source not found" (file doesn't exist).
+    #[test]
+    fn copy_session_file_no_grandparent() {
+        let result = copy_session_file("session.jsonl", None);
+        assert!(result.is_err());
+    }
+
+    // ── delete_saved_session tests ────────────────────────────────────────────
+
+    /// Non-existent path → "session file not found" error.
+    #[test]
+    fn delete_session_missing_file() {
+        let result = delete_saved_session_inner("/nonexistent/path/session.jsonl", None);
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().contains("session file not found"),
+            "error should mention file not found"
+        );
+    }
+
+    /// Happy path: the session directory is removed from disk.
+    #[test]
+    fn delete_session_removes_directory() {
+        // Layout: <tmp>/<sessions_root>/<session_dir>/sess.jsonl
+        let root     = make_test_dir("del_root");
+        let s_dir    = root.join("session_dir");
+        fs::create_dir_all(&s_dir).unwrap();
+        let file     = s_dir.join("sess.jsonl");
+        File::create(&file).unwrap();
+
+        let result = delete_saved_session_inner(file.to_str().unwrap(), Some(&root));
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert!(!s_dir.exists(), "session directory should have been removed");
+        // Root itself must survive
+        assert!(root.exists(), "sessions root must not be removed");
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// Path outside the sessions root → safety error, nothing deleted.
+    #[test]
+    fn delete_session_outside_root_is_rejected() {
+        let root     = make_test_dir("del_safety_root");
+        let other    = make_test_dir("del_safety_other");
+        let file     = other.join("sess.jsonl");
+        File::create(&file).unwrap();
+
+        let result = delete_saved_session_inner(file.to_str().unwrap(), Some(&root));
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().contains("outside the sessions root"),
+            "safety check should fire"
+        );
+        assert!(file.exists(), "file outside root must not be deleted");
+
+        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_dir_all(&other);
+    }
+
+    /// Truncated copy: keeps metadata events plus only the first N message events.
+    #[test]
+    fn copy_session_file_truncated() {
+        let root  = make_test_dir("copy_trunc");
+        let s_dir = root.join("trunc_dir");
+        fs::create_dir_all(&s_dir).unwrap();
+        let src = s_dir.join("sess.jsonl");
+        {
+            let mut f = File::create(&src).unwrap();
+            writeln!(f, r#"{{"type":"session","id":"s1","timestamp":"2026-01-01"}}"#).unwrap();
+            writeln!(f, r#"{{"type":"message","message":{{"role":"user","content":"m1"}}}}"#).unwrap();
+            writeln!(f, r#"{{"type":"message","message":{{"role":"assistant","content":"a1"}}}}"#).unwrap();
+            writeln!(f, r#"{{"type":"message","message":{{"role":"user","content":"m2"}}}}"#).unwrap();
+            writeln!(f, r#"{{"type":"message","message":{{"role":"assistant","content":"a2"}}}}"#).unwrap();
+        }
+        // Keep only the first 2 message events (user m1 + assistant a1).
+        let result = copy_session_file(src.to_str().unwrap(), Some(2));
+        assert!(result.is_ok(), "{result:?}");
+        let content = fs::read_to_string(result.unwrap()).unwrap();
+        let lines: Vec<&str> = content.lines().collect();
+        // session metadata + 2 message lines = 3 lines total
+        assert_eq!(lines.len(), 3, "should have 3 lines: 1 session + 2 messages, got: {lines:?}");
+        assert!(lines[0].contains("\"type\":\"session\""), "first line is session metadata");
+        assert!(lines[1].contains("\"content\":\"m1\""), "second line is first user msg");
+        assert!(lines[2].contains("\"content\":\"a1\""), "third line is first assistant msg");
+        let _ = fs::remove_dir_all(&root);
     }
 }

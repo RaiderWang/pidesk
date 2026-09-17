@@ -23,8 +23,12 @@ desktop.ini
 # ── Editors ───────────────────────────────────────────────────────────────────
 .vscode/
 .idea/
+.cursor/
 *.swp
 *.swo
+
+# Session export dumps
+omp-session-*.html
 
 # ── Design prototype (read-only reference — live copy lives in src/design/) ───
 /design/

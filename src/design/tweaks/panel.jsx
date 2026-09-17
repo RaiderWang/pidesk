@@ -9,7 +9,8 @@
 // The close button posts __edit_mode_dismissed so the host's toolbar toggle
 // flips off in lockstep; the host echoes __deactivate_edit_mode back which
 // is what actually hides the panel.
-function TweaksPanel({ title = 'Tweaks', noDeckControls = false, children }) {
+function TweaksPanel({ title, noDeckControls = false, children }) {
+  const resolvedTitle = title || (window.t ? window.t('tweaks.title', null, 'Tweaks') : 'Tweaks');
   const [open, setOpen] = React.useState(false);
   const dragRef = React.useRef(null);
   // Auto-inject a rail toggle when a <deck-stage> is on the page. The
@@ -119,8 +120,8 @@ function TweaksPanel({ title = 'Tweaks', noDeckControls = false, children }) {
       <div ref={dragRef} className="twk-panel" data-noncommentable=""
            style={{ right: offsetRef.current.x, bottom: offsetRef.current.y }}>
         <div className="twk-hd" onMouseDown={onDragStart}>
-          <b>{title}</b>
-          <button className="twk-x" aria-label="Close tweaks"
+          <b>{resolvedTitle}</b>
+          <button className="twk-x" aria-label={window.t ? window.t('tweaks.close', null, 'Close tweaks') : 'Close tweaks'}
                   onMouseDown={(e) => e.stopPropagation()}
                   onClick={dismiss}>✕</button>
         </div>

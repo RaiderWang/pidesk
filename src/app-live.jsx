@@ -16,7 +16,7 @@
 
 const {
   Icon, ChatView, Composer, CommandBridge, WindowChrome, TabBar,
-  StatusBar, AmbientRail, PlanKanban, HistoryModal, ModelManagerModal, useTweaks,
+  StatusBar, AmbientRail, SplitPeer, PlanKanban, HistoryModal, ModelManagerModal, useTweaks,
   TweaksPanel, TweakSection, TweakRadio, TweakToggle, TweakColor, TweakSlider,
   TWEAK_DEFAULTS, NULL_MODEL, EMPTY_PROJECT, NULL_PEER,
   INTENT_FRAMING, APPROVAL_PROMPT,
@@ -25,6 +25,9 @@ const {
 
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  if (window.I18N && t.locale) {
+    window.I18N.setLocale(t.locale);
+  }
   const data          = window.OMP_DATA;
   const bridge        = window.OMP_BRIDGE;
 
@@ -64,6 +67,15 @@ function App() {
   const [sparkline,     setSparkline]     = React.useState(Array(30).fill(0));
   const [loginProviders, setLoginProviders] = React.useState(null);
 
+  // ── Peer session — pinned to the ambient rail ─────────────────────────────
+  const [peer,          setPeer]          = React.useState(null);
+  const [peerSessionId, setPeerSessionId] = React.useState(null);
+
+  // ── Agent activity — running tools + turn clock ───────────────────────────
+  const [runningTools,  setRunningTools]  = React.useState([]);
+  const [recentTools,   setRecentTools]   = React.useState([]);
+  const [turnStartMs,   setTurnStartMs]   = React.useState(null);
+
   // ── Tab list — driven by bridge session registry ──────────────────────────
   // Each entry: { id, name, path, color, branch }
   const [sessions,        setSessions]        = React.useState([]);
@@ -85,6 +97,8 @@ function App() {
     setModels, setActivity, setSparkline,
     setModelState, setThinkingLevel,
     setSessions, setActiveSessionId,
+    setPeer, setPeerSessionId,
+    setRunningTools, setRecentTools, setTurnStartMs,
   });
   useThemeEffect(t);
   useCommandShortcut(setBridgeOpen, setBridgeView);
@@ -197,12 +211,34 @@ function App() {
     else if (c.name === "new")      { bridge?.newSession(); }
     else if (c.name === "history")  { setHistoryOpen(true); }
     else if (c.name === "models")   { setModelManagerOpen(true); }
+    else if (c.name === "steer") {
+      // steer is only meaningful while the agent is streaming.
+      // Selecting it from the palette while streaming closes the bridge so
+      // the composer gets focus and the user can type a redirect message.
+      // While idle, show an informational nudge instead.
+      if (streaming) {
+        setBridgeOpen(false);
+        // composer's useEffect re-focuses textarea when bridge closes
+      } else {
+        bridge?.addAssistantMessage(
+               window.t
+                 ? window.t("cmd.steer.idle", null, "**Steer** is only available while the agent is running — type your message in the input area during streaming to redirect it.")
+                 : "**Steer** is only available while the agent is running — type your message in the input area during streaming to redirect it."
+             );
+           }
+         }
   };
 
   const handleResumeSession = async (session) => {
     if (!bridge || !session) return;
     await bridge.resumeSession(session);
   };
+
+  // Branch from a specific message (or HEAD when idx is omitted)
+  const handleBranch = React.useCallback(
+    (fromMsgIdx = null) => { bridge?.branch(fromMsgIdx); },
+    [bridge],
+  );
 
   const handleApprovePlan = () => {
     setPlanAnnotations({});
@@ -238,9 +274,14 @@ function App() {
   // Close tab → kills that session's omp process; bridge updates tab list
   const handleCloseTab = id => { bridge?.closeSession(id); };
 
+  // ── Peer session handlers ───────────────────────────────────────────────
+  const handleSetPeer   = id  => bridge?.setPeer(id);
+  const handleClearPeer = ()  => bridge?.clearPeer();
+  const handleFocusPeer = ()  => { if (peerSessionId) bridge?.activateSession(peerSessionId); };
+
   const showRail  = t.layout !== "focus";
-  const showSplit = t.layout === "split" && data.peer !== null;
-  const safePeer  = data.peer ?? NULL_PEER;
+  const showSplit = t.layout === "split" && peer !== null;
+  const safePeer  = peer ?? NULL_PEER;
   const liveCtx   = ctx ?? data.ctx;
 
   return (
@@ -276,6 +317,7 @@ function App() {
                 onAnnotate={handleAnnotate}
                 onAskAnswer={handleAskAnswer}
                 hoveredMsgIdx={hoveredMsgIdx}
+                onBranch={handleBranch}
               />
               <Composer
                 onSend={handleSend}
@@ -311,13 +353,21 @@ function App() {
               />
             </main>
 
-            {showSplit && data.peer && <SplitPeer peer={data.peer} />}
+            {showSplit && (
+              <SplitPeer peer={safePeer} onFocus={handleFocusPeer} onClear={handleClearPeer} />
+            )}
 
             {showRail && (
               <AmbientRail
                 ctx={liveCtx}
                 activity={activity}
                 peer={safePeer}
+                peerSessionId={peerSessionId}
+                sessions={sessions}
+                activeSessionId={activeSessionId}
+                onSetPeer={handleSetPeer}
+                onClearPeer={handleClearPeer}
+                onFocusPeer={handleFocusPeer}
                 messages={messages}
                 microcopy={data.microcopy}
                 sparklineValues={sparkline}
@@ -325,6 +375,10 @@ function App() {
                 hoveredMsgIdx={hoveredMsgIdx}
                 onMinimapHover={setHoveredMsgIdx}
                 onMinimapClick={handleMinimapClick}
+                isStreaming={streaming}
+                turnStartMs={turnStartMs}
+                runningTools={runningTools}
+                recentTools={recentTools}
               />
             )}
           </div>
@@ -370,43 +424,52 @@ function App() {
         />
       )}
 
-      <TweaksPanel title="Tweaks" noDeckControls>
-        <TweakSection label="Look">
-          <TweakRadio label="theme" value={t.theme}
+      <TweaksPanel title={window.t("tweaks.title", null, "Tweaks")} noDeckControls>
+        <TweakSection label={window.t("tweaks.section.general", null, "General")}>
+          <TweakRadio label={window.t("tweaks.language", null, "Language")} value={t.locale || "zh-CN"}
             options={[
-              { label: "aurora",   value: "aurora"   },
-              { label: "phosphor", value: "phosphor" },
-              { label: "daylight", value: "daylight" },
+              { label: "English", value: "en" },
+              { label: "简体中文", value: "zh-CN" },
+            ]}
+            onChange={v => setTweak("locale", v)}
+          />
+        </TweakSection>
+        <TweakSection label={window.t("tweaks.section.look", null, "Look")}>
+          <TweakRadio label={window.t("tweaks.theme", null, "theme")} value={t.theme}
+            options={[
+              { label: window.t("tweaks.theme.aurora", null, "aurora"),   value: "aurora"   },
+              { label: window.t("tweaks.theme.phosphor", null, "phosphor"), value: "phosphor" },
+              { label: window.t("tweaks.theme.daylight", null, "daylight"), value: "daylight" },
             ]}
             onChange={v => setTweak({ theme: v, accent:
               v === "aurora"   ? "#78E8BE" :
               v === "phosphor" ? "#39E557" : "#1F8A5B"
             })}
           />
-          <TweakRadio label="density" value={t.density}
+          <TweakRadio label={window.t("tweaks.density", null, "density")} value={t.density}
             options={[
-              { label: "cozy",    value: "cozy"    },
-              { label: "compact", value: "compact" },
-              { label: "dense",   value: "dense"   },
+              { label: window.t("tweaks.density.cozy", null, "cozy"),    value: "cozy"    },
+              { label: window.t("tweaks.density.compact", null, "compact"), value: "compact" },
+              { label: window.t("tweaks.density.dense", null, "dense"),   value: "dense"   },
             ]}
             onChange={v => setTweak("density", v)}
           />
-          <TweakColor label="accent" value={t.accent}
+          <TweakColor label={window.t("tweaks.accent", null, "accent")} value={t.accent}
             options={["#78E8BE", "#39E557", "#1F8A5B", "#6EE7FF", "#FF7AC6", "#FFC56E", "#B59BFF"]}
             onChange={v => setTweak("accent", v)}
           />
-          <TweakToggle label="mono chat font" value={t.monoChat}
+          <TweakToggle label={window.t("tweaks.monoChat", null, "mono chat font")} value={t.monoChat}
             onChange={v => setTweak("monoChat", v)} />
-          <TweakSlider label="font size" value={t.fontSize ?? 100}
+          <TweakSlider label={window.t("tweaks.fontSize", null, "font size")} value={t.fontSize ?? 100}
             min={75} max={150} step={5} unit="%"
             onChange={v => setTweak("fontSize", v)} />
         </TweakSection>
-        <TweakSection label="Layout">
-          <TweakRadio label="layout" value={t.layout}
+        <TweakSection label={window.t("tweaks.section.layout", null, "Layout")}>
+          <TweakRadio label={window.t("tweaks.layout", null, "layout")} value={t.layout}
             options={[
-              { label: "rail",  value: "rail"  },
-              { label: "split", value: "split" },
-              { label: "focus", value: "focus" },
+              { label: window.t("tweaks.layout.rail", null, "rail"),  value: "rail"  },
+              { label: window.t("tweaks.layout.split", null, "split"), value: "split" },
+              { label: window.t("tweaks.layout.focus", null, "focus"), value: "focus" },
             ]}
             onChange={v => setTweak("layout", v)}
           />

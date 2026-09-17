@@ -56,7 +56,7 @@ function ModelManagerModal({ open, onClose, onModelUpdated }) {
       const p = YamlUtil.parseModelsYaml(res.content || "");
       setParsed(p);
     } catch (err) {
-      showToast("Failed to load models config: " + (err.message || String(err)), "error");
+      showToast((window.t ? window.t("models.loadError", null, "Failed to load models config: ") : "Failed to load models config: ") + (err.message || String(err)), "error");
     } finally {
       setLoading(false);
     }
@@ -109,7 +109,7 @@ function ModelManagerModal({ open, onClose, onModelUpdated }) {
     setSaving(true);
     try {
       await window.OMP_BRIDGE?.writeModelsConfig(yamlToSave);
-      showToast("Models config saved! Note: active sessions may need a new tab to reload models.");
+      showToast(window.t ? window.t("models.saveSuccess", null, "Models config saved!") : "Models config saved!");
       await window.OMP_BRIDGE?.refreshModels();
       onModelUpdated?.();
     } catch (err) {
@@ -199,18 +199,18 @@ function ModelManagerModal({ open, onClose, onModelUpdated }) {
           <div className="bridge-input-row" style={{ padding: "10px 16px", gap: 10, borderBottom: "1px solid var(--line)" }}>
             <Icon name="cpu" size={16} color="var(--accent)" />
             <span style={{ fontWeight: 600, fontSize: "var(--d-text-md)", color: "var(--fg)" }}>
-              Manage Models <span className="mono" style={{ fontSize: "var(--d-text-xs)", color: "var(--fg-4)", fontWeight: 400 }}>models.yml</span>
+              {window.t ? window.t("models.title", null, "Manage Models") : "Manage Models"} <span className="mono" style={{ fontSize: "var(--d-text-xs)", color: "var(--fg-4)", fontWeight: 400 }}>models.yml</span>
             </span>
 
             <div style={{ flex: 1 }} />
 
             <button className="btn ghost" style={{ height: 24, fontSize: "var(--d-text-xs)", padding: "0 8px", gap: 4 }}
               title="Open models.yml in external editor" onClick={() => window.OMP_BRIDGE?.openModelsFile()}>
-              <Icon name="edit" size={11} color="var(--fg-3)" /> Open in Editor
+              <Icon name="edit" size={11} color="var(--fg-3)" /> {window.t ? window.t("models.openFile", null, "Open in Editor") : "Open in Editor"}
             </button>
             <button className="btn ghost" style={{ height: 24, fontSize: "var(--d-text-xs)", padding: "0 8px", gap: 4 }}
               title="Reveal models folder in file explorer" onClick={() => window.OMP_BRIDGE?.openModelsFolder()}>
-              <Icon name="folder" size={11} color="var(--fg-3)" /> Open Folder
+              <Icon name="folder" size={11} color="var(--fg-3)" /> {window.t ? window.t("models.openFolder", null, "Open Folder") : "Open Folder"}
             </button>
             <button className="btn ghost" style={{ height: 24, fontSize: "var(--d-text-xs)", padding: "0 8px", gap: 4 }}
               title="Reload configuration from disk" onClick={loadConfig}>
@@ -231,19 +231,19 @@ function ModelManagerModal({ open, onClose, onModelUpdated }) {
               <button className={`btn ${tab === "form" ? "accent" : "ghost"}`}
                 style={{ height: 22, padding: "0 10px", fontSize: "var(--d-text-xs)", borderRadius: 4 }}
                 onClick={() => handleTabChange("form")}>
-                Models ({pKeys.reduce((acc, k) => acc + (providers[k].models?.length || 0), 0)})
+                {window.t ? window.t("models.tab.form", null, "Models") : "Models"} ({pKeys.reduce((acc, k) => acc + (providers[k].models?.length || 0), 0)})
               </button>
               <button className={`btn ${tab === "yaml" ? "accent" : "ghost"}`}
                 style={{ height: 22, padding: "0 10px", fontSize: "var(--d-text-xs)", borderRadius: 4 }}
                 onClick={() => handleTabChange("yaml")}>
-                Raw YAML
+                {window.t ? window.t("models.tab.yaml", null, "Raw YAML") : "Raw YAML"}
               </button>
             </div>
 
             {tab === "form" && (
               <input
                 className="bridge-input mono"
-                placeholder="Filter models or providers…"
+                placeholder={window.t ? window.t("models.search", null, "Filter models or providers…") : "Filter models or providers…"}
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 style={{ height: 24, maxWidth: 220, fontSize: "var(--d-text-xs)", padding: "0 8px", borderRadius: 4, border: "1px solid var(--line)" }}
@@ -356,7 +356,7 @@ function ModelManagerModal({ open, onClose, onModelUpdated }) {
 
                         <button className="btn ghost" style={{ height: 22, fontSize: "var(--d-text-xs)", padding: "0 6px", gap: 4 }}
                           onClick={() => setEditingModel({ providerKey: pKey, isNew: true, model: { id: "", name: "", contextWindow: 200000, maxTokens: 8192, reasoning: false, input: ["text"] } })}>
-                          <Icon name="plus" size={10} color="var(--accent)" /> Add Model
+                          <Icon name="plus" size={10} color="var(--accent)" /> {window.t ? window.t("models.addModel", null, "Add Model") : "Add Model"}
                         </button>
                         <button className="btn ghost" style={{ height: 22, fontSize: "var(--d-text-xs)", padding: "0 6px" }}
                           title="Edit provider" onClick={() => setEditingProv({ key: pKey, isNew: false, provider: { ...prov } })}>
@@ -444,11 +444,11 @@ function ModelManagerModal({ open, onClose, onModelUpdated }) {
             <div style={{ flex: 1 }} />
 
             <button className="btn ghost" onClick={onClose} style={{ height: 28, padding: "0 14px" }}>
-              Cancel
+              {window.t ? window.t("models.cancel", null, "Cancel") : "Cancel"}
             </button>
             <button className="btn accent" onClick={handleSave} disabled={saving}
               style={{ height: 28, padding: "0 16px", gap: 6 }}>
-              <Icon name="check" size={11} /> {saving ? "Saving…" : "Save & Apply"}
+              <Icon name="check" size={11} /> {saving ? (window.t ? window.t("models.saving", null, "Saving…") : "Saving…") : (window.t ? window.t("models.save", null, "Save & Apply") : "Save & Apply")}
             </button>
           </div>
         </div>

@@ -56,7 +56,9 @@ function ScrubbableDiff({ msg }) {
         </div>
       </div>
       <div className="diff-track-wrap">
-        <span className="mono" style={{ color: "var(--fg-4)", fontSize: "var(--d-text-xs)" }}>scrub</span>
+        <span className="mono" style={{ color: "var(--fg-4)", fontSize: "var(--d-text-xs)" }}>
+          {window.t ? window.t("chat.scrub", null, "scrub") : "scrub"}
+        </span>
         <div className="diff-track" ref={trackRef}
           onMouseMove={onScrub} onMouseLeave={() => setHover(null)}>
           <div className="diff-track-base" />
@@ -158,7 +160,7 @@ function ToolCard({ msg, idx, highlighted }) {
           <div className="tool-card-spacer" />
           {running ? (
             <span className="chip accent" style={{ animation: "pulseDot 1.4s infinite" }}>
-              <span className="dot live" /> running
+              <span className="dot live" /> {window.t ? window.t("chat.running", null, "running") : "running"}
             </span>
           ) : (
             <span className="chip muted">
@@ -174,7 +176,9 @@ function ToolCard({ msg, idx, highlighted }) {
               <div key={i} className={`search-row ${p.hot ? "hot" : ""}`}>
                 <_TC_Icon name="file" size={11} color={p.hot ? "var(--accent)" : "var(--fg-3)"} />
                 <span className="mono" style={{ color: p.hot ? "var(--fg)" : "var(--fg-2)" }}>{p.file}</span>
-                <span className="mono" style={{ color: "var(--fg-4)", marginLeft: "auto" }}>{p.hits} hits</span>
+                <span className="mono" style={{ color: "var(--fg-4)", marginLeft: "auto" }}>
+                  {window.t ? window.t("chat.hits", { count: p.hits }, `${p.hits} hits`) : `${p.hits} hits`}
+                </span>
               </div>
             ))}
           </div>

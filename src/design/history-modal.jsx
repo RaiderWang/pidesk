@@ -11,21 +11,32 @@ function formatRelativeTime(ts) {
   if (isNaN(date.getTime())) return ts;
   const now = new Date();
   const diffSec = Math.floor((now - date) / 1000);
-  if (diffSec < 60) return "just now";
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
-  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
-  if (diffSec < 604800) return `${Math.floor(diffSec / 86400)}d ago`;
+  if (diffSec < 60) return window.t ? window.t("history.time.justNow", null, "just now") : "just now";
+  if (diffSec < 3600) {
+    const n = Math.floor(diffSec / 60);
+    return window.t ? window.t("history.time.minutesAgo", { n }, `${n}m ago`) : `${n}m ago`;
+  }
+  if (diffSec < 86400) {
+    const n = Math.floor(diffSec / 3600);
+    return window.t ? window.t("history.time.hoursAgo", { n }, `${n}h ago`) : `${n}h ago`;
+  }
+  if (diffSec < 604800) {
+    const n = Math.floor(diffSec / 86400);
+    return window.t ? window.t("history.time.daysAgo", { n }, `${n}d ago`) : `${n}d ago`;
+  }
   return date.toLocaleDateString();
 }
 
 function HistoryModal({ open, onClose, onResume, activeCwd }) {
-  const [sessions, setSessions]       = React.useState([]);
-  const [loading, setLoading]         = React.useState(false);
-  const [filterScope, setFilterScope] = React.useState("all"); // 'all' | 'current'
-  const [query, setQuery]             = React.useState("");
-  const [activeIdx, setActiveIdx]     = React.useState(0);
-  const inputRef                      = React.useRef(null);
-  const listRef                       = React.useRef(null);
+  const [sessions, setSessions]           = React.useState([]);
+  const [loading, setLoading]             = React.useState(false);
+  const [filterScope, setFilterScope]     = React.useState("all"); // 'all' | 'current'
+  const [query, setQuery]                 = React.useState("");
+  const [activeIdx, setActiveIdx]         = React.useState(0);
+  const [confirmDeletePath, setConfirmDeletePath] = React.useState(null); // path being confirmed for deletion
+  const [deleting, setDeleting]           = React.useState(false);
+  const inputRef                          = React.useRef(null);
+  const listRef                           = React.useRef(null);
 
   const fetchSessions = React.useCallback(async () => {
     if (!window.OMP_BRIDGE?.listSavedSessions) return;
@@ -41,11 +52,27 @@ function HistoryModal({ open, onClose, onResume, activeCwd }) {
     }
   }, []);
 
+  const handleDelete = React.useCallback(async (path) => {
+    if (!window.OMP_BRIDGE?.deleteSavedSession) return;
+    setDeleting(true);
+    try {
+      await window.OMP_BRIDGE.deleteSavedSession(path);
+      // Optimistically remove from local state, then re-fetch to sync
+      setSessions(prev => prev.filter(s => s.path !== path));
+      setConfirmDeletePath(null);
+    } catch (err) {
+      console.error("[HistoryModal] Failed to delete session:", err);
+    } finally {
+      setDeleting(false);
+    }
+  }, []);
+
   // Fetch when opened
   React.useEffect(() => {
     if (open) {
       setQuery("");
       setActiveIdx(0);
+      setConfirmDeletePath(null);
       fetchSessions();
       setTimeout(() => inputRef.current?.focus(), 50);
     }
@@ -125,7 +152,7 @@ function HistoryModal({ open, onClose, onResume, activeCwd }) {
           <input
             ref={inputRef}
             className="bridge-input mono"
-            placeholder="Search saved conversations by title, query, project…"
+            placeholder={window.t ? window.t("history.search", null, "Search saved conversations by title, query, project…") : "Search saved conversations by title, query, project…"}
             value={query}
             onChange={e => { setQuery(e.target.value); setActiveIdx(0); }}
           />
@@ -153,7 +180,7 @@ function HistoryModal({ open, onClose, onResume, activeCwd }) {
             className={`btn ${filterScope === "all" ? "accent outlined" : "ghost"}`}
             style={{ height: 22, padding: "0 8px", fontSize: "var(--d-text-xs)" }}
             onClick={() => { setFilterScope("all"); setActiveIdx(0); }}>
-            All Projects ({sessions.length})
+            {window.t ? window.t("history.scope.all", null, "All Projects") : "All Projects"} ({sessions.length})
           </button>
           {activeCwd && (
             <button
@@ -179,7 +206,7 @@ function HistoryModal({ open, onClose, onResume, activeCwd }) {
             <div className="bridge-empty">
               {query
                 ? `No sessions found matching "${query}"`
-                : "No saved sessions found on disk"}
+                : (window.t ? window.t("history.empty", null, "No saved sessions found on disk") : "No saved sessions found on disk")}
             </div>
           )}
 
@@ -248,16 +275,51 @@ function HistoryModal({ open, onClose, onResume, activeCwd }) {
                     </span>
                   )}
 
-                  <button
-                    className="btn ghost accent"
-                    style={{ height: 20, padding: "0 8px", fontSize: "var(--d-text-xs)", marginLeft: "auto", flexShrink: 0 }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onResume?.(s);
-                      onClose();
-                    }}>
-                    Resume ↵
-                  </button>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginLeft: "auto", flexShrink: 0 }}>
+                    {confirmDeletePath === s.path ? (
+                      <>
+                        <button
+                          className="btn ghost"
+                          style={{ height: 20, padding: "0 6px", fontSize: "var(--d-text-xs)", color: "var(--rose)", borderColor: "color-mix(in oklab, var(--rose) 35%, var(--line))" }}
+                          title={window.t("history.delete.confirmTitle")}
+                          disabled={deleting}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(s.path);
+                          }}>
+                          {deleting ? "…" : window.t("history.delete.confirm")}
+                        </button>
+                        <button
+                          className="btn icon ghost"
+                          style={{ height: 20, width: 20 }}
+                          title={window.t("models.cancel")}
+                          onClick={(e) => { e.stopPropagation(); setConfirmDeletePath(null); }}>
+                          <Icon name="close" size={9} color="var(--fg-4)" />
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        className="btn icon ghost"
+                        style={{ height: 20, width: 20, opacity: isSelected ? 0.7 : 0 }}
+                        title={window.t("history.delete")}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConfirmDeletePath(s.path);
+                        }}>
+                        <Icon name="trash" size={11} color="var(--rose)" />
+                      </button>
+                    )}
+                    <button
+                      className="btn ghost accent"
+                      style={{ height: 20, padding: "0 8px", fontSize: "var(--d-text-xs)" }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onResume?.(s);
+                        onClose();
+                      }}>
+                      {window.t("history.resume")} ↵
+                    </button>
+                  </div>
                 </div>
 
                 {/* Third line: preview snippet */}
