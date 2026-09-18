@@ -152,6 +152,8 @@
       "plan.phase.done": "done",
       "plan.close": "close (esc)",
       "plan.empty": "no plan yet. think out loud below.",
+      "plan.intentFraming": "Please draft a plan for the following task. Write it in Markdown with clear sections: overview, approach, key steps, and risks. Do not start implementing yet — draft only for my review.\n\n---\n\n{intent}",
+      "plan.approvalPrompt": "Plan approved. Please proceed to execute it. Use your todo_write tool to track tasks as you go.",
 
       // Chat
       "chat.ask": "Ask",
@@ -320,6 +322,8 @@
       "plan.phase.done": "已完成",
       "plan.close": "关闭 (Esc)",
       "plan.empty": "暂无规划任务，可在下方输入需求。",
+      "plan.intentFraming": "请为以下任务起草一份规划。使用 Markdown 编写，包含以下部分：概述、实现方案、关键步骤和风险点。暂不开始实施——仅供我审阅。\n\n---\n\n{intent}",
+      "plan.approvalPrompt": "规划已批准，请开始执行。执行过程中请使用 todo_write 工具跟踪任务进度。",
 
       // Chat
       "chat.ask": "提问",

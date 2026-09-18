@@ -242,7 +242,7 @@ function App() {
 
   const handleApprovePlan = () => {
     setPlanAnnotations({});
-    bridge?.followUp(APPROVAL_PROMPT);
+    bridge?.followUp(APPROVAL_PROMPT());
     setPlanMode(false);
     planStartedRef.current = false;
     setPlanOpen(true);

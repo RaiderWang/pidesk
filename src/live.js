@@ -661,12 +661,19 @@
       }
 
     } else if (command === "cycle_thinking_level") {
-      // data is { level: Effort } | null. null means thinking not supported
-      // by the current model — omp leaves the level unchanged in that case.
       if (data?.level != null) {
+        // omp reported the new level — use it.
         state.thinkingLevel = data.level;
-        notify();
+      } else {
+        // omp didn't report a level (null response). Cycle client-side
+        // through the practical tiers and push the choice via set_thinking_level.
+        const LEVELS = ["off", "low", "medium", "high"];
+        const idx = LEVELS.indexOf(state.thinkingLevel);
+        const next = LEVELS[(idx + 1) % LEVELS.length];
+        state.thinkingLevel = next;
+        _send({ type: "set_thinking_level", level: next });
       }
+      notify();
 
     } else if (command === "new_session") {
       // New session started — clear local state and re-fetch
@@ -1048,7 +1055,7 @@
       state.turnStartMs  = null;
       state.runningTools = [];
     }
-    state.thinkingLevel = rpcState.thinkingLevel ?? "auto";
+    state.thinkingLevel = state.thinkingLevel ?? rpcState.thinkingLevel ?? "off";
 
     if (rpcState.model) {
       state.model = _buildModelEntry(rpcState.model);
@@ -1576,12 +1583,12 @@
 
     /** Get application version from Tauri backend. */
     async getAppVersion() {
-      if (!window.__TAURI__) return "0.2.3";
+      if (!window.__TAURI__) return "0.2.4";
       try {
         return await window.__TAURI__.core.invoke("get_app_version");
       } catch (err) {
         console.error("[live] getAppVersion error:", err);
-        return "0.2.3";
+        return "0.2.4";
       }
     },
 

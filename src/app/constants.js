@@ -28,9 +28,14 @@
   const NULL_PEER     = { project: "—", title: "no peer session", activity: "edit · idle", tps: 0, todo: { done: 0, total: 1 } };
 
   const INTENT_FRAMING = (intent) =>
-    `Please draft a plan for the following task. Write it in Markdown with clear sections: overview, approach, key steps, and risks. Do not start implementing yet — draft only for my review.\n\n---\n\n${intent.trim()}`;
+    window.t
+      ? window.t("plan.intentFraming", { intent: intent.trim() })
+      : `Please draft a plan for the following task. Write it in Markdown with clear sections: overview, approach, key steps, and risks. Do not start implementing yet — draft only for my review.\n\n---\n\n${intent.trim()}`;
 
-  const APPROVAL_PROMPT = "Plan approved. Please proceed to execute it. Use your todo_write tool to track tasks as you go.";
+  const APPROVAL_PROMPT = () =>
+    window.t
+      ? window.t("plan.approvalPrompt")
+      : "Plan approved. Please proceed to execute it. Use your todo_write tool to track tasks as you go.";
 
   Object.assign(window, {
     TWEAK_DEFAULTS,

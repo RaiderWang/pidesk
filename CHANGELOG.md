@@ -4,7 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.2.4] - 2026-09-18
+
+### Fixed
+
+- **Plan mode prompts not localized**: the intent-framing prefix and approval prompt that PiDesk auto-prepends in plan mode are now routed through `window.t()` with `plan.intentFraming` / `plan.approvalPrompt` keys, so they render in the user's chosen language instead of always English
+- **Thinking level display oscillation**: the composer's "thinking · level" pill no longer flickers between values on every turn — `get_state` responses no longer overwrite the user's chosen level; only explicit cycling updates the display
+- **Thinking level cycling non-functional**: when omp doesn't report the new level in `cycle_thinking_level` response (omp ≤ 18.x), PiDesk now cycles client-side through `off → low → medium → high` and pushes the choice via `set_thinking_level`
 
 ## [0.2.3] - 2026-09-17
 

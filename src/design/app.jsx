@@ -31,7 +31,7 @@ function App() {
   const [planOpen, setPlanOpen] = React.useState(false);
   const [planPhase, setPlanPhase] = React.useState("review"); // review | running | done
   const [planMode, setPlanMode] = React.useState(false);
-  const [thinkingLevel, setThinkingLevel] = React.useState("auto");
+  const [thinkingLevel, setThinkingLevel] = React.useState("off");
   const [model, setModel] = React.useState(data.models.find((m) => m.current));
   const [messages, setMessages] = React.useState(data.messages);
   const [streaming, setStreaming] = React.useState(true);
@@ -105,9 +105,11 @@ function App() {
     else if (c.name === "thinking") cycleThinking();
   };
 
-  const cycleThinking = () => setThinkingLevel((x) =>
-    x === "none" ? "auto" : x === "auto" ? "extended" : "none"
-  );
+  const cycleThinking = () => setThinkingLevel((x) => {
+    const levels = ["off", "low", "medium", "high"];
+    const idx = levels.indexOf(x);
+    return levels[(idx + 1) % levels.length];
+  });
 
   const showRail = t.layout !== "focus";
   const showSplit = t.layout === "split";
@@ -121,7 +123,7 @@ function App() {
             onCmd={() => setBridgeOpen(true)} />
           <TabBar projects={data.projects} activeId={activeTabId}
             onSelect={setActiveTabId} peer={data.peer} onNew={() => {}}
-            appVersion={window.PIDESK_APP_VERSION || window.OMP_APP_VERSION || "0.2.3"} theme={t.theme} />
+            appVersion={window.PIDESK_APP_VERSION || window.OMP_APP_VERSION || "0.2.4"} theme={t.theme} />
 
           <div className={`stage ${showRail ? "with-rail" : ""}`}>
             <main className="session">

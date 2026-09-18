@@ -104,6 +104,9 @@ function PlanKanban({ kanban, planMeta, onClose, onAbort }) {
             <>
               <span style={{ color: "var(--fg-4)" }}>agent is executing the plan</span>
               <div style={{ flex: 1 }} />
+              <button className="btn ghost" onClick={onClose}>
+                {window.t ? window.t("plan.close", null, "close (esc)") : "close (esc)"}
+              </button>
               <button className="btn danger" onClick={onAbort}>
                 <Icon name="stop" size={10} /> abort
               </button>
