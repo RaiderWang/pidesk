@@ -5,7 +5,7 @@
    session lifecycle; the tab list and active session come from the
    bridge (snap.sessions / snap.activeSessionId). Switching tabs calls
    bridge.activateSession() which resets ALL per-session state and
-   re-fetches from omp — so the right panel (sparkline, activity radar,
+   re-fetches from omp — so the right panel (sparkline, agent hub,
    minimap, kanban, context gauge) always reflects the active session.
 
    Constants and the cross-cutting effects (bridge subscription, theme,
@@ -76,6 +76,11 @@ function App() {
   const [recentTools,   setRecentTools]   = React.useState([]);
   const [turnStartMs,   setTurnStartMs]   = React.useState(null);
 
+  // ── Agent Hub — subagent tree / task tracking ────────────────────────────
+  const [hubMode,    setHubMode]    = React.useState("compact");
+  const [hubAgents,  setHubAgents]  = React.useState([]);
+  const [hubHistory, setHubHistory] = React.useState([]);
+
   // ── Tab list — driven by bridge session registry ──────────────────────────
   // Each entry: { id, name, path, color, branch }
   const [sessions,        setSessions]        = React.useState([]);
@@ -99,6 +104,7 @@ function App() {
     setSessions, setActiveSessionId,
     setPeer, setPeerSessionId,
     setRunningTools, setRecentTools, setTurnStartMs,
+    setHubMode, setHubAgents, setHubHistory,
   });
   useThemeEffect(t);
   useCommandShortcut(setBridgeOpen, setBridgeView);
@@ -379,6 +385,9 @@ function App() {
                 turnStartMs={turnStartMs}
                 runningTools={runningTools}
                 recentTools={recentTools}
+                hubMode={hubMode}
+                hubAgents={hubAgents}
+                hubHistory={hubHistory}
               />
             )}
           </div>

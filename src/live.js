@@ -69,6 +69,11 @@
     runningTools:   [],   // [{id, tool, target, startMs}] — currently executing tools
     recentTools:    [],   // [{id, tool, target, durationMs}] — last N completed tools (rolling trail)
     turnStartMs:    null, // raw timestamp when current turn started (for elapsed display)
+    // ── Agent Hub — subagent tree / task tracking ──────────────────────
+    hubMode:    "compact",  // "compact" | "tree" | "summary"
+    hubAgents:  [],         // current task's subagent list (from tool_execution_update progress)
+    hubTaskId:  null,       // active task tool's toolCallId
+    hubHistory: [],         // last 3 completed task results [{taskId, agents, time}]
   };
 
   let streamingBubble = null;
@@ -79,6 +84,52 @@
   let activityLog     = [];           // [{ts, toolName}], pruned to 60s
   let _compactBackfillId = null; // compact msg id awaiting tokensAfter back-fill
   let _msgSeq = 0;  // monotonic counter — stable React keys for message bubbles
+  let _sessionFresh = false; // true after _resetSessionVars (new/restarted session, no snapshot)
+
+  // ── User preference persistence ──────────────────────────────────────────
+  // Saves the user's last model + thinking level across app restarts.
+  // On a fresh session (no snapshot to restore from) the saved prefs are
+  // pushed to omp so the new process matches the user's previous choice.
+  const PREFS_KEY = "pidesk:prefs";
+
+  function _loadPrefs() {
+    try {
+      const raw = localStorage.getItem(PREFS_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  }
+
+  function _savePrefs(patch) {
+    try {
+      const prev = _loadPrefs();
+      localStorage.setItem(PREFS_KEY, JSON.stringify({ ...prev, ...patch }));
+    } catch {}
+  }
+
+  function _restorePrefs() {
+    const prefs = _loadPrefs();
+    if (!prefs || typeof prefs !== "object") return;
+
+    // Thinking level — omp doesn't persist this; push it on every fresh session.
+    if (prefs.thinkingLevel) {
+      state.thinkingLevel = prefs.thinkingLevel;
+      _send({ type: "set_thinking_level", level: prefs.thinkingLevel });
+    }
+
+    // Model — only override when saved preference differs from omp's default.
+    if (prefs.modelId && prefs.modelProvider && state.model?.id !== prefs.modelId) {
+      _send({ type: "set_model", provider: prefs.modelProvider, modelId: prefs.modelId });
+      // Optimistic local update to prevent the UI flashing omp's default model.
+      state.model = _buildModelEntry({
+        id: prefs.modelId,
+        name: prefs.modelName,
+        provider: prefs.modelProvider,
+      });
+      if (state.models.length > 0) {
+        state.models = state.models.map(m => ({ ...m, current: m.id === prefs.modelId }));
+      }
+    }
+  }
 
   // ── Minimap / message-history trim ───────────────────────────────────────
   const MINIMAP_COLS = 13;
@@ -196,6 +247,11 @@
       runningTools:    state.runningTools,
       recentTools:     state.recentTools,
       turnStartMs:     state.turnStartMs,
+      // Agent Hub — subagent tree / task tracking
+      hubMode:         state.hubMode,
+      hubAgents:       state.hubAgents,
+      hubTaskId:       state.hubTaskId,
+      hubHistory:      state.hubHistory,
     };
     subscribers.forEach(cb => cb(snap));
 
@@ -229,6 +285,10 @@
       runningTools:  [],
       recentTools:   [],
       turnStartMs:   null,
+      hubMode:       "compact",
+      hubAgents:     [],
+      hubTaskId:     null,
+      hubHistory:    [],
     });
     streamingBubble = null;
     pendingAskBubble = null;
@@ -260,6 +320,13 @@
       runningTools:  [...state.runningTools],
       recentTools:   [...state.recentTools],
       turnStartMs:   state.turnStartMs,
+      hubMode:       state.hubMode,
+      hubAgents:     state.hubAgents.map(a => ({
+        ...a,
+        _stream: (a._stream ?? []).slice(-200), // cap saved stream lines
+      })),
+      hubTaskId:     state.hubTaskId,
+      hubHistory:    state.hubHistory,
       // volatile vars
       streamingBubble,
       activeToolCards: new Map(activeToolCards),
@@ -289,6 +356,10 @@
       runningTools:  snap.runningTools ?? [],
       recentTools:   snap.recentTools ?? [],
       turnStartMs:   snap.turnStartMs ?? null,
+      hubMode:       snap.hubMode ?? "compact",
+      hubAgents:     snap.hubAgents ?? [],
+      hubTaskId:     snap.hubTaskId ?? null,
+      hubHistory:    snap.hubHistory ?? [],
     });
     streamingBubble = snap.streamingBubble;
     activeToolCards = snap.activeToolCards;
@@ -474,6 +545,9 @@
     // Restore cached snapshot (preserves streaming messages) or start fresh
     if (!_restoreSession(id)) {
       _resetSessionVars();
+      _sessionFresh = true;
+    } else {
+      _sessionFresh = false;
     }
 
     const { listen } = window.__TAURI__.event;
@@ -649,6 +723,7 @@
       if (data) {
         state.model  = _buildModelEntry(data);
         state.models = state.models.map(m => ({ ...m, current: m.id === data.id }));
+        _savePrefs({ modelId: data.id, modelProvider: data.provider, modelName: data.name });
         notify();
       }
 
@@ -657,6 +732,8 @@
         state.model  = _buildModelEntry(data.model);
         if (data.thinkingLevel != null) state.thinkingLevel = data.thinkingLevel;
         state.models = state.models.map(m => ({ ...m, current: m.id === data.model.id }));
+        _savePrefs({ modelId: data.model.id, modelProvider: data.model.provider, modelName: data.model.name });
+        if (data.thinkingLevel != null) _savePrefs({ thinkingLevel: data.thinkingLevel });
         notify();
       }
 
@@ -673,6 +750,7 @@
         state.thinkingLevel = next;
         _send({ type: "set_thinking_level", level: next });
       }
+      _savePrefs({ thinkingLevel: state.thinkingLevel });
       notify();
 
     } else if (command === "new_session") {
@@ -959,6 +1037,12 @@
       const cutoff = now - 60_000;
       while (activityLog.length && activityLog[0].ts < cutoff) activityLog.shift();
       state.activity = window.buildActivityFromLog(activityLog);
+      // Hub: when a task tool starts, switch to tree mode
+      if (toolName === "task") {
+        state.hubMode    = "tree";
+        state.hubTaskId  = ev.toolCallId;
+        state.hubAgents  = [];
+      }
       notify();
       return;
     }
@@ -972,6 +1056,10 @@
           const msgs = [...state.messages];
           msgs[idx] = updated;
           state.messages = msgs;
+          // Hub: sync subagent list from task progress updates
+          if (state.hubTaskId === ev.toolCallId && updated.subagents) {
+            state.hubAgents = updated.subagents;
+          }
           notify();
         }
       }
@@ -998,6 +1086,16 @@
           msgs[idx]     = updated;
           state.messages = msgs;
           activeToolCards.delete(ev.toolCallId);
+          // Hub: when the tracked task finishes, switch to summary mode
+          if (state.hubTaskId === ev.toolCallId) {
+            const finalAgents = updated.subagents ?? state.hubAgents;
+            state.hubAgents  = finalAgents;
+            state.hubMode    = "summary";
+            state.hubHistory = [...state.hubHistory, {
+              taskId: ev.toolCallId, agents: finalAgents, time,
+            }].slice(-3);
+            state.hubTaskId  = null;
+          }
           if (ev.toolName === "todo_write") {
             const phases = ev.result?.details?.phases ?? ev.result?.phases ?? [];
             if (phases.length > 0) {
@@ -1091,6 +1189,14 @@
           m.kind === "compact" && m.id === cid ? { ...m, tokensAfter: afterTokens } : m
         );
       }
+    }
+
+    // On the first get_state of a fresh session (no snapshot), restore
+    // the user's saved model + thinking level so the new omp process
+    // matches their previous choices.
+    if (_sessionFresh) {
+      _sessionFresh = false;
+      _restorePrefs();
     }
 
     _refreshCtx();
@@ -1583,12 +1689,12 @@
 
     /** Get application version from Tauri backend. */
     async getAppVersion() {
-      if (!window.__TAURI__) return "0.2.4";
+      if (!window.__TAURI__) return "0.2.5";
       try {
         return await window.__TAURI__.core.invoke("get_app_version");
       } catch (err) {
         console.error("[live] getAppVersion error:", err);
-        return "0.2.4";
+        return "0.2.5";
       }
     },
 
@@ -1682,6 +1788,10 @@
         runningTools:    state.runningTools,
         recentTools:     state.recentTools,
         turnStartMs:     state.turnStartMs,
+        hubMode:         state.hubMode,
+        hubAgents:       state.hubAgents,
+        hubTaskId:       state.hubTaskId,
+        hubHistory:      state.hubHistory,
       });
       return () => subscribers.delete(cb);
     },

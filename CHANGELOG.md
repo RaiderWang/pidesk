@@ -4,7 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+## [0.2.5] - 2026-09-20
+
+### Added
+
+- **Agent Hub**: adaptive right-rail card replacing Agent Activity and Agent Radar — three auto-switching modes: enhanced tool timeline with mini distribution bar (Compact), live subagent tree with expandable log streams (Tree), and task result summary with 5 s auto-collapse (Summary); `ast_edit` tool now recognized in the tool name map
+- **Hub data layer**: `live.js` tracks hub state (`hubMode`, `hubAgents`, `hubTaskId`, `hubHistory`) with full session snapshot/restore and automatic mode transitions on `task` tool lifecycle events
+
+### Removed
+
+- Agent Radar (60-cell grid) and standalone Agent Activity card — functionality merged into Agent Hub Compact mode
+
 ## [0.2.4] - 2026-09-18
+
+### Added
+
+- **Persist model & thinking level across restarts**: PiDesk now saves the last-used model and thinking level to `localStorage` and restores them when reopening the app or opening a new tab — each fresh omp process receives `set_model` + `set_thinking_level` on first `get_state`, while tab-switch snapshots preserve per-tab choices independently
 
 ### Fixed
 

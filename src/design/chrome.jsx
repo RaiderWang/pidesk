@@ -3,10 +3,10 @@
    - WindowChrome (traffic lights, title)
    - TabBar
    - StatusBar
-   - Ambient rail: TokenGauge, ActivityRadar, Minimap, Peer session
+   - Ambient rail: TokenGauge, AgentHub, Minimap, Peer session
    ═════════════════════════════════════════════════════════════════════ */
 
-const { Icon, TokenGauge, ActivityRadar, Sparkline, TOOL_META, AgentActivity } = window;
+const { Icon, TokenGauge, Sparkline, TOOL_META, AgentHub } = window;
 
 // ── Platform detection ────────────────────────────────────────────────
 const IS_WIN = typeof navigator !== "undefined" &&
@@ -58,7 +58,7 @@ function WindowChrome({ project, peer, onCmd }) {
 
 // ── Project tabs ─────────────────────────────────────────────────────
 function TabBar({ projects, activeId, onSelect, onClose, peer, onNew, onNewProject, onNewStandalone, onHistory, onManageModels, appVersion, theme }) {
-  const version = appVersion || window.PIDESK_APP_VERSION || window.OMP_APP_VERSION || "0.2.4";
+  const version = appVersion || window.PIDESK_APP_VERSION || window.OMP_APP_VERSION || "0.2.5";
   const themeName = theme || "daylight";
   const versionLabel = `v${version}-${themeName}`;
 
@@ -360,7 +360,8 @@ function PeerPicker({ sessions, activeSessionId, onSetPeer }) {
 function AmbientRail({ ctx, activity, peer, peerSessionId, sessions, activeSessionId,
     onSetPeer, onClearPeer, onFocusPeer,
     messages, microcopy, onClose, sparklineValues, hoveredMsgIdx, onMinimapHover, onMinimapClick,
-    isStreaming, turnStartMs, runningTools, recentTools }) {
+    isStreaming, turnStartMs, runningTools, recentTools,
+    hubMode, hubAgents, hubHistory }) {
   // Use live tps samples. Before the first turn, sparklineValues is all zeros
   // which renders as a flat baseline — honest, not fake random data.
   const sparkVals = (sparklineValues && sparklineValues.length > 0)
@@ -389,23 +390,11 @@ function AmbientRail({ ctx, activity, peer, peerSessionId, sessions, activeSessi
       </div>
 
       <div className="rail-card glass">
-        <AgentActivity isStreaming={isStreaming} turnStartMs={turnStartMs} runningTools={runningTools} recentTools={recentTools} />
-      </div>
-
-      <div className="rail-card glass">
-        <div className="rail-card-head">
-          <Icon name="radar" size={11} color="var(--accent)" />
-          <span style={{ color: "var(--fg-2)" }}>{window.t ? window.t("chrome.rail.radar", null, "agent radar") : "agent radar"}</span>
-          <span className="chip muted" style={{ marginLeft: "auto" }}>{window.t ? window.t("chrome.rail.last60s", null, "last 60s") : "last 60s"}</span>
-        </div>
-        <ActivityRadar activity={activity} tps={ctx.tokensPerSec} />
-        <div className="legend">
-          {Object.entries(TOOL_META).filter(([k]) => ["read","search","edit","bash"].includes(k)).map(([k, m]) => (
-            <span key={k} className="legend-item">
-              <span style={{ background: m.color }} /> {m.label}
-            </span>
-          ))}
-        </div>
+        <AgentHub
+          hubMode={hubMode} hubAgents={hubAgents} hubHistory={hubHistory}
+          runningTools={runningTools} recentTools={recentTools}
+          isStreaming={isStreaming} turnStartMs={turnStartMs} activity={activity}
+        />
       </div>
 
       <div className="rail-card glass">

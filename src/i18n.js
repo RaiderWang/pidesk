@@ -169,11 +169,23 @@
       "chat.scrub": "scrub",
       "chat.hits": "{count} hits",
 
-      // Agent Activity
+      // Agent Activity / Hub
       "agent.status": "agent status",
       "agent.idle": "idle",
       "agent.thinking": "thinking…",
       "agent.recent": "recent",
+
+      // Agent Hub
+      "hub.title": "agent hub",
+      "hub.mode.compact": "compact",
+      "hub.mode.tree": "workers",
+      "hub.mode.summary": "done",
+      "hub.tools": "tools",
+      "hub.avg": "avg",
+      "hub.total": "total",
+      "hub.steer": "steer",
+      "hub.kill": "kill",
+      "hub.noActivity": "no recent activity",
     },
 
     "zh-CN": {
@@ -339,11 +351,23 @@
       "chat.scrub": "拖动比对",
       "chat.hits": "{count} 处匹配",
 
-      // Agent Activity
+      // Agent Activity / Hub
       "agent.status": "智能体状态",
       "agent.idle": "空闲",
       "agent.thinking": "思考中…",
       "agent.recent": "近期动作",
+
+      // Agent Hub
+      "hub.title": "Agent Hub",
+      "hub.mode.compact": "紧凑",
+      "hub.mode.tree": "工作者",
+      "hub.mode.summary": "已完成",
+      "hub.tools": "工具",
+      "hub.avg": "平均",
+      "hub.total": "合计",
+      "hub.steer": "转向",
+      "hub.kill": "终止",
+      "hub.noActivity": "无近期活动",
     }
   };
 

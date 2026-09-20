@@ -33,6 +33,10 @@ function useBridgeSnapshot(bridge, setters) {
       setters.setRunningTools?.(snap.runningTools ?? []);
       setters.setRecentTools?.(snap.recentTools ?? []);
       setters.setTurnStartMs?.(snap.turnStartMs ?? null);
+      // Agent Hub — subagent tree / task tracking
+      setters.setHubMode?.(snap.hubMode ?? "compact");
+      setters.setHubAgents?.(snap.hubAgents ?? []);
+      setters.setHubHistory?.(snap.hubHistory ?? []);
     });
     return unsub;
   }, [bridge]);

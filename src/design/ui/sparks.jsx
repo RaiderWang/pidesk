@@ -1,4 +1,4 @@
-/* ui/sparks.jsx — Sparkline + TokenGauge + ActivityRadar.
+/* ui/sparks.jsx — Sparkline + TokenGauge.
    Small ambient peripherals shown in the right rail. */
 
 const { TOOL_META: _SP_TOOL_META } = window;
@@ -58,30 +58,5 @@ const TokenGauge = ({ used, total, pct, label, sub }) => {
   );
 };
 
-// ── Activity radar — 60s strip of tool calls colored by kind ─────────
-const ActivityRadar = ({ activity, tps }) => {
-  const cells = Array.from({ length: 60 }, (_, i) => activity.find((a) => a.t === i));
-  return (
-    <div className="radar">
-      <div className="radar-row">
-        {cells.map((c, i) => (
-          <div key={i}
-            className={`radar-cell ${c ? "on" : ""}`}
-            style={{
-              background: c ? _SP_TOOL_META[c.k]?.color : "transparent",
-              animationDelay: `${i * 30}ms`,
-            }}
-            title={c ? `t-${60 - i}s · ${c.k}` : ""} />
-        ))}
-      </div>
-      <div className="radar-foot">
-        <span className="mono" style={{ color: "var(--fg-3)" }}>−60s</span>
-        <span className="mono" style={{ color: "var(--accent)" }}>{tps} t/s</span>
-        <span className="mono" style={{ color: "var(--fg-3)" }}>now</span>
-      </div>
-    </div>
-  );
-};
 
-
-Object.assign(window, { Sparkline, TokenGauge, ActivityRadar });
+Object.assign(window, { Sparkline, TokenGauge });

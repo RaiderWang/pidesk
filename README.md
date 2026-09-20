@@ -41,6 +41,13 @@ React UI as a connected, live interface — no browser, no Electron, ~8 MB binar
 - Click a cell → chat scrolls smoothly to that message
 - Tooltip shows role, token count (in/out), tool name, duration, or message preview
 
+**Agent Hub** *(ambient right-rail card)*
+- Three auto-switching modes driven by live session state
+  - **Compact** (default): heartbeat indicator, current phase label, running tools with ticking elapsed timers, rolling trail of the last 8 completed actions, and a mini colour-coded tool-distribution bar — replaces the old 60-cell radar
+  - **Tree**: activates automatically when a `task` (subagent fan-out) tool starts — shows live worker nodes with status dot, token count, duration, task description, and an expandable log stream per worker
+  - **Summary**: shown on task completion with per-worker result rows and totals; auto-collapses back to Compact after 5 s of no interaction
+- Hub state (`hubMode`, `hubAgents`, `hubHistory`) is fully preserved in session snapshots so the view survives tab switches
+
 **Native shell**
 - Tauri 2, Rust backend, no Electron, no CDN dependencies
 - Frameless window with custom traffic-light / drag region on Windows and macOS
