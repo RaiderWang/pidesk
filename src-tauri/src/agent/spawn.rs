@@ -101,10 +101,23 @@ pub(super) fn spawn_omp(cwd: Option<&str>, resume: Option<&str>) -> Result<Child
         // otherwise attach to a console-subsystem child of a GUI parent.
         #[cfg(windows)]
         cmd.creation_flags(CREATE_NO_WINDOW);
-        if let Some(dir) = cwd {
-            if !dir.is_empty() {
-                cmd.current_dir(dir);
-            }
+        if let Some(dir) = cwd.filter(|d| !d.is_empty()) {
+            cmd.current_dir(dir);
+        } else {
+            // No project specified — pin the child to the running
+            // executable's own directory instead of letting it inherit
+            // whatever ambient CWD the Tauri process happens to have.
+            // That ambient value is fragile and inconsistent between
+            // launch sites (crate root under `cargo run`, a scratch
+            // folder if launched from a terminal, etc.), which is exactly
+            // what made "no project" sessions started from different
+            // places (main window default/"New Standalone" vs. the
+            // Quick Bar) disagree on their default working directory.
+            // Pinning to the exe's directory matches what Explorer/the
+            // Start Menu use as the default CWD for an installed build,
+            // so every "no project" session — wherever it's started —
+            // lands in the same place.
+            cmd.current_dir(default_cwd());
         }
         match cmd.spawn() {
             Ok(child) => return Ok(child),
@@ -120,11 +133,37 @@ pub(super) fn spawn_omp(cwd: Option<&str>, resume: Option<&str>) -> Result<Child
     ))
 }
 
+/// Return the fallback working directory for "no project" sessions: the
+/// directory containing the running executable.
+fn default_cwd() -> std::path::PathBuf {
+    exe_dir(std::env::current_exe().ok())
+}
+
+/// Pure helper: derive the containing directory of an executable path,
+/// falling back to `.` (the process's actual ambient CWD at spawn time)
+/// when the executable's own path can't be resolved.
+fn exe_dir(exe_path: Option<std::path::PathBuf>) -> std::path::PathBuf {
+    exe_path
+        .and_then(|p| p.parent().map(std::path::Path::to_path_buf))
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+}
+
 // ── tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
-    use super::help_text_supports_rpc_ui;
+    use super::{exe_dir, help_text_supports_rpc_ui};
+
+    #[test]
+    fn exe_dir_uses_parent_of_executable() {
+        let exe = std::path::PathBuf::from("/opt/pidesk/pidesk");
+        assert_eq!(exe_dir(Some(exe)), std::path::PathBuf::from("/opt/pidesk"));
+    }
+
+    #[test]
+    fn exe_dir_falls_back_to_dot_when_unresolvable() {
+        assert_eq!(exe_dir(None), std::path::PathBuf::from("."));
+    }
 
     #[test]
     fn detects_rpc_ui_in_mode_line() {

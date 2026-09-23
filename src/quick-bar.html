@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Quick Bar</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Shared design tokens (themes, density, type scale) -->
+  <link rel="stylesheet" href="design/styles.css" />
+  <!-- Markdown content typography (.md-content) — the result HTML is
+       rendered via marked/hljs upstream in the main window
+       (src/app/quickbar-host.js); this just supplies matching styles. -->
+  <link rel="stylesheet" href="platform.css" />
+  <!-- Syntax highlighting theme for fenced code blocks (atom-one-dark) -->
+  <link rel="stylesheet" href="highlight-theme.css" />
+  <!-- Quick Bar styles -->
+  <link rel="stylesheet" href="quick-bar/quick-bar.css" />
+
+  <style>
+    /* The Quick Bar window is transparent + undecorated, so html/body
+       must also be transparent for the rounded corners to show. */
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: transparent;
+      overflow: hidden;
+    }
+  </style>
+
+  <script>
+    // Disable native context menu.
+    window.addEventListener('contextmenu', function (e) {
+      e.preventDefault();
+    }, true);
+  </script>
+
+  <!-- Appearance helper: apply saved theme/density/accent before React boots
+       so there is no flash of the default daylight theme on show. -->
+  <script src="app/appearance.js"></script>
+  <script>
+    (function () {
+      var t = window.loadTweaksFromStorage && window.loadTweaksFromStorage();
+      if (t && window.applyAppearance) window.applyAppearance(t);
+    })();
+  </script>
+</head>
+<body>
+  <div id="qb-root"></div>
+
+  <!-- React 18 (vendored, same copies as the main window) -->
+  <script src="react.development.js"></script>
+  <script src="react-dom.development.js"></script>
+  <script src="babel.min.js"></script>
+
+  <!-- i18n so window.t() is available for Quick Bar strings -->
+  <script src="i18n.js"></script>
+
+  <!-- Quick Bar component + boot -->
+  <script type="text/babel" src="quick-bar/quick-bar.jsx"></script>
+  <script type="text/babel" src="quick-bar/quick-bar-boot.jsx"></script>
+
+  <!-- Real-time appearance sync from main window.
+       Two paths:
+         1. storage event — fires when the main window writes pidesk:tweaks
+            (same origin, different webview window).
+         2. quickbar://appearance Tauri event — pushed by quickbar-host.js on
+            tweakchange and on quickbar://appearance-request response.
+       Reading from storage in the quickbar://show handler in quick-bar.jsx
+       provides a third belt-and-suspenders update on every open. -->
+  <script>
+    window.addEventListener("storage", function (e) {
+      if ((e.key === "pidesk:tweaks" || e.key === "omp-desktop:tweaks") && e.newValue) {
+        try {
+          var t = JSON.parse(e.newValue);
+          if (t && window.applyAppearance) window.applyAppearance(t);
+        } catch (_) {}
+      }
+    });
+
+    if (window.__TAURI__) {
+      window.__TAURI__.event.listen("quickbar://appearance", function (ev) {
+        if (ev.payload && window.applyAppearance) window.applyAppearance(ev.payload);
+      });
+      // Ask the main window host for the current tweaks. This fires while the
+      // Quick Bar is still hidden (warm_up), so quickbar-host.js has time to
+      // set up its listener before the first user invocation.
+      window.__TAURI__.event.emitTo("main", "quickbar://appearance-request", {}).catch(function () {});
+    }
+  </script>
+</body>
+</html>

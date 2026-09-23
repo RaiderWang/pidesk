@@ -106,9 +106,18 @@
   <!-- Live data layer (must load before app-live.jsx) -->
   <script src="model-names.js"></script>
   <script src="adapter.js"></script>
+  <script src="peer-session.js"></script>
   <script src="live.js"></script>
 
   <!-- App root — wired to OMP_BRIDGE, no demo effects -->
+  <!-- Shared appearance helper (must load before quickbar-host.js and
+       use-bridge-snapshot.jsx, both of which call window.applyAppearance /
+       window.loadTweaksFromStorage). -->
+  <script src="app/appearance.js"></script>
+
+  <!-- Quick Bar host bridge (relays Quick Bar events to OMP_BRIDGE) -->
+  <script src="app/quickbar-host.js"></script>
+
   <!-- App constants + cross-cutting hooks (must load before app-live.jsx) -->
   <script src="app/constants.js"></script>
   <script type="text/babel" src="app/use-bridge-snapshot.jsx"></script>

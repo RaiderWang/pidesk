@@ -44,15 +44,7 @@ function useBridgeSnapshot(bridge, setters) {
 
 function useThemeEffect(t) {
   React.useEffect(() => {
-    const root = document.documentElement;
-    root.classList.remove("theme-aurora", "theme-phosphor", "theme-daylight");
-    root.classList.add(`theme-${t.theme}`);
-    root.classList.remove("density-cozy", "density-compact", "density-dense");
-    root.classList.add(`density-${t.density}`);
-    if (t.monoChat) root.classList.add("mono-chat");
-    else            root.classList.remove("mono-chat");
-    if (t.accent)   root.style.setProperty("--accent", t.accent);
-    if (t.fontSize) root.style.fontSize = `${t.fontSize}%`;
+    window.applyAppearance(t);
   }, [t.theme, t.density, t.accent, t.monoChat, t.fontSize]);
 }
 

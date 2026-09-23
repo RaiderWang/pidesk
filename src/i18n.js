@@ -186,6 +186,23 @@
       "hub.steer": "steer",
       "hub.kill": "kill",
       "hub.noActivity": "no recent activity",
+
+      // Quick Bar
+      "quickbar.placeholder": "Ask omp…",
+      "quickbar.placeholder.followup": "Follow up…",
+      "quickbar.mode.inject": "→ active session",
+      "quickbar.thinking": "thinking…",
+      "quickbar.hint.send": "send",
+      "quickbar.hint.newSession": "new session",
+      "quickbar.hint.escalate": "open in PiDesk",
+      "quickbar.hint.close": "close",
+      "quickbar.copy": "copy as markdown",
+      "quickbar.copied": "copied!",
+
+      // Tray
+      "tray.showMain": "Show PiDesk",
+      "tray.quickBar": "Quick Bar",
+      "tray.quit": "Quit",
     },
 
     "zh-CN": {
@@ -368,6 +385,23 @@
       "hub.steer": "转向",
       "hub.kill": "终止",
       "hub.noActivity": "无近期活动",
+
+      // Quick Bar
+      "quickbar.placeholder": "向 omp 提问…",
+      "quickbar.placeholder.followup": "继续追问…",
+      "quickbar.mode.inject": "→ 当前会话",
+      "quickbar.thinking": "思考中…",
+      "quickbar.hint.send": "发送",
+      "quickbar.hint.newSession": "新建会话",
+      "quickbar.hint.escalate": "在 PiDesk 中打开",
+      "quickbar.hint.close": "关闭",
+      "quickbar.copy": "复制 Markdown",
+      "quickbar.copied": "已复制！",
+
+      // Tray
+      "tray.showMain": "显示 PiDesk",
+      "tray.quickBar": "Quick Bar",
+      "tray.quit": "退出",
     }
   };
 

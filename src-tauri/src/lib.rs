@@ -8,7 +8,10 @@ mod agent;
 mod git;
 mod git_watcher;
 mod models_config;
+mod quick_bar;
 mod saved_sessions;
+mod shortcut;
+mod tray;
 
 use agent::AgentBridge;
 use git_watcher::GitWatcherState;
@@ -35,7 +38,11 @@ fn start_session(
     bridge: State<'_, AgentBridge>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
-    let cwd_opt = if cwd.is_empty() { None } else { Some(cwd.as_str()) };
+    let cwd_opt = if cwd.is_empty() {
+        None
+    } else {
+        Some(cwd.as_str())
+    };
     bridge.start_session(session_id, cwd_opt, resume.as_deref(), app)
 }
 
@@ -44,7 +51,7 @@ fn start_session(
 fn list_saved_sessions(
     cwd: Option<String>,
     app: tauri::AppHandle,
-) -> Result<Vec<saved_sessions::SavedSession>, String> {
+) -> Vec<saved_sessions::SavedSession> {
     saved_sessions::scan_saved_sessions(&app, cwd.as_deref())
 }
 
@@ -150,10 +157,7 @@ fn open_url_external(url: String) -> Result<(), String> {
 /// Returns the full path to the new copy, ready to pass as `resume` to
 /// `start_session`.
 #[tauri::command]
-fn copy_session_file(
-    source_path: String,
-    max_messages: Option<usize>,
-) -> Result<String, String> {
+fn copy_session_file(source_path: String, max_messages: Option<usize>) -> Result<String, String> {
     saved_sessions::copy_session_file(&source_path, max_messages)
 }
 
@@ -183,10 +187,10 @@ async fn save_html_export(source_path: String, app: tauri::AppHandle) -> Result<
     if !src.exists() {
         return Err(format!("export file not found: {source_path}"));
     }
-    let default_name = src
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "session-export.html".to_owned());
+    let default_name = src.file_name().map_or_else(
+        || "session-export.html".to_owned(),
+        |n| n.to_string_lossy().into_owned(),
+    );
 
     let (tx, rx) = std::sync::mpsc::channel();
     app.dialog()
@@ -229,6 +233,15 @@ fn get_app_version(app: tauri::AppHandle) -> String {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _shortcut, event| {
+                    if event.state == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                        let _ = quick_bar::toggle_quick_bar(app.clone());
+                    }
+                })
+                .build(),
+        )
         .manage(AgentBridge::new())
         .manage(GitWatcherState::new())
         .invoke_handler(tauri::generate_handler![
@@ -249,12 +262,49 @@ pub fn run() {
             delete_saved_session,
             save_html_export,
             get_app_version,
+            quick_bar::toggle_quick_bar,
+            quick_bar::hide_quick_bar,
+            quick_bar::set_quick_bar_height,
+            tray::set_tray_activity,
+            shortcut::get_quick_bar_shortcut,
+            shortcut::set_quick_bar_shortcut,
         ])
         .setup(|app| {
-            #[cfg(debug_assertions)]
+            // Intercept close on the main window: hide instead of destroy.
+            // This keeps the webview (and quickbar-host.js relay) alive so
+            // the Quick Bar and tray can still function. Users quit via
+            // tray menu → Quit, which calls app.exit(0).
             if let Some(win) = app.get_webview_window("main") {
+                let win_hide = win.clone();
+                win.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = win_hide.hide();
+                    }
+                });
+
+                #[cfg(debug_assertions)]
                 win.open_devtools();
             }
+
+            // System tray — left-click toggles Quick Bar, right-click shows menu.
+            tray::build(app.handle()).unwrap_or_else(|e| {
+                eprintln!("[pidesk] tray build failed: {e}");
+            });
+
+            // Global shortcut for Quick Bar (persisted or default).
+            shortcut::register_initial(app.handle()).unwrap_or_else(|e| {
+                eprintln!("[pidesk] shortcut registration failed: {e}");
+            });
+
+            // Pre-create the Quick Bar window (hidden) so its WebView2
+            // controller has the rest of startup to finish attaching —
+            // see `quick_bar::warm_up` doc comment for why this avoids a
+            // no-op first hotkey/tray click.
+            quick_bar::warm_up(app.handle()).unwrap_or_else(|e| {
+                eprintln!("[pidesk] quick-bar warm-up failed: {e}");
+            });
+
             // Start the default session (no cwd = omp's working directory).
             // The frontend activates this session on load via OMP_BRIDGE.activateSession("default").
             //
@@ -263,7 +313,8 @@ pub fn run() {
             // session_status on attach and surfaces the cached reason
             // if any — no event timing race, no delayed emit thread.
             let bridge = app.state::<AgentBridge>();
-            if let Err(e) = bridge.start_session("default".into(), None, None, app.handle().clone()) {
+            if let Err(e) = bridge.start_session("default".into(), None, None, app.handle().clone())
+            {
                 eprintln!("[pidesk] failed to start default session: {e}");
             }
             Ok(())

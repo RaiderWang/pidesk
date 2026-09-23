@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-09-23
+
+### Added
+
+- **Quick Bar copy**: AI reply result pane now has a copy button (top-right corner of the result area) that copies the response as raw Markdown to the clipboard; button shows a check mark on success and disappears when there is no content to copy
+- **Tray double-click**: left-click (single) on the system tray icon toggles the Quick Bar as before; a new left-click double-click action opens (or focuses) the main PiDesk window — debounced via a generation counter so the single-click action is cleanly cancelled when a double-click is detected
+
+### Fixed
+
+- **Quick Bar theme**: the Quick Bar overlay now follows the main window's theme (aurora / phosphor / daylight), density, accent colour, and font-size settings instead of always rendering in the default daylight theme; appearance is synced on first load (from `localStorage`), on every Quick Bar open, and in real time via Tauri events when the user changes tweaks
+
+### Added
+
+- **System tray**: PiDesk now lives in the system notification area with a tray icon; left-click toggles the Quick Bar, right-click menu offers Show PiDesk / Quick Bar / Quit; tooltip reflects agent streaming state
+- **Quick Bar**: a floating Spotlight-style input panel invoked by a global hotkey (default `Ctrl+Shift+Space`); supports two modes — inject into the active session (Enter) or open an ephemeral quick-answer session (Shift+Enter to toggle); results stream in-place; `Ctrl+Enter` escalates to the full PiDesk window; `Esc` hides
+- **Global shortcut**: Quick Bar hotkey is persisted to `quick-bar-shortcut.json` in the app config directory; runtime re-registration via `set_quick_bar_shortcut` command with rollback on failure
+- **Quick Bar host bridge** (`app/quickbar-host.js`): main-window relay that proxies Quick Bar events to `OMP_BRIDGE` and streams a throttled snapshot back via `emitTo`, avoiding a second `live.js` instance
+- **i18n**: added `quickbar.*` and `tray.*` keys for English and Simplified Chinese
+
+### Fixed
+
+- **Quick Bar results rendered as plain text**: assistant replies streamed into the Quick Bar now go through the same `marked`/highlight.js pipeline as the main chat view (rendered in the main window's `quickbar-host.js` relay, styled via `platform.css` + `highlight-theme.css` loaded by `quick-bar.html`) instead of manual escaping with `<br>` line breaks
+- **Quick Bar / main window "no project" sessions disagreed on default working directory**: both now pin to the running executable's own directory (`agent::spawn::default_cwd`) instead of letting the child inherit whatever ambient CWD the Tauri process happened to have, which was fragile and differed across launch sites
+- **Quick Bar didn't appear on the first tray-icon click after launch**: the window is now pre-created (hidden) during app startup (`quick_bar::warm_up`) instead of lazily on first toggle, so its WebView2 controller has time to finish attaching before the first hotkey/tray click can race it
+
 ## [0.2.5] - 2026-09-20
 
 ### Added

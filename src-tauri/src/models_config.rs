@@ -141,11 +141,10 @@ mod tests {
     fn test_custom_env_override() {
         std::env::set_var("PI_CODING_AGENT_DIR", "F:/test_agent_dir");
         // Verify path resolution respects env var
-        let path = if let Ok(dir) = std::env::var("PI_CODING_AGENT_DIR") {
-            PathBuf::from(dir).join("models.yml")
-        } else {
-            PathBuf::from("fallback.yml")
-        };
+        let path = std::env::var("PI_CODING_AGENT_DIR").map_or_else(
+            |_| PathBuf::from("fallback.yml"),
+            |dir| PathBuf::from(dir).join("models.yml"),
+        );
         assert_eq!(path, PathBuf::from("F:/test_agent_dir/models.yml"));
         std::env::remove_var("PI_CODING_AGENT_DIR");
     }

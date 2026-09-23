@@ -145,26 +145,6 @@
   let activeSessionId  = null;
   let activeListeners  = [];          // unlisten functions for current session
 
-  // ── Peer session ─────────────────────────────────────────────────────────
-  // "Pin" another session so its live activity is visible in the ambient
-  // rail card while you work in the active session. Lightweight listener:
-  // only tracks activity, TPS, todo progress, and streaming status — no
-  // full message history, just enough for the PeerSession widget.
-  let peerSessionId   = null;
-  let peerListeners   = [];
-  let peerTurnStart   = null;
-  let _peerNotifyTimer = null;
-  const PEER_MAX_TOOLS = 15;
-  const peerState = {
-    activity:    "idle",
-    tps:         0,
-    todo:        { done: 0, total: 0 },
-    isStreaming:  false,
-    title:       "",
-    recentTools: [],   // [{id, tool, target, status, duration, time, _startMs}]
-    thought:     null, // current thinking text while streaming
-  };
-
   // ── ID-keyed response correlation ─────────────────────────────────────────
   // Used by _sendWithResponse to correlate commands that need a typed reply.
   const _pendingResponses = new Map(); // id → { resolve, reject }
@@ -241,8 +221,8 @@
       sessions:        [...sessionRegistry.values()],
       activeSessionId,
       // Peer — null when no session is pinned
-      peer:            _buildPeerData(),
-      peerSessionId,
+      peer:            window.PeerSessionBridge.build(),
+      peerSessionId:   window.PeerSessionBridge.id,
       // Agent activity — running tools + turn clock for the status card
       runningTools:    state.runningTools,
       recentTools:     state.recentTools,
@@ -262,8 +242,11 @@
     window.OMP_DATA.planMeta  = state.planMeta;
     window.OMP_DATA.ctx       = state.ctx;
     window.OMP_DATA.activity  = state.activity;
-    window.OMP_DATA.peer      = _buildPeerData();
+    window.OMP_DATA.peer      = window.PeerSessionBridge.build();
   }
+
+  // Wire peer-session.js with the dependencies it needs from this IIFE.
+  window.PeerSessionBridge.init({ notify, sessionRegistry });
 
   // Reset all per-session volatile state (called before loading a new session)
   function _resetSessionVars() {
@@ -369,169 +352,12 @@
     return true;
   }
 
-  // ── Peer session helpers ────────────────────────────────────────────────
-  function _buildPeerData() {
-    if (!peerSessionId) return null;
-    const entry = sessionRegistry.get(peerSessionId);
-    if (!entry) return null;
-    return {
-      projectId:   peerSessionId,
-      project:     entry.name,
-      activity:    peerState.activity || "idle",
-      tps:         peerState.tps,
-      todo:        { ...peerState.todo },
-      title:       peerState.title || "—",
-      isStreaming:  peerState.isStreaming,
-      recentTools: peerState.recentTools,
-      thought:     peerState.thought,
-    };
-  }
-
-  function _sendTo(sessionId, cmd) {
-    if (!window.__TAURI__ || !sessionId) return;
-    window.__TAURI__.core
-      .invoke("send_command", { sessionId, json: JSON.stringify(cmd) })
-      .catch(e => console.error("[live] sendTo error:", e));
-  }
-
-  async function _startPeerListening(id) {
-    _stopPeerListening();
-    if (!window.__TAURI__ || !id) return;
-    Object.assign(peerState, {
-      activity: "idle", tps: 0,
-      todo: { done: 0, total: 0 },
-      isStreaming: false, title: "",
-      recentTools: [], thought: null,
-    });
-    peerTurnStart = null;
-    const { listen } = window.__TAURI__.event;
-    const ulLine = await listen(`agent://line/${id}`, ev => _handlePeerLine(ev.payload));
-    const ulExit = await listen(`agent://exit/${id}`, () => {
-      peerState.isStreaming = false;
-      peerState.activity = "exited";
-      _debouncedPeerNotify();
-    });
-    peerListeners = [ulLine, ulExit];
-    // Fetch initial state so the card shows current todo/streaming status
-    _sendTo(id, { type: "get_state" });
-  }
-
-  function _stopPeerListening() {
-    for (const ul of peerListeners) { try { ul(); } catch (_) {} }
-    peerListeners = [];
-    if (_peerNotifyTimer) { clearTimeout(_peerNotifyTimer); _peerNotifyTimer = null; }
-  }
-
-  // Throttled peer notify — at most 10 updates/sec to avoid flooding React
-  function _debouncedPeerNotify() {
-    if (_peerNotifyTimer) return;
-    _peerNotifyTimer = setTimeout(() => {
-      _peerNotifyTimer = null;
-      window.OMP_DATA.peer = _buildPeerData();
-      notify();
-    }, 100);
-  }
-
-  function _handlePeerLine(rawLine) {
-    let obj;
-    try { obj = JSON.parse(rawLine); } catch { return; }
-    if (!obj || typeof obj !== "object") return;
-    const { type } = obj;
-    let changed = false;
-
-    // Re-fetch state when peer omp restarts
-    if (type === "ready") {
-      _sendTo(peerSessionId, { type: "get_state" });
-      return;
-    }
-
-    if (type === "turn_start") {
-      peerState.isStreaming = true;
-      peerState.thought = null;
-      peerTurnStart = Date.now();
-      changed = true;
-    } else if (type === "turn_end") {
-      peerState.isStreaming = false;
-      peerState.thought = null;
-      const usage = obj.message?.usage;
-      if (peerTurnStart && usage?.output) {
-        const elapsed = (Date.now() - peerTurnStart) / 1000;
-        if (elapsed > 0) peerState.tps = Math.round(usage.output / elapsed);
-      }
-      peerTurnStart = null;
-      changed = true;
-    } else if (type === "tool_execution_start") {
-      const tool = window.normalizeToolName(obj.toolName ?? "");
-      const args = (typeof obj.args === "object" && obj.args) ? obj.args : {};
-      const target = args.path ?? args.pattern ?? args.command ?? args.query ?? "";
-      const short = target ? String(target).split(/[\\/]/).pop() : "";
-      peerState.activity = short ? `${tool} · ${short}` : tool;
-      // Append to recentTools (rolling window)
-      peerState.recentTools = [
-        ...peerState.recentTools.slice(-(PEER_MAX_TOOLS - 1)),
-        { id: obj.toolCallId, tool, target: short || String(target), status: "running",
-          duration: null, time: timeNow(), _startMs: Date.now() },
-      ];
-      changed = true;
-    } else if (type === "tool_execution_end") {
-      // Update the matching tool entry's status and duration
-      const now = Date.now();
-      peerState.recentTools = peerState.recentTools.map(t =>
-        t.id === obj.toolCallId
-          ? { ...t, status: "ok", duration: t._startMs ? now - t._startMs : null }
-          : t
-      );
-      if (obj.toolName === "todo_write") {
-        const phases = obj.result?.details?.phases ?? obj.result?.phases ?? [];
-        if (phases.length > 0) {
-          let done = 0, total = 0;
-          for (const p of phases) {
-            for (const t of p.tasks) { total++; if (t.status === "completed" || t.status === "abandoned") done++; }
-          }
-          peerState.todo = { done, total };
-        }
-      }
-      changed = true;
-    } else if (type === "message_update" && obj.message) {
-      const blocks = Array.isArray(obj.message.content) ? obj.message.content : [];
-      let foundThought = false;
-      for (const b of blocks) {
-        if (b.type === "thinking" && b.thinking?.trim()) {
-          peerState.thought = b.thinking.trim();
-          foundThought = true;
-        }
-        if (b.type === "text" && b.text?.trim()) {
-          peerState.title = b.text.trim().slice(0, 120);
-          changed = true;
-        }
-      }
-      if (foundThought) changed = true;
-    } else if (type === "response" && obj.command === "get_state" && obj.success && obj.data) {
-      const d = obj.data;
-      if (d.todoPhases?.length > 0) {
-        let done = 0, total = 0;
-        for (const p of d.todoPhases) {
-          for (const t of p.tasks) { total++; if (t.status === "completed" || t.status === "abandoned") done++; }
-        }
-        peerState.todo = { done, total };
-      }
-      if (d.isStreaming != null) peerState.isStreaming = d.isStreaming;
-      if (d.sessionName) peerState.title = d.sessionName;
-      changed = true;
-    }
-
-    if (changed) _debouncedPeerNotify();
-  }
-
   // ── Session switching ─────────────────────────────────────────────────────
   async function _switchToSession(id) {
     if (!window.__TAURI__) return;
 
     // Auto-clear peer if switching to the peer tab (redundant to monitor yourself)
-    if (id === peerSessionId) {
-      _stopPeerListening();
-      peerSessionId = null;
-    }
+    window.PeerSessionBridge.clearIfMatch(id);
 
     // Snapshot current session so we can restore it when switching back
     _saveCurrentSession();
@@ -1485,21 +1311,10 @@
       })();
     },
 
-    // ── Peer session ──────────────────────────────────────────────────────
-    get peerSessionId() { return peerSessionId; },
-    /** Pin another session as the peer to monitor in the ambient rail. */
-    setPeer(id) {
-      if (!id || id === activeSessionId || !sessionRegistry.has(id)) return;
-      peerSessionId = id;
-      _startPeerListening(id);
-    },
-    /** Unpin the peer session. */
-    clearPeer() {
-      _stopPeerListening();
-      peerSessionId = null;
-      window.OMP_DATA.peer = null;
-      notify();
-    },
+    // ── Peer session (delegated to peer-session.js) ────────────────────────
+    get peerSessionId() { return window.PeerSessionBridge.id; },
+    setPeer(id)   { window.PeerSessionBridge.pin(id, activeSessionId); },
+    clearPeer()   { window.PeerSessionBridge.unpin(); },
 
     async refreshModels() {
       _initFetch();
@@ -1689,12 +1504,12 @@
 
     /** Get application version from Tauri backend. */
     async getAppVersion() {
-      if (!window.__TAURI__) return "0.2.5";
+      if (!window.__TAURI__) return "0.2.6";
       try {
         return await window.__TAURI__.core.invoke("get_app_version");
       } catch (err) {
         console.error("[live] getAppVersion error:", err);
-        return "0.2.5";
+        return "0.2.6";
       }
     },
 
@@ -1739,10 +1554,7 @@
       sessionRegistry.delete(id);
       sessionSnapshots.delete(id);
       // Clear peer if closing the peer session
-      if (id === peerSessionId) {
-        _stopPeerListening();
-        peerSessionId = null;
-      }
+      window.PeerSessionBridge.clearIfMatch(id);
       // If no sessions remain, immediately reset and create a clean default "PiDesk" session
       if (sessionRegistry.size === 0) {
         for (const ul of activeListeners) { try { await ul(); } catch (_) {} }
@@ -1783,8 +1595,8 @@
         sparkline:       state.sparkline,
         sessions:        [...sessionRegistry.values()],
         activeSessionId,
-        peer:            _buildPeerData(),
-        peerSessionId,
+        peer:            window.PeerSessionBridge.build(),
+        peerSessionId:   window.PeerSessionBridge.id,
         runningTools:    state.runningTools,
         recentTools:     state.recentTools,
         turnStartMs:     state.turnStartMs,
