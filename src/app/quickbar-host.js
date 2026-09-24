@@ -148,20 +148,21 @@
   // ── Event handlers ─────────────────────────────────────────────────────
 
   listen("quickbar://submit", (ev) => {
-    const { text, newSession } = ev.payload ?? {};
-    if (!text) return;
+    const { text, newSession, images } = ev.payload ?? {};
+    if (!text && (!images || images.length === 0)) return;
     const bridge = BRIDGE();
     if (!bridge) return;
+    const imgs = images ?? [];
 
     if (newSession) {
       // Create a fresh tab, then send the prompt there.
       bridge.openSession(null).then(() => {
-        bridge.send(text);
+        bridge.send(text, imgs);
         _startRelay();
       });
     } else {
       // Inject into the current active session.
-      bridge.send(text);
+      bridge.send(text, imgs);
       _startRelay();
     }
   });

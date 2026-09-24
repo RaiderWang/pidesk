@@ -4,7 +4,32 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.2.7] - 2026-09-24
+
+### Added
+
+- **Single-instance application**: ensure only a single instance of PiDesk runs at a time using `tauri-plugin-single-instance`; subsequent launches automatically bring the existing instance's main window to the front and focus it
+- **Composer image menu & main window region capture**:
+  - Image button in main window composer now opens an action popover with two options: **Upload image…** (opens system file dialog) and **Capture screen** (triggers interactive region screenshot)
+  - Region capture triggered while the main window is open automatically hides the main window during capture to prevent window obscuration, restores the main window upon completion or cancellation, and inserts the cropped screenshot thumbnail directly into the main composer attachments without opening the Quick Bar
+  - Context-aware global screenshot routing: pressing `Alt+S` while the main window is visible sends the capture to the main window; while Quick Bar is visible or when in the background, it routes to Quick Bar
+- **Configurable global shortcuts in Tweaks panel**:
+  - Customize both the **Quick Bar hotkey** (default `CmdOrCtrl+Shift+Space`) and **Region Screenshot hotkey** (default `Alt+S`) directly from the Tweaks panel
+  - Interactive key combination recorder with conflict handling, Esc to cancel, and one-click reset to defaults
+  - Dynamic runtime re-registration with rollback on failure; persisted to `quick-bar-shortcut.json` in app config
+  - Quick Bar overlay and hints dynamically update to reflect the configured screenshot shortcut in real time
+- **Quick Bar screen capture**: ask questions based on screen context; supports two modes:
+  - **Auto screen capture**: click the camera toggle button to enable; on message send, PiDesk automatically captures the full screen, downscales to standard resolution (max width 1920px), compresses to JPEG, and attaches it with the prompt
+  - **Manual region capture**: press `Alt+S` in the Quick Bar to freeze the screen with a fullscreen overlay, drag mouse to draw a selection rectangle, and attach the cropped screenshot thumbnail to the input box before sending; pressing `Alt+S` while auto-screenshot mode is active disables auto-screenshot
+
+### Fixed
+
+- **Duplicate screenshot thumbnail in composer**: fixed race condition where `main://screenshot-result` event listener was re-registered on re-renders without cleaning up the pending unlisten promise; listener is now mounted once with cancelled-closure cleanup, shortcut prop is passed from root tweaks state, and screenshot attachments are deduplicated by image payload
+- **Screenshot overlay cold-start black screen**: pre-warm the screenshot overlay window during app startup (`screenshot::warm_up`) and add a proactive pull fallback (`get_screenshot_background`) on overlay mount to eliminate the race condition where `screenshot://background` was emitted before the WebView2 controller attached and loaded `overlay.js`
+
+### Changed
+
+- **Image upload no longer blocked by model vision check**: when the current model does not natively support images, the composer now shows an informational warning ("omp will use tools to read them") but no longer prevents the user from attaching or sending images; the "upload anyway" button has been removed since it is no longer necessary
 
 ## [0.2.6] - 2026-09-23
 

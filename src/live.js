@@ -1504,12 +1504,12 @@
 
     /** Get application version from Tauri backend. */
     async getAppVersion() {
-      if (!window.__TAURI__) return "0.2.6";
+      if (!window.__TAURI__) return "0.2.7";
       try {
         return await window.__TAURI__.core.invoke("get_app_version");
       } catch (err) {
         console.error("[live] getAppVersion error:", err);
-        return "0.2.6";
+        return "0.2.7";
       }
     },
 

@@ -219,3 +219,56 @@
   color: var(--amber);
 }
 
+/* ── Image menu popover ────────────────────────────────────────────── */
+.composer-image-menu-anchor {
+  position: relative;
+  display: inline-flex;
+}
+.composer-image-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  min-width: 175px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line-bright);
+  border-radius: 8px;
+  box-shadow: var(--shadow-pop);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 35;
+  animation: slideIn 140ms var(--ease-out);
+}
+.composer-image-popover-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: var(--d-text-sm);
+  color: var(--fg);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  transition: background 120ms, color 120ms;
+  white-space: nowrap;
+}
+.composer-image-popover-item:hover {
+  background: var(--bg-hover);
+  color: var(--fg-bright);
+}
+.composer-menu-kbd {
+  margin-left: auto;
+  font-size: 10px;
+  font-family: inherit;
+  color: var(--fg-4);
+  background: var(--bg-surface);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 5px;
+  line-height: 1.2;
+}
+

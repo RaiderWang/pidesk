@@ -21,11 +21,17 @@ function modelSupportsImages(m) {
 }
 
 // ── The composer (input + plan/steer modes + send) ────────────────────
-function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenModel, currentModel, thinking, onCycleThinking, isStreaming, onAbort, onApprove, annotationCount = 0, microcopy }) {
+function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenModel, currentModel, thinking, onCycleThinking, isStreaming, onAbort, onApprove, annotationCount = 0, microcopy, screenshotShortcut: screenshotShortcutProp }) {
   const [text, setText]             = React.useState("");
   const [activeIdx, setActiveIdx]   = React.useState(0);
   const [images, setImages]         = React.useState([]);
   const [modelWarning, setModelWarning] = React.useState(null);
+  const [fallbackShortcut, setFallbackShortcut] = React.useState(() => {
+    const t = window.loadTweaksFromStorage?.();
+    return t?.screenshotShortcut || "Alt+S";
+  });
+  const effectiveShortcut = screenshotShortcutProp || fallbackShortcut || "Alt+S";
+
   const taRef        = React.useRef(null);
   const listRef      = React.useRef(null);
   const fileInputRef = React.useRef(null);
@@ -36,12 +42,92 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
   const cmds = window.OMP_DATA?.commands || [];
   const supportsImages = React.useMemo(() => modelSupportsImages(currentModel), [currentModel]);
 
+  const supportsImagesRef = React.useRef(supportsImages);
+  supportsImagesRef.current = supportsImages;
+  const currentModelRef = React.useRef(currentModel);
+  currentModelRef.current = currentModel;
+
   // Clear warning if user switches to a model that supports vision
   React.useEffect(() => {
     if (supportsImages && modelWarning) {
       setModelWarning(null);
     }
   }, [supportsImages, modelWarning]);
+
+  // Listen for screenshot results delivered to the main window (mounted once)
+  React.useEffect(() => {
+    if (!window.__TAURI__) return;
+    let cancelled = false;
+    let unlistenResult = null;
+    let unlistenShortcut = null;
+
+    window.__TAURI__.event.listen("main://screenshot-result", (ev) => {
+      const payload = ev.payload;
+      if (!payload?.base64) return;
+      const mime = payload.mimeType || "image/jpeg";
+      const dataUrl = `data:${mime};base64,${payload.base64}`;
+      const approxSize = Math.round(payload.base64.length * 0.75);
+
+      setImages(prev => {
+        // Prevent duplicate screenshot thumbnails if identical image payload is received
+        if (prev.some(img => img.data === payload.base64)) {
+          return prev;
+        }
+        return [
+          ...prev,
+          {
+            id: 'img_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+            name: `screenshot-${payload.width}x${payload.height}.jpg`,
+            size: approxSize,
+            mimeType: mime,
+            dataUrl,
+            data: payload.base64,
+          }
+        ];
+      });
+
+      const curSupports = supportsImagesRef.current;
+      const curModel = currentModelRef.current;
+      if (!curSupports) {
+        setModelWarning(
+          window.t
+            ? window.t("composer.warn.vision", { model: curModel?.name || curModel?.id || "model" })
+            : `Current model "${curModel?.name || curModel?.id || "model"}" may not natively support images — omp will use tools to read them.`
+        );
+      }
+      requestAnimationFrame(() => taRef.current?.focus());
+    }).then(u => {
+      if (cancelled) {
+        u();
+      } else {
+        unlistenResult = u;
+      }
+    });
+
+    if (!screenshotShortcutProp) {
+      window.__TAURI__.event.listen("shortcuts://updated", (ev) => {
+        if (ev.payload?.screenshot) {
+          setFallbackShortcut(ev.payload.screenshot);
+        }
+      }).then(u => {
+        if (cancelled) {
+          u();
+        } else {
+          unlistenShortcut = u;
+        }
+      });
+
+      window.__TAURI__.core.invoke("get_screenshot_shortcut").then((sc) => {
+        if (!cancelled && sc) setFallbackShortcut(sc);
+      }).catch(() => {});
+    }
+
+    return () => {
+      cancelled = true;
+      if (unlistenResult) unlistenResult();
+      if (unlistenShortcut) unlistenShortcut();
+    };
+  }, [screenshotShortcutProp]);
 
   // Derive slash state inline — no useEffect, no stale flicker
   const slashQ = text.startsWith("/") ? text.slice(1).split(" ")[0].toLowerCase() : null;
@@ -116,7 +202,7 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
     });
 
     if (!supportsImages) {
-      setModelWarning(`Current model "${currentModel?.name || currentModel?.id || "model"}" does not support image input. Please switch to a vision-capable model (e.g. Claude 3.5/3.7 Sonnet).`);
+      setModelWarning(window.t ? window.t("composer.warn.vision", { model: currentModel?.name || currentModel?.id || "model" }) : `Current model "${currentModel?.name || currentModel?.id || "model"}" may not natively support images — omp will use tools to read them.`);
     }
   };
 
@@ -125,11 +211,6 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
     if (showSlash) { execCmd(filtered[clampedIdx]); return; }
     const canSend = text.trim() || images.length > 0 || (planMode && annotationCount > 0);
     if (!canSend) return;
-
-    if (!supportsImages && images.length > 0) {
-      setModelWarning(`Current model "${currentModel?.name || currentModel?.id || "model"}" does not support image input. Please switch models or remove the image before sending.`);
-      return;
-    }
 
     const payloadImages = images.map(img => ({
       type: "image",
@@ -248,16 +329,6 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
             <Icon name="bolt" size={11} color="var(--amber)" />
             {window.t ? window.t("composer.warn.switchModel", null, "switch model") : "switch model"}
           </button>
-          {!supportsImages && images.length === 0 && (
-            <button
-              type="button"
-              className="btn ghost warning-action"
-              style={{ color: "var(--fg-3)" }}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              {window.t ? window.t("composer.warn.uploadAnyway", null, "upload anyway") : "upload anyway"}
-            </button>
-          )}
           <button
             type="button"
             className="btn icon ghost warning-close"
@@ -301,22 +372,57 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
       )}
 
       <div className="composer-row">
-        <button
-          type="button"
-          className={`btn icon ghost ${!supportsImages ? "unsupported-vision" : ""}`}
-          title={supportsImages
-            ? (window.t ? window.t("composer.attach", null, "attach image (paste screenshot or drag & drop)") : "attach image (paste screenshot or drag & drop)")
-            : (window.t ? window.t("composer.unsupportedVision", { model: currentModel?.name || "" }) : `Current model "${currentModel?.name || ""}" does not support images (click to switch)`)}
-          onClick={() => {
-            if (!supportsImages) {
-              setModelWarning(window.t ? window.t("composer.warn.vision", { model: currentModel?.name || currentModel?.id || "model" }) : `Current model "${currentModel?.name || currentModel?.id || "model"}" does not support image input. Please switch to a vision-capable model.`);
-            } else {
+        {window.ComposerImageMenu ? (
+          <window.ComposerImageMenu
+            onUploadClick={() => {
+              if (!supportsImages) {
+                setModelWarning(
+                  window.t
+                    ? window.t("composer.warn.vision", { model: currentModel?.name || currentModel?.id || "model" })
+                    : `Current model "${currentModel?.name || currentModel?.id || "model"}" may not natively support images — omp will use tools to read them.`
+                );
+              }
               fileInputRef.current?.click();
+            }}
+            onCaptureClick={() => {
+              if (!supportsImages) {
+                setModelWarning(
+                  window.t
+                    ? window.t("composer.warn.vision", { model: currentModel?.name || currentModel?.id || "model" })
+                    : `Current model "${currentModel?.name || currentModel?.id || "model"}" may not natively support images — omp will use tools to read them.`
+                );
+              }
+              if (window.__TAURI__) {
+                window.__TAURI__.core.invoke("start_region_capture", { target: "main" }).catch((err) => {
+                  console.error("[composer] region capture failed:", err);
+                });
+              }
+            }}
+            supportsImages={supportsImages}
+            shortcutText={effectiveShortcut}
+            title={
+              supportsImages
+                ? (window.t ? window.t("composer.imageMenu.trigger", null, "Add image or screenshot") : "Add image or screenshot")
+                : (window.t ? window.t("composer.unsupportedVision", { model: currentModel?.name || "" }) : `Current model "${currentModel?.name || ""}" may not natively support images — omp can use tools to read them`)
             }
-          }}
-        >
-          <Icon name="image" size={13} color={!supportsImages ? "var(--fg-4)" : "currentColor"} />
-        </button>
+          />
+        ) : (
+          <button
+            type="button"
+            className={`btn icon ghost ${!supportsImages ? "unsupported-vision" : ""}`}
+            title={supportsImages
+              ? (window.t ? window.t("composer.attach", null, "attach image (paste screenshot or drag & drop)") : "attach image (paste screenshot or drag & drop)")
+              : (window.t ? window.t("composer.unsupportedVision", { model: currentModel?.name || "" }) : `Current model "${currentModel?.name || ""}" may not natively support images — omp can use tools to read them`)}
+            onClick={() => {
+              if (!supportsImages) {
+                setModelWarning(window.t ? window.t("composer.warn.vision", { model: currentModel?.name || currentModel?.id || "model" }) : `Current model "${currentModel?.name || currentModel?.id || "model"}" may not natively support images — omp will use tools to read them.`);
+              }
+              fileInputRef.current?.click();
+            }}
+          >
+            <Icon name="image" size={13} color={!supportsImages ? "var(--fg-4)" : "currentColor"} />
+          </button>
+        )}
         <input
           ref={fileInputRef}
           type="file"

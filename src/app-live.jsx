@@ -17,7 +17,7 @@
 const {
   Icon, ChatView, Composer, CommandBridge, WindowChrome, TabBar,
   StatusBar, AmbientRail, SplitPeer, PlanKanban, HistoryModal, ModelManagerModal, useTweaks,
-  TweaksPanel, TweakSection, TweakRadio, TweakToggle, TweakColor, TweakSlider,
+  TweaksPanel, TweakSection, TweakRadio, TweakToggle, TweakColor, TweakSlider, TweakShortcut,
   TWEAK_DEFAULTS, NULL_MODEL, EMPTY_PROJECT, NULL_PEER,
   INTENT_FRAMING, APPROVAL_PROMPT,
   useBridgeSnapshot, useThemeEffect, useCommandShortcut, timeNow,
@@ -95,6 +95,31 @@ function App() {
       }
     });
   }, [bridge]);
+
+  React.useEffect(() => {
+    if (!window.__TAURI__) return;
+    window.__TAURI__.core.invoke("get_shortcuts").then((sc) => {
+      if (sc) {
+        setTweak({
+          quickBarShortcut: sc.quick_bar || "CmdOrCtrl+Shift+Space",
+          screenshotShortcut: sc.screenshot || "Alt+S",
+        });
+      }
+    }).catch(() => {});
+
+    let unlisten;
+    window.__TAURI__.event.listen("shortcuts://updated", (ev) => {
+      const sc = ev.payload;
+      if (sc) {
+        setTweak({
+          quickBarShortcut: sc.quick_bar || "CmdOrCtrl+Shift+Space",
+          screenshotShortcut: sc.screenshot || "Alt+S",
+        });
+      }
+    }).then(u => { unlisten = u; });
+
+    return () => { unlisten?.(); };
+  }, [setTweak]);
 
   // ── Cross-cutting effects (bridge subscription, theme, ⌘K) ────────────────
   useBridgeSnapshot(bridge, {
@@ -344,6 +369,7 @@ function App() {
                 annotationCount={Object.keys(planAnnotations).length}
                 microcopy={data.microcopy}
                 onPick={handleCommand}
+                screenshotShortcut={t.screenshotShortcut}
               />
               <StatusBar
                 ctx={liveCtx}
@@ -481,6 +507,30 @@ function App() {
               { label: window.t("tweaks.layout.focus", null, "focus"), value: "focus" },
             ]}
             onChange={v => setTweak("layout", v)}
+          />
+        </TweakSection>
+        <TweakSection label={window.t("tweaks.section.shortcuts", null, "Shortcuts")}>
+          <TweakShortcut
+            label={window.t("tweaks.shortcut.quickBar", null, "Toggle Quick Bar")}
+            value={t.quickBarShortcut || "CmdOrCtrl+Shift+Space"}
+            defaultValue="CmdOrCtrl+Shift+Space"
+            onChange={async (newVal) => {
+              if (window.__TAURI__) {
+                await window.__TAURI__.core.invoke("set_shortcut", { kind: "quick_bar", shortcut: newVal });
+              }
+              setTweak("quickBarShortcut", newVal);
+            }}
+          />
+          <TweakShortcut
+            label={window.t("tweaks.shortcut.screenshot", null, "Region screenshot")}
+            value={t.screenshotShortcut || "Alt+S"}
+            defaultValue="Alt+S"
+            onChange={async (newVal) => {
+              if (window.__TAURI__) {
+                await window.__TAURI__.core.invoke("set_shortcut", { kind: "screenshot", shortcut: newVal });
+              }
+              setTweak("screenshotShortcut", newVal);
+            }}
           />
         </TweakSection>
       </TweaksPanel>

@@ -121,6 +121,18 @@ const __TWEAKS_STYLE = `
   .twk-chip>span>i{flex:1;border-top:1px solid var(--line)}
   .twk-chip>span>i:first-child{border-top:none}
   .twk-chip svg{position:absolute;top:6px;left:6px;width:13px;height:13px}
+
+  .twk-shortcut-wrap{display:flex;align-items:center;gap:6px;width:100%}
+  .twk-shortcut-btn{flex:1;display:flex;align-items:center;justify-content:center;height:26px;
+    padding:0 8px;border:1px solid var(--line);border-radius:var(--r-1,7px);
+    background:var(--bg-input);color:var(--fg);font-family:var(--font-mono);font-size:11px;
+    cursor:pointer;outline:none;user-select:none;transition:border-color .15s,background .15s}
+  .twk-shortcut-btn:hover{background:var(--bg-hover);border-color:var(--line-bright)}
+  .twk-shortcut-btn.recording{border-color:var(--accent);background:color-mix(in oklab,var(--accent) 12%,var(--bg-input));color:var(--accent)}
+  .twk-shortcut-reset{appearance:none;height:26px;padding:0 6px;border:1px solid var(--line);
+    border-radius:var(--r-1,7px);background:transparent;color:var(--fg-4);font-size:11px;cursor:pointer}
+  .twk-shortcut-reset:hover{background:var(--bg-hover);color:var(--fg-2)}
+  .twk-shortcut-err{font-size:11px;color:var(--rose,#f43f5e);margin-top:2px}
 `;
 
 window.__TWEAKS_STYLE = __TWEAKS_STYLE;

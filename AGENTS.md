@@ -5,6 +5,7 @@
 - Session branch UX: allow branching only from assistant/agent messages, not user messages; prefer per-message actions over duplicating the same flow in the bridge command menu.
 - Message actions (copy as Markdown, branch) should sit at the bottom-right of bubbles and use accent styling so they stay visible.
 - Quick Bar UX: support multi-turn and choosing send-to-current vs new session; keep the overlay result pane on the current turn only (never flash older active-session history); keep "no project" default cwd aligned with the main window.
+- Image upload for non-vision models: warn only, never block send or file picker — omp reads images via external tools even without native vision; do not reintroduce `composer.warn.uploadAnyway`.
 
 ## Learned Workspace Facts
 
@@ -16,3 +17,5 @@
 - "No project" omp sessions (main default tab, New Standalone, Quick Bar new session) pin cwd with `agent::spawn::default_cwd()` to the running executable's directory — never inherit ambient process CWD (fragile across `cargo run` / install / terminal launch).
 - omp 18.x `get_state` does NOT include `thinkingLevel`; `cycle_thinking_level` returns null. PiDesk cycles client-side through `off → low → medium → high` and pushes the choice to omp via `set_thinking_level`. Never default to `"auto"` — it is not a valid RPC level.
 - omp compact response contains `tokensBefore` (may be 0 in some versions) but NOT `tokensAfter`. PiDesk snapshots pre-compact tokens from `contextUsage` at send time, then back-fills `tokensAfter` from the next `get_state` via `_compactBackfillId` in `live.js`.
+- Developer technical reference lives in project-root `manual.md` (English only: architecture, RPC, Tauri commands, frontend state flow, design decisions); `README.md` and `README.zh-CN.md` link to it (and `CLAUDE.md`) instead of inlining that material.
+- Frontend unit tests live under `test/` using Node 20 built-in `node:test` (zero npm test deps); `test/helpers/shim.mjs` loads IIFE scripts via `new Function(code)()` with `globalThis.window = globalThis`; run with `npm run test:js`.

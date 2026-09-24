@@ -10,6 +10,7 @@ mod git_watcher;
 mod models_config;
 mod quick_bar;
 mod saved_sessions;
+mod screenshot;
 mod shortcut;
 mod tray;
 
@@ -232,18 +233,26 @@ fn get_app_version(app: tauri::AppHandle) -> String {
 /// there is no meaningful recovery from inside `main`.
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.unminimize();
+                let _ = win.show();
+                let _ = win.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, _shortcut, event| {
+                .with_handler(|app, shortcut, event| {
                     if event.state == tauri_plugin_global_shortcut::ShortcutState::Pressed {
-                        let _ = quick_bar::toggle_quick_bar(app.clone());
+                        shortcut::handle_global_shortcut(app, shortcut);
                     }
                 })
                 .build(),
         )
         .manage(AgentBridge::new())
         .manage(GitWatcherState::new())
+        .manage(screenshot::ScreenshotState::default())
         .invoke_handler(tauri::generate_handler![
             send_command,
             start_session,
@@ -266,8 +275,17 @@ pub fn run() {
             quick_bar::hide_quick_bar,
             quick_bar::set_quick_bar_height,
             tray::set_tray_activity,
+            shortcut::get_shortcuts,
+            shortcut::set_shortcut,
             shortcut::get_quick_bar_shortcut,
             shortcut::set_quick_bar_shortcut,
+            shortcut::get_screenshot_shortcut,
+            shortcut::set_screenshot_shortcut,
+            screenshot::capture_screen,
+            screenshot::start_region_capture,
+            screenshot::finish_region_capture,
+            screenshot::cancel_region_capture,
+            screenshot::get_screenshot_background,
         ])
         .setup(|app| {
             // Intercept close on the main window: hide instead of destroy.
@@ -303,6 +321,11 @@ pub fn run() {
             // no-op first hotkey/tray click.
             quick_bar::warm_up(app.handle()).unwrap_or_else(|e| {
                 eprintln!("[pidesk] quick-bar warm-up failed: {e}");
+            });
+
+            // Pre-create the screenshot overlay window (hidden) for the same reason.
+            screenshot::warm_up(app.handle()).unwrap_or_else(|e| {
+                eprintln!("[pidesk] screenshot overlay warm-up failed: {e}");
             });
 
             // Start the default session (no cwd = omp's working directory).

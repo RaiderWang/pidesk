@@ -230,6 +230,10 @@ omp 18.x `get_state` does not include `thinkingLevel`; `cycle_thinking_level` re
 
 The omp compact response contains `tokensBefore` (may be 0 in some versions) but **not** `tokensAfter`. PiDesk snapshots pre-compact tokens from `contextUsage` at send time, then back-fills `tokensAfter` from the next `get_state` via `_compactBackfillId` in `live.js`.
 
+### Single instance lifecycle
+
+PiDesk enforces single-instance execution via `tauri-plugin-single-instance`. When a secondary process is launched, it detects the running primary instance, notifies it, and terminates immediately. The primary instance's callback locates the `"main"` window, unminimizes it if minimized, makes it visible if hidden, and brings it to the foreground (`set_focus()`).
+
 ---
 
 ## Development Notes

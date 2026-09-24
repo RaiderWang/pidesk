@@ -20,7 +20,9 @@
     "scanlines": true,
     "showRadar": true,
     "fontSize":  100,
-    "autosave":  true
+    "autosave":  true,
+    "quickBarShortcut":   "CmdOrCtrl+Shift+Space",
+    "screenshotShortcut": "Alt+S"
   }/*EDITMODE-END*/;
 
   const NULL_MODEL    = { id: "", name: "–", provider: "", note: "", latency: 0, current: false };
