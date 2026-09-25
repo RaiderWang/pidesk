@@ -13,6 +13,8 @@ const MAX_LINE_BYTES: usize = 16 * 1024 * 1024;
 
 pub(super) fn spawn_stdout_reader(
     sessions: Arc<Mutex<HashMap<String, BridgeInner>>>,
+    last_errors: Arc<Mutex<HashMap<String, String>>>,
+    stderr_lines: Arc<Mutex<Vec<String>>>,
     sid: String,
     gen: u64,
     app: AppHandle,
@@ -59,27 +61,72 @@ pub(super) fn spawn_stdout_reader(
             }
         }
 
+        // Brief delay to give stderr reader thread time to drain trailing output
+        thread::sleep(std::time::Duration::from_millis(50));
+
         // Process exited. Only remove our own map entry — if start_session
         // already replaced this session with a fresh incarnation (higher
         // generation), leave it alone.
-        if let Ok(mut s) = sessions.lock() {
+        let removed = if let Ok(mut s) = sessions.lock() {
             if let Some(inner) = s.get(&sid) {
                 if inner.gen == gen {
-                    s.remove(&sid);
+                    s.remove(&sid)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        if exit_reason.is_empty() {
+            let stderr_tail = stderr_lines
+                .lock()
+                .map(|lines| lines.join("\n").trim().to_string())
+                .unwrap_or_default();
+
+            let exit_status = removed
+                .and_then(|mut inner| inner.child.take())
+                .and_then(|mut c| c.try_wait().ok().flatten());
+
+            if !stderr_tail.is_empty() {
+                exit_reason = stderr_tail;
+            } else if let Some(status) = exit_status {
+                if !status.success() {
+                    exit_reason = format!("Process exited with status {status}");
                 }
             }
         }
+
+        if !exit_reason.is_empty() {
+            if let Ok(mut errs) = last_errors.lock() {
+                errs.insert(sid.clone(), exit_reason.clone());
+            }
+        }
+
         // Empty payload = clean exit; non-empty = error reason. See the
         // AgentBridge doc-comment for the full event contract.
         let _ = app.emit(&exit_event, exit_reason);
     });
 }
 
-pub(super) fn spawn_stderr_reader(sid: String, stderr: ChildStderr) {
+pub(super) fn spawn_stderr_reader(
+    sid: String,
+    stderr: ChildStderr,
+    stderr_lines: Arc<Mutex<Vec<String>>>,
+) {
     thread::spawn(move || {
         let reader = BufReader::new(stderr);
         for line in reader.lines().map_while(Result::ok) {
             eprintln!("[omp/{sid}] {line}");
+            if let Ok(mut lines) = stderr_lines.lock() {
+                if lines.len() >= 30 {
+                    lines.remove(0);
+                }
+                lines.push(line);
+            }
         }
     });
 }

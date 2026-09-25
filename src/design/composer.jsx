@@ -499,7 +499,7 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
         <button className="composer-pill" onClick={onCycleThinking}>
           <Icon name="thinking" size={11} color="var(--lilac)" />
           <span style={{ color: "var(--fg-2)" }}>
-            {window.t ? window.t("composer.thinking", { level: thinking }, `thinking · ${thinking}`) : `thinking · ${thinking}`}
+            {window.t ? window.t("composer.thinking", { level: thinking || "off" }, `thinking · ${thinking || "off"}`) : `thinking · ${thinking || "off"}`}
           </span>
         </button>
         <button className={`composer-pill ${planMode ? "on" : ""}`} onClick={onTogglePlan}>

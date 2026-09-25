@@ -1,12 +1,12 @@
 {
   "name": "pidesk",
   "private": true,
-  "version": "0.2.7",
+  "version": "0.2.8",
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",
     "tauri": "tauri",
-    "test:js": "node --test test/"
+    "test:js": "node --test 'test/*.test.mjs'"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2"

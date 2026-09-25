@@ -114,9 +114,26 @@ impl AgentBridge {
         // failed attempt for this id.
         self.clear_error(&session_id);
 
-        spawn_stdout_reader(self.sessions.clone(), session_id.clone(), gen, app, stdout);
-        spawn_stderr_reader(session_id, stderr);
+        let stderr_lines = Arc::new(Mutex::new(Vec::new()));
+        spawn_stdout_reader(
+            self.sessions.clone(),
+            self.last_errors.clone(),
+            stderr_lines.clone(),
+            session_id.clone(),
+            gen,
+            app,
+            stdout,
+        );
+        spawn_stderr_reader(session_id, stderr, stderr_lines);
         Ok(())
+    }
+
+    /// Check if a session process is currently registered and active.
+    pub fn is_running(&self, session_id: &str) -> bool {
+        let Ok(s) = self.sessions.lock() else {
+            return false;
+        };
+        s.contains_key(session_id)
     }
 
     pub fn stop_session(&self, session_id: &str) {

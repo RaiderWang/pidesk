@@ -181,6 +181,10 @@
       "agent.idle": "idle",
       "agent.thinking": "thinking…",
       "agent.recent": "recent",
+      "agent.processExited": "Agent process exited: {reason}",
+      "agent.startFailed": "Agent failed to start: {error}",
+      "agent.noModelsAdvice": "No models available. Please open Settings -> Models to configure a model (such as auto/best-free), then save to restart the session.",
+      "agent.restartedAfterModelConfig": "Restarted session with new model configuration.",
 
       // Agent Hub
       "hub.title": "agent hub",
@@ -396,6 +400,10 @@
       "agent.idle": "空闲",
       "agent.thinking": "思考中…",
       "agent.recent": "近期动作",
+      "agent.processExited": "Agent 进程已退出：{reason}",
+      "agent.startFailed": "Agent 启动失败：{error}",
+      "agent.noModelsAdvice": "未检测到可用模型。请前往设置 -> 模型管理配置模型（例如 auto/best-free），保存后将自动重新启动会话。",
+      "agent.restartedAfterModelConfig": "已根据最新的模型配置自动重新启动会话。",
 
       // Agent Hub
       "hub.title": "Agent Hub",

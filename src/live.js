@@ -376,6 +376,40 @@
       _sessionFresh = false;
     }
 
+    function _surfaceAgentExit(reason, isStartup = false) {
+      if (!reason || typeof reason !== "string") return;
+      const trimmed = reason.trim();
+      if (!trimmed) return;
+      state.isStreaming = false;
+
+      const isNoModels = trimmed.includes("No models available");
+      const label = isStartup
+        ? (window.t ? window.t("agent.startFailed", { error: trimmed }) : `Agent failed to start: ${trimmed}`)
+        : (window.t ? window.t("agent.processExited", { reason: trimmed }) : `Agent process exited: ${trimmed}`);
+
+      let text = `⚠️ **${label.replace(/[:：]\s*[\s\S]*$/, "").trim()}**\n\n\`\`\`\n${trimmed}\n\`\`\``;
+      if (isNoModels) {
+        const advice = window.t
+          ? window.t("agent.noModelsAdvice")
+          : "No models available. Please open Settings -> Models to configure a model (such as auto/best-free), then save to restart the session.";
+        text += `\n\n💡 *${advice}*`;
+      }
+
+      // Deduplicate if already present at the end of messages
+      const last = state.messages[state.messages.length - 1];
+      if (last?.kind === "assistant" && (last?.text === text || last?.text?.includes(trimmed))) {
+        return;
+      }
+
+      state.messages = [...state.messages, {
+        kind: "assistant",
+        time: timeNow(),
+        text,
+        completed: true,
+      }];
+      notify();
+    }
+
     const { listen } = window.__TAURI__.event;
     const ulLine = await listen(`agent://line/${id}`, ev => handleLine(ev.payload));
     const ulExit = await listen(`agent://exit/${id}`, ev => {
@@ -383,12 +417,7 @@
       console.warn(`[live] session '${id}' omp process exited${reason ? ": " + reason : ""}`);
       state.isStreaming = false;
       if (reason) {
-        state.messages.push({
-          kind: "assistant",
-          time: timeNow(),
-          text: `**Agent process exited:** ${reason}`,
-          completed: true,
-        });
+        _surfaceAgentExit(reason, false);
       }
       notify();
     });
@@ -403,12 +432,7 @@
       const startupError = await window.__TAURI__.core.invoke("session_status", { sessionId: id });
       if (startupError) {
         console.warn(`[live] session '${id}' startup error: ${startupError}`);
-        state.messages.push({
-          kind: "assistant",
-          time: timeNow(),
-          text: `**Agent failed to start:** ${startupError}`,
-          completed: true,
-        });
+        _surfaceAgentExit(startupError, true);
       }
     } catch (e) {
       console.warn(`[live] session_status query failed:`, e);
@@ -550,6 +574,7 @@
         state.model  = _buildModelEntry(data);
         state.models = state.models.map(m => ({ ...m, current: m.id === data.id }));
         _savePrefs({ modelId: data.id, modelProvider: data.provider, modelName: data.name });
+        _send({ type: "get_state" });
         notify();
       }
 
@@ -1165,7 +1190,21 @@
       notify();
       _send({ type: "steer", message: text, images: [] });
     },
-    setModel(model)    { _send({ type: "set_model", provider: model.provider, modelId: model.id }); },
+    async setModel(model) {
+      if (window.__TAURI__ && activeSessionId) {
+        const isRunning = await window.__TAURI__.core
+          .invoke("is_session_running", { sessionId: activeSessionId })
+          .catch(() => false);
+        if (!isRunning) {
+          const entry = sessionRegistry.get(activeSessionId);
+          const cwd = entry?.path ?? "";
+          await window.__TAURI__.core
+            .invoke("start_session", { sessionId: activeSessionId, cwd })
+            .catch(() => {});
+        }
+      }
+      _send({ type: "set_model", provider: model.provider, modelId: model.id });
+    },
     cycleModel()       { _send({ type: "cycle_model" }); },
     cycleThinking()    { _send({ type: "cycle_thinking_level" }); },
     compact() {
@@ -1317,6 +1356,33 @@
     clearPeer()   { window.PeerSessionBridge.unpin(); },
 
     async refreshModels() {
+      if (window.__TAURI__ && activeSessionId) {
+        const isRunning = await window.__TAURI__.core
+          .invoke("is_session_running", { sessionId: activeSessionId })
+          .catch(() => false);
+        if (!isRunning) {
+          const entry = sessionRegistry.get(activeSessionId);
+          const cwd = entry?.path ?? "";
+          console.log(`[live] session '${activeSessionId}' is not running; restarting with new models config`);
+          try {
+            await window.__TAURI__.core.invoke("start_session", {
+              sessionId: activeSessionId,
+              cwd,
+            });
+            const notice = window.t
+              ? window.t("agent.restartedAfterModelConfig")
+              : "Restarted session with new model configuration.";
+            state.messages.push({
+              kind: "assistant",
+              time: timeNow(),
+              text: `✨ **${notice}**`,
+              completed: true,
+            });
+          } catch (e) {
+            console.warn("[live] failed to restart session:", e);
+          }
+        }
+      }
       _initFetch();
       const customData = await _loadCustomModelsFromConfig();
       if (customData.customModels.length > 0 || customData.customProviders.size > 0) {
@@ -1504,12 +1570,12 @@
 
     /** Get application version from Tauri backend. */
     async getAppVersion() {
-      if (!window.__TAURI__) return "0.2.7";
+      if (!window.__TAURI__) return "0.2.8";
       try {
         return await window.__TAURI__.core.invoke("get_app_version");
       } catch (err) {
         console.error("[live] getAppVersion error:", err);
-        return "0.2.7";
+        return "0.2.8";
       }
     },
 

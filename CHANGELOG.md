@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.8] - 2026-09-25
+
+### Added
+
+- **Cross-platform tray click debounce and double-click handling**:
+  - Implemented `TrayClickHandler` state machine with unified single/double click debounce across platforms
+  - Reliably distinguishes single clicks (toggle Quick Bar) from double clicks (focus main window), handling native Windows double-click event ordering and suppressing trailing clicks
+- **Agent diagnostics & auto-recovery**:
+  - Process exit inspection: capture and surface agent process exit reasons (including stderr lines or non-zero exit statuses) with clear diagnostic messaging and bilingual localization
+  - Startup failure advice: detect missing model configuration errors and display actionable hints guiding the user to configure models
+  - Auto-restart after model configuration: automatically start/restart the active session after saving custom models without needing to recreate the tab
+  - Query `is_session_running` Tauri IPC command to verify agent process liveness
+
+### Fixed
+
+- **macOS region screenshot overlay**:
+  - Position and size the overlay window explicitly using primary monitor physical bounds instead of `set_fullscreen`, avoiding macOS space animation glitches and window freeze issues
+  - Safely restore focus to previous active window (main window or Quick Bar) if screen capture encounters an error
+  - Prevent overlay hint bubble from flashing before background capture is drawn
+- **Composer thinking level display**:
+  - Provide fallback to "off" when thinking level is unset or falsy
+
 ## [0.2.7] - 2026-09-24
 
 ### Added

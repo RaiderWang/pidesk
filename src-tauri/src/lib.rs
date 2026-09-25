@@ -75,6 +75,12 @@ fn session_status(session_id: String, bridge: State<'_, AgentBridge>) -> Option<
     bridge.last_error(&session_id)
 }
 
+/// Query whether a session process is currently active and running.
+#[tauri::command]
+fn is_session_running(session_id: String, bridge: State<'_, AgentBridge>) -> bool {
+    bridge.is_running(&session_id)
+}
+
 /// Native folder picker — returns the chosen path or null.
 ///
 /// On macOS, `AppKit` requires all `NSOpenPanel` calls to originate from
@@ -258,6 +264,7 @@ pub fn run() {
             start_session,
             stop_session,
             session_status,
+            is_session_running,
             open_project,
             start_git_watch,
             stop_git_watch,

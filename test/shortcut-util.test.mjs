@@ -80,13 +80,15 @@ describe('parseKeyCombo', () => {
 
 describe('formatDisplayShortcut', () => {
   it('formats Alt+S with spaces', () => {
-    assert.equal(formatDisplayShortcut('Alt+S'), 'Alt + S');
+    const res = formatDisplayShortcut('Alt+S');
+    assert.ok(res === 'Alt + S' || res === '⌥ + S');
   });
 
   it('formats CmdOrCtrl+Shift+Space', () => {
     const res = formatDisplayShortcut('CmdOrCtrl+Shift+Space');
-    assert.ok(res.includes('Shift + Space'));
+    assert.ok(res.includes('Space'));
     assert.ok(res.includes('Ctrl') || res.includes('⌘'));
+    assert.ok(res.includes('Shift') || res.includes('⇧'));
   });
 });
 

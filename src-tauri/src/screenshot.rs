@@ -139,7 +139,7 @@ pub fn capture_primary_screen() -> Result<RgbaImage, String> {
     let monitors = xcap::Monitor::all().map_err(|e| format!("failed to list monitors: {e}"))?;
     let primary = monitors
         .into_iter()
-        .find(|m| m.is_primary())
+        .find(|m| m.is_primary().unwrap_or(false))
         .ok_or_else(|| "no primary monitor found".to_string())?;
     primary
         .capture_image()
@@ -182,20 +182,34 @@ pub fn get_or_create_overlay(app: &AppHandle) -> Result<WebviewWindow, String> {
     if let Some(w) = app.get_webview_window(OVERLAY_LABEL) {
         Ok(w)
     } else {
-        WebviewWindowBuilder::new(
+        let builder = WebviewWindowBuilder::new(
             app,
             OVERLAY_LABEL,
             WebviewUrl::App("screenshot-overlay.html".into()),
         )
         .title("Screenshot")
-        .fullscreen(true)
         .decorations(false)
         .transparent(false)
         .always_on_top(true)
         .skip_taskbar(true)
-        .visible(false)
-        .build()
-        .map_err(|e| format!("failed to build overlay window: {e}"))
+        .visible(false);
+
+        #[cfg(target_os = "windows")]
+        let builder = builder.fullscreen(true);
+
+        let win = builder
+            .build()
+            .map_err(|e| format!("failed to build overlay window: {e}"))?;
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            if let Ok(Some(monitor)) = win.primary_monitor() {
+                let _ = win.set_position(tauri::Position::Physical(*monitor.position()));
+                let _ = win.set_size(tauri::Size::Physical(*monitor.size()));
+            }
+        }
+
+        Ok(win)
     }
 }
 
@@ -207,7 +221,7 @@ pub fn warm_up(app: &AppHandle) -> Result<(), String> {
 
 /// Begin region capture: hide target/source window, freeze screen, show overlay.
 pub async fn begin_region_capture(app: &AppHandle, target: CaptureTarget) -> Result<(), String> {
-    let raw_img = tauri::async_runtime::spawn_blocking({
+    let raw_img_res = tauri::async_runtime::spawn_blocking({
         let app = app.clone();
         move || {
             match target {
@@ -230,7 +244,28 @@ pub async fn begin_region_capture(app: &AppHandle, target: CaptureTarget) -> Res
         }
     })
     .await
-    .map_err(|e| format!("capture task panicked: {e}"))??;
+    .map_err(|e| format!("capture task panicked: {e}"))?;
+
+    let raw_img = match raw_img_res {
+        Ok(img) => img,
+        Err(e) => {
+            match target {
+                CaptureTarget::Main => {
+                    if let Some(main) = app.get_webview_window(MAIN_WINDOW_LABEL) {
+                        let _ = main.show();
+                        let _ = main.set_focus();
+                    }
+                }
+                CaptureTarget::QuickBar => {
+                    if let Some(qb) = app.get_webview_window(QUICK_BAR_LABEL) {
+                        let _ = qb.show();
+                        let _ = qb.set_focus();
+                    }
+                }
+            }
+            return Err(e);
+        }
+    };
 
     let base64_str = encode_jpeg_base64(&raw_img, 85)?;
     let data_url = format!("data:image/jpeg;base64,{base64_str}");
@@ -250,7 +285,16 @@ pub async fn begin_region_capture(app: &AppHandle, target: CaptureTarget) -> Res
     }
 
     let win = get_or_create_overlay(app)?;
+    #[cfg(target_os = "windows")]
     let _ = win.set_fullscreen(true);
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        if let Ok(Some(monitor)) = win.primary_monitor() {
+            let _ = win.set_position(tauri::Position::Physical(*monitor.position()));
+            let _ = win.set_size(tauri::Size::Physical(*monitor.size()));
+        }
+    }
     win.show().map_err(|e| e.to_string())?;
     win.set_focus().map_err(|e| e.to_string())?;
     let _ = win.emit("screenshot://background", BackgroundPayload { data_url });
