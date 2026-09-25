@@ -74,6 +74,7 @@
     hubAgents:  [],         // current task's subagent list (from tool_execution_update progress)
     hubTaskId:  null,       // active task tool's toolCallId
     hubHistory: [],         // last 3 completed task results [{taskId, agents, time}]
+    agentError: null,       // startup/runtime error reason if omp is not running
   };
 
   let streamingBubble = null;
@@ -232,6 +233,7 @@
       hubAgents:       state.hubAgents,
       hubTaskId:       state.hubTaskId,
       hubHistory:      state.hubHistory,
+      agentError:      state.agentError,
     };
     subscribers.forEach(cb => cb(snap));
 
@@ -272,6 +274,7 @@
       hubAgents:     [],
       hubTaskId:     null,
       hubHistory:    [],
+      agentError:    null,
     });
     streamingBubble = null;
     pendingAskBubble = null;
@@ -310,6 +313,7 @@
       })),
       hubTaskId:     state.hubTaskId,
       hubHistory:    state.hubHistory,
+      agentError:    state.agentError,
       // volatile vars
       streamingBubble,
       activeToolCards: new Map(activeToolCards),
@@ -343,6 +347,7 @@
       hubAgents:     snap.hubAgents ?? [],
       hubTaskId:     snap.hubTaskId ?? null,
       hubHistory:    snap.hubHistory ?? [],
+      agentError:    snap.agentError ?? null,
     });
     streamingBubble = snap.streamingBubble;
     activeToolCards = snap.activeToolCards;
@@ -381,6 +386,7 @@
       const trimmed = reason.trim();
       if (!trimmed) return;
       state.isStreaming = false;
+      state.agentError = trimmed;
 
       const isNoModels = trimmed.includes("No models available");
       const label = isStartup
@@ -416,6 +422,7 @@
       const reason = (ev?.payload && String(ev.payload).trim()) || "";
       console.warn(`[live] session '${id}' omp process exited${reason ? ": " + reason : ""}`);
       state.isStreaming = false;
+      state.agentError = reason || (window.t ? window.t("agent.processNotRunning") : "Agent process (omp) is not running");
       if (reason) {
         _surfaceAgentExit(reason, false);
       }
@@ -430,9 +437,15 @@
     // synchronously — no event timing race.
     try {
       const startupError = await window.__TAURI__.core.invoke("session_status", { sessionId: id });
+      const isRunning = await window.__TAURI__.core.invoke("is_session_running", { sessionId: id }).catch(() => false);
       if (startupError) {
         console.warn(`[live] session '${id}' startup error: ${startupError}`);
+        state.agentError = startupError;
         _surfaceAgentExit(startupError, true);
+      } else if (!isRunning) {
+        state.agentError = window.t ? window.t("agent.processNotRunning") : "Agent process (omp) is not running";
+      } else {
+        state.agentError = null;
       }
     } catch (e) {
       console.warn(`[live] session_status query failed:`, e);
@@ -446,6 +459,10 @@
 
   // ── RPC line handler ──────────────────────────────────────────────────────
   function handleLine(rawLine) {
+    if (state.agentError) {
+      state.agentError = null;
+      notify();
+    }
     let obj;
     try { obj = JSON.parse(rawLine); } catch { return; }
     if (!obj || typeof obj !== "object") return;
@@ -1134,7 +1151,14 @@
     if (!window.__TAURI__ || !activeSessionId) return;
     window.__TAURI__.core
       .invoke("send_command", { sessionId: activeSessionId, json: JSON.stringify(cmd) })
-      .catch(e => console.error("[live] send error:", e));
+      .catch(e => {
+        console.error("[live] send error:", e);
+        const errMsg = (e && typeof e === "string") ? e : (e?.message || String(e));
+        if (errMsg && !state.agentError) {
+          state.agentError = errMsg;
+          notify();
+        }
+      });
   }
 
   // ── Window chrome (drag + controls) ──────────────────────────────────────
@@ -1171,7 +1195,7 @@
 
   // ── OMP_BRIDGE public API ─────────────────────────────────────────────────
   window.OMP_BRIDGE = {
-    get isConnected() { return !!window.__TAURI__ && !!activeSessionId; },
+    get isConnected() { return !!window.__TAURI__ && !!activeSessionId && !state.agentError; },
     get models()      { return state.models; },
     get activeSessionId() { return activeSessionId; },
 
@@ -1203,7 +1227,26 @@
             .catch(() => {});
         }
       }
+      state.agentError = null;
       _send({ type: "set_model", provider: model.provider, modelId: model.id });
+    },
+    async retrySession(id = activeSessionId) {
+      if (!window.__TAURI__ || !id) return;
+      const entry = sessionRegistry.get(id);
+      const cwd = entry?.path ?? "";
+      state.agentError = null;
+      notify();
+      try {
+        await window.__TAURI__.core.invoke("start_session", { sessionId: id, cwd });
+      } catch (err) {
+        console.warn(`[live] retrySession '${id}' failed:`, err);
+        const errMsg = (err && typeof err === "string") ? err : (err?.message || String(err));
+        state.agentError = errMsg;
+        _surfaceAgentExit(errMsg, true);
+        notify();
+        return;
+      }
+      await _switchToSession(id);
     },
     cycleModel()       { _send({ type: "cycle_model" }); },
     cycleThinking()    { _send({ type: "cycle_thinking_level" }); },
@@ -1276,7 +1319,11 @@
         sessionRegistry.set(id, {
           id, name: label, path: cwd, color: "var(--lilac)", branch: null,
         });
-        await window.__TAURI__.core.invoke("start_session", { sessionId: id, cwd, resume: newPath });
+        try {
+          await window.__TAURI__.core.invoke("start_session", { sessionId: id, cwd, resume: newPath });
+        } catch (err) {
+          console.warn("[live] branch start_session failed:", err);
+        }
 
         if (cwd) {
           const branchName = await window.__TAURI__.core
@@ -1470,9 +1517,13 @@
       sessionRegistry.set(id, { id, name, path: cwd ?? "", color, branch: null });
       // Spawn omp for this project
       if (window.__TAURI__) {
-        await window.__TAURI__.core.invoke("start_session", {
-          sessionId: id, cwd: cwd ?? "",
-        });
+        try {
+          await window.__TAURI__.core.invoke("start_session", {
+            sessionId: id, cwd: cwd ?? "",
+          });
+        } catch (err) {
+          console.warn("[live] openSession start_session failed:", err);
+        }
       }
       // Git: read initial branch and arm the HEAD watcher (fire-and-forget errors)
       if (cwd && window.__TAURI__) {
@@ -1586,11 +1637,15 @@
       const cwd = session.cwd || "";
       const name = session.title || (cwd ? cwd.replace(/\\/g, "/").split("/").pop() || cwd : "resumed");
       sessionRegistry.set(id, { id, name, path: cwd, color: "var(--cyan)", branch: null });
-      await window.__TAURI__.core.invoke("start_session", {
-        sessionId: id,
-        cwd: cwd,
-        resume: session.path,
-      });
+      try {
+        await window.__TAURI__.core.invoke("start_session", {
+          sessionId: id,
+          cwd: cwd,
+          resume: session.path,
+        });
+      } catch (err) {
+        console.warn("[live] resumeSession start_session failed:", err);
+      }
       if (cwd) {
         const branch = await window.__TAURI__.core
           .invoke("start_git_watch", { sessionId: id, path: cwd })
@@ -1670,6 +1725,7 @@
         hubAgents:       state.hubAgents,
         hubTaskId:       state.hubTaskId,
         hubHistory:      state.hubHistory,
+        agentError:      state.agentError,
       });
       return () => subscribers.delete(cb);
     },

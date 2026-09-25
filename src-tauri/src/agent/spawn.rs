@@ -10,13 +10,79 @@ use std::sync::OnceLock;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-/// Candidate binary names tried in order. Explicit `.exe` first on Windows
-/// because some systems have unusual PATHEXT handling.
-const CANDIDATES: &[&str] = if cfg!(windows) {
-    &["omp.exe", "omp"]
-} else {
-    &["omp"]
-};
+/// Ensure PATH contains standard user binary directories on Unix (macOS / Linux).
+/// macOS GUI apps launched from Finder/Dock run under launchd with a minimal
+/// PATH (/usr/bin:/bin:/usr/sbin:/sbin), missing tools in ~/.bun/bin, /opt/homebrew/bin, etc.
+pub fn ensure_gui_path() {
+    #[cfg(not(windows))]
+    {
+        static PATH_INITIALIZED: OnceLock<()> = OnceLock::new();
+        PATH_INITIALIZED.get_or_init(|| {
+            let current = std::env::var("PATH").unwrap_or_default();
+            let mut extra = Vec::new();
+
+            if let Ok(home) = std::env::var("HOME") {
+                let h = std::path::Path::new(&home);
+                extra.push(h.join(".bun/bin"));
+                extra.push(h.join(".cargo/bin"));
+                extra.push(h.join(".local/bin"));
+
+                // Node / NVM versions if installed
+                let nvm_versions = h.join(".nvm/versions/node");
+                if let Ok(entries) = std::fs::read_dir(&nvm_versions) {
+                    for entry in entries.flatten() {
+                        let bin = entry.path().join("bin");
+                        if bin.is_dir() {
+                            extra.push(bin);
+                        }
+                    }
+                }
+            }
+
+            extra.push(std::path::PathBuf::from("/opt/homebrew/bin"));
+            extra.push(std::path::PathBuf::from("/opt/homebrew/sbin"));
+            extra.push(std::path::PathBuf::from("/usr/local/bin"));
+            extra.push(std::path::PathBuf::from("/usr/local/sbin"));
+
+            let current_parts: Vec<&str> = current.split(':').collect();
+            let mut to_prepend = Vec::new();
+            for dir in extra {
+                if dir.is_dir() {
+                    let s = dir.to_string_lossy().to_string();
+                    if !current_parts.iter().any(|&p| p == s) {
+                        to_prepend.push(s);
+                    }
+                }
+            }
+
+            if !to_prepend.is_empty() {
+                let new_path = format!("{}:{}", to_prepend.join(":"), current);
+                std::env::set_var("PATH", &new_path);
+            }
+        });
+    }
+}
+
+/// Candidate binary paths tried in order.
+fn omp_candidates() -> Vec<std::path::PathBuf> {
+    ensure_gui_path();
+    let mut list = Vec::new();
+    if cfg!(windows) {
+        list.push(std::path::PathBuf::from("omp.exe"));
+        list.push(std::path::PathBuf::from("omp"));
+    } else {
+        list.push(std::path::PathBuf::from("omp"));
+        if let Ok(home) = std::env::var("HOME") {
+            let h = std::path::Path::new(&home);
+            list.push(h.join(".bun/bin/omp"));
+            list.push(h.join(".cargo/bin/omp"));
+            list.push(h.join(".local/bin/omp"));
+        }
+        list.push(std::path::PathBuf::from("/opt/homebrew/bin/omp"));
+        list.push(std::path::PathBuf::from("/usr/local/bin/omp"));
+    }
+    list
+}
 
 // ── rpc-ui probe ─────────────────────────────────────────────────────────────
 
@@ -47,8 +113,8 @@ fn help_text_supports_rpc_ui(text: &str) -> bool {
 /// present in the environment. Old omp binaries that don't know about
 /// `rpc-ui` simply won't mention it in their help output.
 fn probe_rpc_ui() -> bool {
-    for name in CANDIDATES {
-        let mut cmd = Command::new(name);
+    for path in omp_candidates() {
+        let mut cmd = Command::new(path);
         cmd.arg("--help")
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -77,17 +143,10 @@ fn probe_rpc_ui() -> bool {
 /// Spawn omp for a live session using the best available RPC mode.
 /// If `resume` is specified, `--resume <path_or_id>` is passed to resume an existing session.
 pub(super) fn spawn_omp(cwd: Option<&str>, resume: Option<&str>) -> Result<Child, String> {
-    // On Windows, `Command::new` resolves bare "omp" against PATH and
-    // PATHEXT (.exe etc.) via CreateProcess. We try the explicit ".exe"
-    // name first because some systems have weird PATHEXT handling, then
-    // fall back to bare "omp". We do NOT use `cmd /C` as a fallback —
-    // it leaves the omp process orphaned when the parent cmd.exe is
-    // killed, since Windows does not propagate process termination to
-    // descendants without a Job Object.
     let mode = rpc_mode();
     let mut last_err = String::from("no candidates tried");
-    for name in CANDIDATES {
-        let mut cmd = Command::new(name);
+    for path in omp_candidates() {
+        let mut cmd = Command::new(&path);
         cmd.args(["--mode", mode]);
         if let Some(r) = resume {
             if !r.is_empty() {
@@ -122,7 +181,7 @@ pub(super) fn spawn_omp(cwd: Option<&str>, resume: Option<&str>) -> Result<Child
         match cmd.spawn() {
             Ok(child) => return Ok(child),
             Err(e) => {
-                let msg = format!("{name}: {e}");
+                let msg = format!("{}: {e}", path.display());
                 eprintln!("[pidesk] spawn attempt failed: {msg}");
                 last_err = msg;
             }

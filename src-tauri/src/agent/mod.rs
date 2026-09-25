@@ -25,6 +25,7 @@ use tauri::AppHandle;
 use inner::BridgeInner;
 use reader::{spawn_stderr_reader, spawn_stdout_reader};
 use spawn::spawn_omp;
+pub use spawn::ensure_gui_path;
 
 /// Manages one omp process per tab session.
 ///

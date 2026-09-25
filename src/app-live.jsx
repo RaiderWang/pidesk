@@ -16,7 +16,7 @@
 
 const {
   Icon, ChatView, Composer, CommandBridge, WindowChrome, TabBar,
-  StatusBar, AmbientRail, SplitPeer, PlanKanban, HistoryModal, ModelManagerModal, useTweaks,
+  StatusBar, AmbientRail, SplitPeer, PlanKanban, HistoryModal, ModelManagerModal, AgentErrorBanner, useTweaks,
   TweaksPanel, TweakSection, TweakRadio, TweakToggle, TweakColor, TweakSlider, TweakShortcut,
   TWEAK_DEFAULTS, NULL_MODEL, EMPTY_PROJECT, NULL_PEER,
   INTENT_FRAMING, APPROVAL_PROMPT,
@@ -80,6 +80,7 @@ function App() {
   const [hubMode,    setHubMode]    = React.useState("compact");
   const [hubAgents,  setHubAgents]  = React.useState([]);
   const [hubHistory, setHubHistory] = React.useState([]);
+  const [agentError, setAgentError] = React.useState(null);
 
   // ── Tab list — driven by bridge session registry ──────────────────────────
   // Each entry: { id, name, path, color, branch }
@@ -130,6 +131,7 @@ function App() {
     setPeer, setPeerSessionId,
     setRunningTools, setRecentTools, setTurnStartMs,
     setHubMode, setHubAgents, setHubHistory,
+    setAgentError,
   });
   useThemeEffect(t);
   useCommandShortcut(setBridgeOpen, setBridgeView);
@@ -207,6 +209,9 @@ function App() {
     } else if (bridge?.isConnected) {
       bridge.send(msg, images);
     } else {
+      if (agentError) {
+        bridge?.retrySession?.(activeSessionId);
+      }
       setMessages(prev => [...prev, { kind: "user", time: timeNow(), text: msg, images: images ?? [] }]);
     }
   };
@@ -342,6 +347,13 @@ function App() {
 
           <div className={`stage ${showRail ? "with-rail" : ""}`}>
             <main className="session">
+              {agentError && (
+                <AgentErrorBanner
+                  error={agentError}
+                  onRetry={() => bridge?.retrySession?.(activeSessionId)}
+                  onConfigureModels={() => setModelManagerOpen(true)}
+                />
+              )}
               <ChatView messages={messages}
                 planMode={planMode}
                 annotations={planAnnotations}
@@ -370,6 +382,7 @@ function App() {
                 microcopy={data.microcopy}
                 onPick={handleCommand}
                 screenshotShortcut={t.screenshotShortcut}
+                agentError={agentError}
               />
               <StatusBar
                 ctx={liveCtx}
@@ -382,6 +395,7 @@ function App() {
                 onTweaks={() => window.postMessage({ type: '__activate_edit_mode' }, '*')}
                 autosave={t.autosave ?? true}
                 onAutosave={v => setTweak("autosave", v)}
+                agentError={agentError}
               />
             </main>
 

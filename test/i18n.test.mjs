@@ -205,5 +205,19 @@ describe('known-key spot-checks', () => {
     assert.equal(t('agent.restartedAfterModelConfig'), '已根据最新的模型配置自动重新启动会话。');
     setLocale('en');
   });
+
+  it('agent.ompNotFoundTitle, agent.retry, and composer.placeholder.agentError resolve in en and zh-CN', () => {
+    setLocale('en');
+    assert.equal(t('agent.ompNotFoundTitle'), 'Agent Process (omp) Not Found or Failed to Start');
+    assert.equal(t('agent.retry'), 'Retry');
+    assert.equal(t('agent.retrying'), 'Connecting…');
+    assert.equal(t('composer.placeholder.agentError'), 'Agent process is not running. Check the error above or click Retry to reconnect.');
+    setLocale('zh-CN');
+    assert.equal(t('agent.ompNotFoundTitle'), '未找到 Agent (omp) 进程或启动失败');
+    assert.equal(t('agent.retry'), '重试');
+    assert.equal(t('agent.retrying'), '正在连接…');
+    assert.equal(t('composer.placeholder.agentError'), 'Agent 进程未运行。请查看上方报错提示或点击重试重新连接。');
+    setLocale('en');
+  });
 });
 

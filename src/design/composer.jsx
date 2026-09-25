@@ -21,7 +21,7 @@ function modelSupportsImages(m) {
 }
 
 // ── The composer (input + plan/steer modes + send) ────────────────────
-function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenModel, currentModel, thinking, onCycleThinking, isStreaming, onAbort, onApprove, annotationCount = 0, microcopy, screenshotShortcut: screenshotShortcutProp }) {
+function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenModel, currentModel, thinking, onCycleThinking, isStreaming, onAbort, onApprove, annotationCount = 0, microcopy, screenshotShortcut: screenshotShortcutProp, agentError }) {
   const [text, setText]             = React.useState("");
   const [activeIdx, setActiveIdx]   = React.useState(0);
   const [images, setImages]         = React.useState([]);
@@ -442,11 +442,13 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
             ref={taRef}
             rows="1"
             placeholder={
-              planMode && !isStreaming
-                ? (window.t ? window.t("composer.placeholder.plan", null, microcopy?.planTip) : (microcopy?.planTip ?? "describe what to build, or give feedback on the plan…"))
-                : isStreaming
-                  ? (window.t ? window.t("composer.placeholder.streaming", null, microcopy?.streamingTip) : microcopy?.streamingTip)
-                  : (window.t ? window.t("composer.placeholder.default", null, microcopy?.paletteTip) : (microcopy?.paletteTip ?? "what should we ship?  ·  / for commands  ·  ⌘K for the bridge"))
+              agentError
+                ? (window.t ? window.t("composer.placeholder.agentError", null, "Agent process is not running. Check the error above or click Retry to reconnect.") : "Agent process is not running. Check the error above or click Retry to reconnect.")
+                : planMode && !isStreaming
+                  ? (window.t ? window.t("composer.placeholder.plan", null, microcopy?.planTip) : (microcopy?.planTip ?? "describe what to build, or give feedback on the plan…"))
+                  : isStreaming
+                    ? (window.t ? window.t("composer.placeholder.streaming", null, microcopy?.streamingTip) : microcopy?.streamingTip)
+                    : (window.t ? window.t("composer.placeholder.default", null, microcopy?.paletteTip) : (microcopy?.paletteTip ?? "what should we ship?  ·  / for commands  ·  ⌘K for the bridge"))
             }
             value={text}
             onChange={(e) => setText(e.target.value)}

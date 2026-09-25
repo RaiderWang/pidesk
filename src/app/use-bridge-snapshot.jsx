@@ -37,6 +37,8 @@ function useBridgeSnapshot(bridge, setters) {
       setters.setHubMode?.(snap.hubMode ?? "compact");
       setters.setHubAgents?.(snap.hubAgents ?? []);
       setters.setHubHistory?.(snap.hubHistory ?? []);
+      // Agent error — status and process errors
+      setters.setAgentError?.(snap.agentError ?? null);
     });
     return unsub;
   }, [bridge]);

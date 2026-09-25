@@ -238,6 +238,7 @@ fn get_app_version(app: tauri::AppHandle) -> String {
 /// runtime cannot be initialised). This is a fatal startup condition;
 /// there is no meaningful recovery from inside `main`.
 pub fn run() {
+    agent::ensure_gui_path();
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(win) = app.get_webview_window("main") {

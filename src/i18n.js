@@ -108,6 +108,7 @@
       "composer.bridge.models": "Models",
       "composer.bridge.filterModels": "filter models…",
       "composer.bridge.logins": "Login Providers",
+      "composer.placeholder.agentError": "Agent process is not running. Check the error above or click Retry to reconnect.",
 
       // History Modal
       "history.title": "Saved Sessions",
@@ -185,6 +186,17 @@
       "agent.startFailed": "Agent failed to start: {error}",
       "agent.noModelsAdvice": "No models available. Please open Settings -> Models to configure a model (such as auto/best-free), then save to restart the session.",
       "agent.restartedAfterModelConfig": "Restarted session with new model configuration.",
+      "agent.ompNotFoundTitle": "Agent Process (omp) Not Found or Failed to Start",
+      "agent.ompNotFoundDesc": "PiDesk cannot connect to the omp agent process. Please check whether omp is installed and configured in PATH.",
+      "agent.ompInstallHint": "Tip: Make sure omp is installed (e.g. via bun or cargo) and in your PATH. If installed via Bun, ensure ~/.bun/bin/omp exists.",
+      "agent.processNotRunning": "Agent process (omp) is not running",
+      "agent.retry": "Retry",
+      "agent.retrying": "Connecting…",
+      "agent.configureModels": "Configure Models",
+      "agent.copyError": "Copy error details",
+      "agent.copied": "Copied!",
+      "agent.expandDetails": "Show full error",
+      "agent.collapseDetails": "Collapse details",
 
       // Agent Hub
       "hub.title": "agent hub",
@@ -327,6 +339,7 @@
       "composer.bridge.models": "切换模型",
       "composer.bridge.filterModels": "过滤模型…",
       "composer.bridge.logins": "登录提供商",
+      "composer.placeholder.agentError": "Agent 进程未运行。请查看上方报错提示或点击重试重新连接。",
 
       // History Modal
       "history.title": "历史会话",
@@ -404,6 +417,17 @@
       "agent.startFailed": "Agent 启动失败：{error}",
       "agent.noModelsAdvice": "未检测到可用模型。请前往设置 -> 模型管理配置模型（例如 auto/best-free），保存后将自动重新启动会话。",
       "agent.restartedAfterModelConfig": "已根据最新的模型配置自动重新启动会话。",
+      "agent.ompNotFoundTitle": "未找到 Agent (omp) 进程或启动失败",
+      "agent.ompNotFoundDesc": "PiDesk 无法连接到 omp 智能体进程。请检查本机是否已安装 omp 并已加入环境变量 PATH。",
+      "agent.ompInstallHint": "提示：请确保已安装 omp（例如通过 bun 或 cargo）并且位于系统 PATH 中。若通过 Bun 安装，请确认 ~/.bun/bin/omp 存在。",
+      "agent.processNotRunning": "Agent 进程 (omp) 当前未运行",
+      "agent.retry": "重试",
+      "agent.retrying": "正在连接…",
+      "agent.configureModels": "配置模型",
+      "agent.copyError": "复制错误详情",
+      "agent.copied": "已复制！",
+      "agent.expandDetails": "展开完整报错",
+      "agent.collapseDetails": "收起报错",
 
       // Agent Hub
       "hub.title": "Agent Hub",
