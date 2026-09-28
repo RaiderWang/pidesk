@@ -350,7 +350,7 @@ function App() {
           <WindowChrome
             project={activeProject}
             peer={safePeer}
-            onCmd={() => setBridgeOpen(true)}
+            onCmd={() => openBridge("commands")}
             filesOpen={showFiles}
             onToggleFiles={handleToggleFiles}
           />
@@ -469,7 +469,10 @@ function App() {
       <CommandBridge
         open={bridgeOpen}
         initialView={bridgeView}
-        onClose={() => setBridgeOpen(false)}
+        onClose={() => {
+          setBridgeOpen(false);
+          setBridgeView("commands");
+        }}
         onPick={handleCommand}
         onPickModel={handlePickModel}
         onPickLogin={handlePickLogin}

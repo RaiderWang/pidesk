@@ -546,10 +546,10 @@ function CommandBridge({
   React.useEffect(() => {
     if (open) {
       setQ("");
-      setView(initialView);
+      setView(initialView || "commands");
       setTimeout(() => inputRef.current?.focus(), 30);
     }
-  }, [open]);
+  }, [open, initialView]);
 
   // When model view opens, automatically trigger a background refresh
   React.useEffect(() => {
