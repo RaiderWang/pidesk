@@ -1,0 +1,313 @@
+/* ═════════════════════════════════════════════════════════════════════
+   files.css — Project Files & Folder Panel + Context Menu
+   ═════════════════════════════════════════════════════════════════════ */
+
+.files-panel {
+  width: 240px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-window);
+  border-right: 1px solid var(--line);
+  overflow: hidden;
+  position: relative;
+  user-select: none;
+  min-height: 0;
+  flex-shrink: 0;
+  transition: width 150ms var(--ease-out, ease-out);
+}
+
+.files-panel-head {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px 0 12px;
+  gap: 6px;
+  border-bottom: 1px solid var(--line-soft);
+  background: color-mix(in oklab, var(--bg-surface) 40%, var(--bg-window));
+  flex-shrink: 0;
+}
+
+.files-panel-title {
+  font-family: var(--font-sans);
+  font-size: var(--d-text-xs);
+  font-weight: 600;
+  color: var(--fg-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.files-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.files-action-btn {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  color: var(--fg-4);
+  cursor: pointer;
+  transition: color 120ms, background 120ms;
+}
+
+.files-action-btn:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.files-tree {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 0;
+  min-height: 0;
+}
+
+.files-tree::-webkit-scrollbar {
+  width: 5px;
+}
+.files-tree::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 3px;
+}
+.files-tree::-webkit-scrollbar-thumb:hover {
+  background: var(--line-bright);
+}
+
+.files-tree-item {
+  display: flex;
+  align-items: center;
+  height: 25px;
+  padding-right: 8px;
+  border-radius: 4px;
+  margin: 1px 4px;
+  cursor: pointer;
+  font-size: var(--d-text-xs);
+  color: var(--fg-3);
+  transition: background 100ms, color 100ms;
+  position: relative;
+}
+
+.files-tree-item:hover {
+  background: var(--bg-hover);
+  color: var(--fg-2);
+}
+
+.files-tree-item.selected {
+  background: var(--bg-surface);
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.files-tree-item.context-active {
+  background: color-mix(in oklab, var(--accent) 15%, var(--bg-surface));
+  color: var(--fg);
+}
+
+.files-tree-expand {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--fg-4);
+}
+
+.files-tree-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-right: 6px;
+}
+
+.files-tree-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.files-tree-rename-input {
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  padding: 0 4px;
+  font-family: inherit;
+  font-size: var(--d-text-xs);
+  background: var(--bg-elevated);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  color: var(--fg);
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 25%, transparent);
+}
+
+.files-empty {
+  padding: 24px 16px;
+  font-size: var(--d-text-xs);
+  color: var(--fg-5);
+  text-align: center;
+}
+
+/* ── Context Menu ────────────────────────────────────────────────────── */
+.files-context-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 190px;
+  background: var(--bg-surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-1, 6px);
+  padding: 4px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+  backdrop-filter: blur(14px);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  animation: filesMenuFadeIn 100ms var(--ease-out, ease-out);
+}
+
+@keyframes filesMenuFadeIn {
+  from { opacity: 0; transform: scale(0.96) translateY(-2px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.files-context-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: var(--d-text-xs);
+  color: var(--fg-2);
+  border-radius: 4px;
+  border: 0;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: background 100ms, color 100ms;
+}
+
+.files-context-item:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.files-context-item.danger {
+  color: var(--rose, #ff5f57);
+}
+
+.files-context-item.danger:hover {
+  background: color-mix(in oklab, var(--rose, #ff5f57) 18%, transparent);
+  color: var(--rose, #ff5f57);
+}
+
+.files-context-label {
+  flex: 1;
+  white-space: nowrap;
+}
+
+.files-context-sep {
+  height: 1px;
+  background: var(--line-soft);
+  margin: 3px 4px;
+}
+
+/* ── Delete Confirmation Dialog ──────────────────────────────────────── */
+.files-modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1050;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: filesModalFade 120ms ease-out;
+}
+
+@keyframes filesModalFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.files-modal-box {
+  background: var(--bg-surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2, 10px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+  width: 100%;
+  max-width: 380px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: filesModalSlide 120ms ease-out;
+}
+
+@keyframes filesModalSlide {
+  from { transform: scale(0.96) translateY(6px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.files-modal-title {
+  font-size: var(--d-text-sm);
+  font-weight: 600;
+  color: var(--fg);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.files-modal-body {
+  font-size: var(--d-text-xs);
+  color: var(--fg-3);
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+.files-modal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* ── Toast notification ──────────────────────────────────────────────── */
+.files-toast {
+  position: fixed;
+  bottom: 42px;
+  left: 20px;
+  z-index: 1100;
+  background: var(--bg-surface);
+  border: 1px solid var(--accent);
+  color: var(--fg);
+  font-size: var(--d-text-xs);
+  padding: 6px 12px;
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+  animation: filesToastIn 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes filesToastIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}

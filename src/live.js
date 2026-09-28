@@ -1502,6 +1502,61 @@
       }
     },
 
+    /** List directory contents */
+    async listDirectory(path) {
+      if (!window.__TAURI__) return [];
+      try {
+        return await window.__TAURI__.core.invoke("list_directory", { path });
+      } catch (err) {
+        console.error("[live] listDirectory error:", err);
+        throw err;
+      }
+    },
+
+    /** Rename file or directory */
+    async renameFile(oldPath, newPath) {
+      if (!window.__TAURI__) return;
+      try {
+        await window.__TAURI__.core.invoke("rename_file", { oldPath, newPath });
+      } catch (err) {
+        console.error("[live] renameFile error:", err);
+        throw err;
+      }
+    },
+
+    /** Delete file or directory */
+    async deleteFileOrDir(path) {
+      if (!window.__TAURI__) return;
+      try {
+        await window.__TAURI__.core.invoke("delete_file_or_dir", { path });
+      } catch (err) {
+        console.error("[live] deleteFileOrDir error:", err);
+        throw err;
+      }
+    },
+
+    /** Open with default application */
+    async openPathDefault(path) {
+      if (!window.__TAURI__) return;
+      try {
+        await window.__TAURI__.core.invoke("open_path_default", { path });
+      } catch (err) {
+        console.error("[live] openPathDefault error:", err);
+        throw err;
+      }
+    },
+
+    /** Reveal in OS file manager */
+    async revealInExplorer(path) {
+      if (!window.__TAURI__) return;
+      try {
+        await window.__TAURI__.core.invoke("reveal_in_explorer", { path });
+      } catch (err) {
+        console.error("[live] revealInExplorer error:", err);
+        throw err;
+      }
+    },
+
     /** Get application version from Tauri backend. */
     async getAppVersion() {
       if (!window.__TAURI__) return "0.2.7";

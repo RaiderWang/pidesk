@@ -17,6 +17,7 @@
 const {
   Icon, ChatView, Composer, CommandBridge, WindowChrome, TabBar,
   StatusBar, AmbientRail, SplitPeer, PlanKanban, HistoryModal, ModelManagerModal, useTweaks,
+  FileTreePanel,
   TweaksPanel, TweakSection, TweakRadio, TweakToggle, TweakColor, TweakSlider, TweakShortcut,
   TWEAK_DEFAULTS, NULL_MODEL, EMPTY_PROJECT, NULL_PEER,
   INTENT_FRAMING, APPROVAL_PROMPT,
@@ -38,6 +39,22 @@ function App() {
   const [modelManagerOpen, setModelManagerOpen] = React.useState(false);
   const [planOpen,    setPlanOpen]    = React.useState(false);
   const [planMode,    setPlanMode]    = React.useState(false);
+  const [filesOpen,   setFilesOpen]   = React.useState(() => {
+    try {
+      const saved = localStorage.getItem("pidesk:files-panel-open");
+      return saved !== null ? JSON.parse(saved) : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const handleToggleFiles = React.useCallback(() => {
+    setFilesOpen(prev => {
+      const next = !prev;
+      try { localStorage.setItem("pidesk:files-panel-open", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
   const planStartedRef = React.useRef(false); // true after first send in plan mode
   const [planAnnotations, setPlanAnnotations] = React.useState({});
   const handleAnnotate = React.useCallback((idx, value) => setPlanAnnotations(prev => {
@@ -149,6 +166,9 @@ function App() {
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "t") {
         e.preventDefault();
         handleNewStandalone();
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        handleToggleFiles();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -168,6 +188,8 @@ function App() {
 
   // ── Derived values ────────────────────────────────────────────────────────
   const activeProject = sessions.find(s => s.id === activeSessionId) ?? sessions[0] ?? EMPTY_PROJECT;
+  const hasProject    = Boolean(activeProject?.path && activeProject.path.trim());
+  const showFiles     = hasProject && filesOpen;
   const todoCounts    = kanban.reduce(
     (acc, col) => {
       acc.total += col.tasks.length;
@@ -324,6 +346,8 @@ function App() {
             project={activeProject}
             peer={safePeer}
             onCmd={() => setBridgeOpen(true)}
+            filesOpen={showFiles}
+            onToggleFiles={handleToggleFiles}
           />
           <TabBar
             projects={sessions}
@@ -340,7 +364,15 @@ function App() {
             theme={t.theme}
           />
 
-          <div className={`stage ${showRail ? "with-rail" : ""}`}>
+          <div className={`stage ${showFiles ? "with-files " : ""}${showRail ? "with-rail" : ""}`}>
+            {showFiles && (
+              <FileTreePanel
+                rootPath={activeProject.path}
+                projectName={activeProject.name}
+                onClose={handleToggleFiles}
+                bridge={bridge}
+              />
+            )}
             <main className="session">
               <ChatView messages={messages}
                 planMode={planMode}

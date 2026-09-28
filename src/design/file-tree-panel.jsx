@@ -1,0 +1,653 @@
+/* ═════════════════════════════════════════════════════════════════════
+   file-tree-panel.jsx — Project Files & Folder Panel with Context Menu
+   ═════════════════════════════════════════════════════════════════════ */
+
+const { Icon } = window;
+
+function getRelativePath(root, full) {
+  if (!root || !full) return full || "";
+  const normRoot = root.replace(/\\/g, "/").replace(/\/+$/, "");
+  const normFull = full.replace(/\\/g, "/");
+  if (normFull.startsWith(normRoot)) {
+    let rel = normFull.slice(normRoot.length);
+    return rel.replace(/^\/+/, "");
+  }
+  return full;
+}
+
+function getFileIconColor(name) {
+  const ext = (name.split(".").pop() || "").toLowerCase();
+  switch (ext) {
+    case "rs":
+      return "var(--amber, #f59e0b)";
+    case "js":
+    case "jsx":
+    case "ts":
+    case "tsx":
+      return "var(--cyan, #06b6d4)";
+    case "json":
+    case "yml":
+    case "yaml":
+    case "toml":
+      return "var(--lilac, #a855f7)";
+    case "css":
+    case "scss":
+    case "html":
+      return "var(--rose, #f43f5e)";
+    case "md":
+    case "txt":
+      return "var(--fg-3)";
+    case "png":
+    case "jpg":
+    case "jpeg":
+    case "svg":
+    case "webp":
+    case "ico":
+      return "var(--accent, #10b981)";
+    default:
+      return "var(--fg-4)";
+  }
+}
+
+function FileTreeNode({
+  item,
+  depth,
+  expandedPaths,
+  childrenMap,
+  loadingPaths,
+  selectedPath,
+  renamingPath,
+  renameValue,
+  contextMenuItem,
+  onSelect,
+  onToggleExpand,
+  onContextMenu,
+  onRenameChange,
+  onRenameSubmit,
+  onRenameCancel,
+}) {
+  const isExpanded = expandedPaths.has(item.path);
+  const isSelected = selectedPath === item.path;
+  const isRenaming = renamingPath === item.path;
+  const isContextActive = contextMenuItem?.path === item.path;
+  const isLoading = loadingPaths.has(item.path);
+  const children = childrenMap.get(item.path) || [];
+
+  const handleItemClick = (e) => {
+    e.stopPropagation();
+    onSelect(item);
+    if (item.is_dir) {
+      onToggleExpand(item);
+    }
+  };
+
+  const handleExpandArrowClick = (e) => {
+    e.stopPropagation();
+    if (item.is_dir) {
+      onToggleExpand(item);
+    }
+  };
+
+  const handleContextMenu = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onContextMenu(e, item);
+  };
+
+  const itemClass = `files-tree-item ${isSelected ? "selected" : ""} ${
+    isContextActive ? "context-active" : ""
+  }`.trim();
+
+  return (
+    <div className="files-tree-node">
+      <div
+        className={itemClass}
+        style={{ paddingLeft: depth * 14 + 6 }}
+        onClick={handleItemClick}
+        onContextMenu={handleContextMenu}
+        title={item.name}
+      >
+        <span
+          className="files-tree-expand"
+          onClick={handleExpandArrowClick}
+        >
+          {item.is_dir ? (
+            <Icon
+              name={isExpanded ? "chev" : "chevR"}
+              size={9}
+              color={isLoading ? "var(--accent)" : "var(--fg-4)"}
+            />
+          ) : (
+            <span style={{ width: 9 }} />
+          )}
+        </span>
+
+        <span className="files-tree-icon">
+          {item.is_dir ? (
+            <Icon
+              name="folder"
+              size={12}
+              color={isExpanded ? "var(--accent)" : "var(--fg-3)"}
+            />
+          ) : (
+            <Icon
+              name="file"
+              size={12}
+              color={getFileIconColor(item.name)}
+            />
+          )}
+        </span>
+
+        {isRenaming ? (
+          <input
+            className="files-tree-rename-input"
+            value={renameValue}
+            autoFocus
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => onRenameChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onRenameSubmit();
+              else if (e.key === "Escape") onRenameCancel();
+            }}
+            onBlur={onRenameSubmit}
+          />
+        ) : (
+          <span className="files-tree-name">{item.name}</span>
+        )}
+      </div>
+
+      {item.is_dir && isExpanded && (
+        <div className="files-tree-children">
+          {children.length === 0 && !isLoading ? (
+            <div
+              className="files-empty"
+              style={{ paddingLeft: (depth + 1) * 14 + 18, textAlign: "left", padding: "4px 8px" }}
+            >
+              {window.t ? window.t("files.panel.empty", null, "Empty directory") : "Empty directory"}
+            </div>
+          ) : (
+            children.map((child) => (
+              <FileTreeNode
+                key={child.path}
+                item={child}
+                depth={depth + 1}
+                expandedPaths={expandedPaths}
+                childrenMap={childrenMap}
+                loadingPaths={loadingPaths}
+                selectedPath={selectedPath}
+                renamingPath={renamingPath}
+                renameValue={renameValue}
+                contextMenuItem={contextMenuItem}
+                onSelect={onSelect}
+                onToggleExpand={onToggleExpand}
+                onContextMenu={onContextMenu}
+                onRenameChange={onRenameChange}
+                onRenameSubmit={onRenameSubmit}
+                onRenameCancel={onRenameCancel}
+              />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FileTreePanel({ rootPath, projectName, onClose, bridge }) {
+  const [rootEntries, setRootEntries] = React.useState([]);
+  const [expandedPaths, setExpandedPaths] = React.useState(new Set());
+  const [childrenMap, setChildrenMap] = React.useState(new Map());
+  const [loadingPaths, setLoadingPaths] = React.useState(new Set());
+  const [selectedPath, setSelectedPath] = React.useState(null);
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = React.useState(null);
+
+  // Rename state
+  const [renamingPath, setRenamingPath] = React.useState(null);
+  const [renameValue, setRenameValue] = React.useState("");
+
+  // Delete modal state
+  const [deleteTarget, setDeleteTarget] = React.useState(null);
+
+  // Toast notification state
+  const [toastMessage, setToastMessage] = React.useState(null);
+  const toastTimeoutRef = React.useRef(null);
+
+  const showToast = React.useCallback((msg) => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setToastMessage(msg);
+    toastTimeoutRef.current = setTimeout(() => {
+      setToastMessage(null);
+    }, 2400);
+  }, []);
+
+  // Fetch directory contents
+  const loadDirectory = React.useCallback(
+    async (path) => {
+      if (!bridge?.listDirectory) return [];
+      try {
+        return await bridge.listDirectory(path);
+      } catch (err) {
+        console.error("Failed to list directory:", path, err);
+        showToast(window.t ? window.t("files.error.load", null, "Failed to load directory") : "Failed to load directory");
+        return [];
+      }
+    },
+    [bridge, showToast]
+  );
+
+  // Initial load or when rootPath changes
+  const refreshRoot = React.useCallback(async () => {
+    if (!rootPath) {
+      setRootEntries([]);
+      return;
+    }
+    const entries = await loadDirectory(rootPath);
+    setRootEntries(entries);
+  }, [rootPath, loadDirectory]);
+
+  React.useEffect(() => {
+    refreshRoot();
+  }, [refreshRoot]);
+
+  // Refresh an entire subfolder
+  const refreshFolder = React.useCallback(
+    async (folderPath) => {
+      if (!folderPath) return;
+      if (folderPath === rootPath) {
+        await refreshRoot();
+        return;
+      }
+      const children = await loadDirectory(folderPath);
+      setChildrenMap((prev) => {
+        const next = new Map(prev);
+        next.set(folderPath, children);
+        return next;
+      });
+    },
+    [rootPath, refreshRoot, loadDirectory]
+  );
+
+  // Toggle expand / collapse folder
+  const handleToggleExpand = React.useCallback(
+    async (item) => {
+      const path = item.path;
+      setExpandedPaths((prev) => {
+        const next = new Set(prev);
+        if (next.has(path)) {
+          next.delete(path);
+          return next;
+        } else {
+          next.add(path);
+          return next;
+        }
+      });
+
+      // If expanding and not yet loaded
+      if (!expandedPaths.has(path) && !childrenMap.has(path)) {
+        setLoadingPaths((prev) => new Set(prev).add(path));
+        const children = await loadDirectory(path);
+        setChildrenMap((prev) => new Map(prev).set(path, children));
+        setLoadingPaths((prev) => {
+          const next = new Set(prev);
+          next.delete(path);
+          return next;
+        });
+      }
+    },
+    [expandedPaths, childrenMap, loadDirectory]
+  );
+
+  // Full Refresh button
+  const handleRefreshAll = async () => {
+    await refreshRoot();
+    // Refresh all currently expanded folders
+    const paths = Array.from(expandedPaths);
+    for (const p of paths) {
+      const children = await loadDirectory(p);
+      setChildrenMap((prev) => new Map(prev).set(p, children));
+    }
+  };
+
+  // Close context menu on outside click or escape
+  React.useEffect(() => {
+    if (!contextMenu) return;
+    const handleClose = () => setContextMenu(null);
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") setContextMenu(null);
+    };
+    window.addEventListener("click", handleClose);
+    window.addEventListener("contextmenu", handleClose);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("click", handleClose);
+      window.removeEventListener("contextmenu", handleClose);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [contextMenu]);
+
+  // Context Menu trigger
+  const handleContextMenu = (e, item) => {
+    const menuWidth = 210;
+    const menuHeight = 240;
+    const x = Math.min(e.clientX, window.innerWidth - menuWidth - 10);
+    const y = Math.min(e.clientY, window.innerHeight - menuHeight - 10);
+    setSelectedPath(item.path);
+    setContextMenu({ x, y, item });
+  };
+
+  // Rename handlers
+  const startRename = (item) => {
+    setContextMenu(null);
+    setRenamingPath(item.path);
+    setRenameValue(item.name);
+  };
+
+  const handleRenameCancel = () => {
+    setRenamingPath(null);
+    setRenameValue("");
+  };
+
+  const handleRenameSubmit = async () => {
+    if (!renamingPath) return;
+    const targetPath = renamingPath;
+    const newName = renameValue.trim();
+    setRenamingPath(null);
+
+    if (!newName) return;
+
+    // Extract parent directory
+    const isWindows = targetPath.includes("\\");
+    const sep = isWindows ? "\\" : "/";
+    const parts = targetPath.split(/[\\/]/);
+    const oldName = parts.pop();
+    if (newName === oldName) return;
+
+    const parentDir = parts.join(sep);
+    const newPath = parentDir ? `${parentDir}${sep}${newName}` : newName;
+
+    try {
+      await bridge?.renameFile(targetPath, newPath);
+      // Refresh parent folder
+      await refreshFolder(parentDir || rootPath);
+      setSelectedPath(newPath);
+    } catch (err) {
+      console.error("Rename failed:", err);
+      const errMsg = err?.message || String(err);
+      showToast(
+        window.t
+          ? window.t("files.error.rename", { error: errMsg }, `Failed to rename: ${errMsg}`)
+          : `Failed to rename: ${errMsg}`
+      );
+    }
+  };
+
+  // Delete handlers
+  const confirmDelete = (item) => {
+    setContextMenu(null);
+    setDeleteTarget(item);
+  };
+
+  const handleDeleteExecute = async () => {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
+    setDeleteTarget(null);
+
+    const isWindows = target.path.includes("\\");
+    const sep = isWindows ? "\\" : "/";
+    const parts = target.path.split(/[\\/]/);
+    parts.pop();
+    const parentDir = parts.join(sep);
+
+    try {
+      await bridge?.deleteFileOrDir(target.path);
+      await refreshFolder(parentDir || rootPath);
+      if (selectedPath === target.path) setSelectedPath(null);
+    } catch (err) {
+      console.error("Delete failed:", err);
+      const errMsg = err?.message || String(err);
+      showToast(
+        window.t
+          ? window.t("files.error.delete", { error: errMsg }, `Failed to delete: ${errMsg}`)
+          : `Failed to delete: ${errMsg}`
+      );
+    }
+  };
+
+  // Copy Path handlers
+  const handleCopyPath = async (item) => {
+    setContextMenu(null);
+    try {
+      await navigator.clipboard.writeText(item.path);
+      showToast(
+        window.t
+          ? window.t("files.toast.copiedPath", null, "Full path copied to clipboard")
+          : "Full path copied to clipboard"
+      );
+    } catch (err) {
+      console.error("Copy path error:", err);
+    }
+  };
+
+  const handleCopyRelativePath = async (item) => {
+    setContextMenu(null);
+    try {
+      const rel = getRelativePath(rootPath, item.path);
+      await navigator.clipboard.writeText(rel);
+      showToast(
+        window.t
+          ? window.t("files.toast.copiedRelative", null, "Relative path copied to clipboard")
+          : "Relative path copied to clipboard"
+      );
+    } catch (err) {
+      console.error("Copy relative path error:", err);
+    }
+  };
+
+  // Open with system default application
+  const handleOpenDefault = async (item) => {
+    setContextMenu(null);
+    try {
+      await bridge?.openPathDefault(item.path);
+    } catch (err) {
+      console.error("Open default error:", err);
+    }
+  };
+
+  // Reveal in File Explorer / Finder
+  const handleRevealInExplorer = async (item) => {
+    setContextMenu(null);
+    try {
+      await bridge?.revealInExplorer(item.path);
+    } catch (err) {
+      console.error("Reveal in explorer error:", err);
+    }
+  };
+
+  const displayName = projectName || (rootPath ? rootPath.replace(/\\/g, "/").split("/").pop() : "Files");
+
+  return (
+    <aside className="files-panel">
+      {/* Panel Header */}
+      <div className="files-panel-head">
+        <Icon name="folder" size={12} color="var(--accent)" />
+        <span className="files-panel-title" title={rootPath}>
+          {displayName}
+        </span>
+        <div className="files-panel-actions">
+          <button
+            className="files-action-btn"
+            title={window.t ? window.t("files.panel.refresh", null, "Refresh") : "Refresh"}
+            onClick={handleRefreshAll}
+          >
+            <Icon name="refresh" size={10} />
+          </button>
+          <button
+            className="files-action-btn"
+            title={window.t ? window.t("files.panel.collapse", null, "Collapse") : "Collapse"}
+            onClick={onClose}
+          >
+            <Icon name="close" size={10} />
+          </button>
+        </div>
+      </div>
+
+      {/* Directory Tree */}
+      <div className="files-tree">
+        {rootEntries.length === 0 ? (
+          <div className="files-empty">
+            {window.t ? window.t("files.panel.empty", null, "Empty directory") : "Empty directory"}
+          </div>
+        ) : (
+          rootEntries.map((item) => (
+            <FileTreeNode
+              key={item.path}
+              item={item}
+              depth={0}
+              expandedPaths={expandedPaths}
+              childrenMap={childrenMap}
+              loadingPaths={loadingPaths}
+              selectedPath={selectedPath}
+              renamingPath={renamingPath}
+              renameValue={renameValue}
+              contextMenuItem={contextMenu?.item}
+              onSelect={(it) => setSelectedPath(it.path)}
+              onToggleExpand={handleToggleExpand}
+              onContextMenu={handleContextMenu}
+              onRenameChange={setRenameValue}
+              onRenameSubmit={handleRenameSubmit}
+              onRenameCancel={handleRenameCancel}
+            />
+          ))
+        )}
+      </div>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          className="files-context-menu"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="files-context-item"
+            onClick={() => startRename(contextMenu.item)}
+          >
+            <Icon name="edit" size={11} color="var(--accent)" />
+            <span className="files-context-label">
+              {window.t ? window.t("files.menu.rename", null, "Rename") : "Rename"}
+            </span>
+          </button>
+
+          <button
+            className="files-context-item"
+            onClick={() => handleCopyPath(contextMenu.item)}
+          >
+            <Icon name="copy" size={11} color="var(--cyan)" />
+            <span className="files-context-label">
+              {window.t ? window.t("files.menu.copyPath", null, "Copy Path") : "Copy Path"}
+            </span>
+          </button>
+
+          <button
+            className="files-context-item"
+            onClick={() => handleCopyRelativePath(contextMenu.item)}
+          >
+            <Icon name="link" size={11} color="var(--lilac)" />
+            <span className="files-context-label">
+              {window.t ? window.t("files.menu.copyRelativePath", null, "Copy Relative Path") : "Copy Relative Path"}
+            </span>
+          </button>
+
+          <div className="files-context-sep" />
+
+          <button
+            className="files-context-item"
+            onClick={() => handleOpenDefault(contextMenu.item)}
+          >
+            <Icon name="external" size={11} color="var(--fg-3)" />
+            <span className="files-context-label">
+              {window.t ? window.t("files.menu.openDefault", null, "Open with Default Application") : "Open with Default Application"}
+            </span>
+          </button>
+
+          <button
+            className="files-context-item"
+            onClick={() => handleRevealInExplorer(contextMenu.item)}
+          >
+            <Icon name="folder" size={11} color="var(--fg-3)" />
+            <span className="files-context-label">
+              {window.t ? window.t("files.menu.reveal", null, "Reveal in File Explorer") : "Reveal in File Explorer"}
+            </span>
+          </button>
+
+          <div className="files-context-sep" />
+
+          <button
+            className="files-context-item danger"
+            onClick={() => confirmDelete(contextMenu.item)}
+          >
+            <Icon name="trash" size={11} color="var(--rose, #ff5f57)" />
+            <span className="files-context-label">
+              {window.t ? window.t("files.menu.delete", null, "Delete") : "Delete"}
+            </span>
+          </button>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div
+          className="files-modal-scrim"
+          onClick={() => setDeleteTarget(null)}
+        >
+          <div
+            className="files-modal-box"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="files-modal-title">
+              <Icon name="trash" size={14} color="var(--rose, #ff5f57)" />
+              <span>
+                {window.t ? window.t("files.delete.title", null, "Delete Item") : "Delete Item"}
+              </span>
+            </div>
+            <div className="files-modal-body">
+              {window.t
+                ? window.t(
+                    "files.delete.confirm",
+                    { name: deleteTarget.name },
+                    `Are you sure you want to delete ${deleteTarget.name}?`
+                  )
+                : `Are you sure you want to delete ${deleteTarget.name}?`}
+            </div>
+            <div className="files-modal-foot">
+              <button
+                className="btn ghost"
+                onClick={() => setDeleteTarget(null)}
+              >
+                {window.t ? window.t("files.delete.cancel", null, "Cancel") : "Cancel"}
+              </button>
+              <button
+                className="btn danger"
+                onClick={handleDeleteExecute}
+              >
+                {window.t ? window.t("files.delete.delete", null, "Delete") : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="files-toast">
+          <Icon name="check" size={11} color="var(--accent)" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+    </aside>
+  );
+}
+
+Object.assign(window, { FileTreePanel });
