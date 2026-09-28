@@ -648,15 +648,17 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge }) {
 
           <div className="files-context-sep" />
 
-          <button
-            className="files-context-item"
-            onClick={() => handleOpenDefault(contextMenu.item)}
-          >
-            <Icon name="external" size={11} color="var(--fg-3)" />
-            <span className="files-context-label">
-              {window.t ? window.t("files.menu.openDefault", null, "Open with Default Application") : "Open with Default Application"}
-            </span>
-          </button>
+          {!contextMenu.item.is_dir && (
+            <button
+              className="files-context-item"
+              onClick={() => handleOpenDefault(contextMenu.item)}
+            >
+              <Icon name="external" size={11} color="var(--fg-3)" />
+              <span className="files-context-label">
+                {window.t ? window.t("files.menu.openDefault", null, "Open with Default Application") : "Open with Default Application"}
+              </span>
+            </button>
+          )}
 
           <button
             className="files-context-item"
