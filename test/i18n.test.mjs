@@ -219,5 +219,26 @@ describe('known-key spot-checks', () => {
     assert.equal(t('composer.placeholder.agentError'), 'Agent 进程未运行。请查看上方报错提示或点击重试重新连接。');
     setLocale('en');
   });
+
+  it('files context menu items are correctly translated in en and zh-CN', () => {
+    setLocale('en');
+    assert.equal(t('files.menu.rename'), 'Rename');
+    assert.equal(t('files.menu.delete'), 'Delete');
+    assert.equal(t('files.menu.copyPath'), 'Copy Path');
+    assert.equal(t('files.menu.copyRelativePath'), 'Copy Relative Path');
+    assert.equal(t('files.menu.openDefault'), 'Open with Default Application');
+    assert.equal(t('files.menu.reveal'), 'Reveal in File Explorer');
+    assert.equal(t('files.panel.title'), 'Files');
+
+    setLocale('zh-CN');
+    assert.equal(t('files.menu.rename'), '重命名');
+    assert.equal(t('files.menu.delete'), '删除');
+    assert.equal(t('files.menu.copyPath'), '复制路径');
+    assert.equal(t('files.menu.copyRelativePath'), '复制相对路径');
+    assert.equal(t('files.menu.openDefault'), '用系统默认方式打开');
+    assert.equal(t('files.menu.reveal'), '在文件资源管理器中显示');
+    assert.equal(t('files.panel.title'), '项目文件');
+    setLocale('en');
+  });
 });
 

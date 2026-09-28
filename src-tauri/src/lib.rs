@@ -5,6 +5,7 @@
 #![allow(clippy::needless_pass_by_value)]
 
 mod agent;
+mod files;
 mod git;
 mod git_watcher;
 mod models_config;
@@ -294,6 +295,11 @@ pub fn run() {
             screenshot::finish_region_capture,
             screenshot::cancel_region_capture,
             screenshot::get_screenshot_background,
+            files::list_directory,
+            files::rename_file,
+            files::delete_file_or_dir,
+            files::open_path_default,
+            files::reveal_in_explorer,
         ])
         .setup(|app| {
             // Intercept close on the main window: hide instead of destroy.

@@ -130,6 +130,11 @@ The frontend calls these Rust commands via `invoke()`:
 | `send_command` | `(sessionId: String, json: String) → Result<()>` | Write a JSON line to that session’s omp stdin |
 | `session_status` | `(sessionId: String) → Option<String>` | Returns cached startup error if the last `start_session` failed |
 | `open_project` | `() → Result<Option<String>>` | Native folder picker dialog |
+| `list_directory` | `(path: String) → Result<Vec<FileEntry>>` | Read files & directories under path, sorted dirs first then files |
+| `rename_file` | `(oldPath: String, newPath: String) → Result<()>` | Rename a file or directory |
+| `delete_file_or_dir` | `(path: String) → Result<()>` | Delete a file or directory recursively |
+| `open_path_default` | `(path: String) → Result<()>` | Open with OS default application |
+| `reveal_in_explorer` | `(path: String) → Result<()>` | Reveal and select file or directory in OS file manager (File Explorer / Finder) |
 
 ---
 

@@ -13,7 +13,8 @@ const IS_WIN = typeof navigator !== "undefined" &&
   (navigator.userAgent.includes("Windows") || navigator.platform.startsWith("Win"));
 
 // ── Window chrome ─────────────────────────────────────────────────────
-function WindowChrome({ project, peer, onCmd }) {
+function WindowChrome({ project, peer, onCmd, filesOpen, onToggleFiles }) {
+  const hasProject = Boolean(project?.path && project.path.trim());
   return (
     <div className="chrome" data-tauri-drag-region>
       {/* macOS traffic lights — left side, hidden on Windows */}
@@ -23,6 +24,21 @@ function WindowChrome({ project, peer, onCmd }) {
           <span className="light amber" />
           <span className="light green" />
         </div>
+      )}
+
+      {hasProject && (
+        <button
+          className={`btn ghost outlined ${filesOpen ? "active" : ""}`}
+          onClick={onToggleFiles}
+          title={window.t ? window.t("files.panel.toggle", null, "Toggle Files Panel (Ctrl+B)") : "Toggle Files Panel (Ctrl+B)"}
+          style={{ height: 26, padding: "0 8px", gap: 5, fontSize: "var(--d-text-xs)" }}
+        >
+          <Icon name="sidebar" size={11} color={filesOpen ? "var(--accent)" : "var(--fg-3)"} />
+          <span style={{ color: filesOpen ? "var(--fg)" : "var(--fg-3)" }}>
+            {window.t ? window.t("files.panel.title", null, "Files") : "Files"}
+          </span>
+          <span className="kbd" style={{ fontSize: 9, opacity: 0.7 }}>{IS_WIN ? "^B" : "⌘B"}</span>
+        </button>
       )}
 
       <div className="chrome-title">
