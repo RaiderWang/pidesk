@@ -14,6 +14,7 @@
   user-select: none;
   min-height: 0;
   flex-shrink: 0;
+  outline: none;
   transition: width 150ms var(--ease-out, ease-out);
 }
 

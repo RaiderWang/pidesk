@@ -60,6 +60,7 @@ function FileTreeNode({
   renameValue,
   contextMenuItem,
   onSelect,
+  onDoubleClick,
   onToggleExpand,
   onContextMenu,
   onRenameChange,
@@ -79,6 +80,11 @@ function FileTreeNode({
     if (item.is_dir) {
       onToggleExpand(item);
     }
+  };
+
+  const handleItemDoubleClick = (e) => {
+    e.stopPropagation();
+    onDoubleClick?.(item);
   };
 
   const handleExpandArrowClick = (e) => {
@@ -104,6 +110,7 @@ function FileTreeNode({
         className={itemClass}
         style={{ paddingLeft: depth * 14 + 6 }}
         onClick={handleItemClick}
+        onDoubleClick={handleItemDoubleClick}
         onContextMenu={handleContextMenu}
         title={item.name}
       >
@@ -179,6 +186,7 @@ function FileTreeNode({
                 renameValue={renameValue}
                 contextMenuItem={contextMenuItem}
                 onSelect={onSelect}
+                onDoubleClick={onDoubleClick}
                 onToggleExpand={onToggleExpand}
                 onContextMenu={onContextMenu}
                 onRenameChange={onRenameChange}
@@ -198,7 +206,9 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge }) {
   const [expandedPaths, setExpandedPaths] = React.useState(new Set());
   const [childrenMap, setChildrenMap] = React.useState(new Map());
   const [loadingPaths, setLoadingPaths] = React.useState(new Set());
-  const [selectedPath, setSelectedPath] = React.useState(null);
+  const [selectedItem, setSelectedItem] = React.useState(null);
+  const selectedPath = selectedItem?.path ?? null;
+  const panelRef = React.useRef(null);
 
   // Context menu state
   const [contextMenu, setContextMenu] = React.useState(null);
@@ -333,7 +343,7 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge }) {
     const menuHeight = 240;
     const x = Math.min(e.clientX, window.innerWidth - menuWidth - 10);
     const y = Math.min(e.clientY, window.innerHeight - menuHeight - 10);
-    setSelectedPath(item.path);
+    setSelectedItem(item);
     setContextMenu({ x, y, item });
   };
 
@@ -371,7 +381,9 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge }) {
       await bridge?.renameFile(targetPath, newPath);
       // Refresh parent folder
       await refreshFolder(parentDir || rootPath);
-      setSelectedPath(newPath);
+      if (selectedItem?.path === targetPath) {
+        setSelectedItem((prev) => (prev ? { ...prev, path: newPath, name: newName } : null));
+      }
     } catch (err) {
       console.error("Rename failed:", err);
       const errMsg = err?.message || String(err);
@@ -403,7 +415,7 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge }) {
     try {
       await bridge?.deleteFileOrDir(target.path);
       await refreshFolder(parentDir || rootPath);
-      if (selectedPath === target.path) setSelectedPath(null);
+      if (selectedItem?.path === target.path) setSelectedItem(null);
     } catch (err) {
       console.error("Delete failed:", err);
       const errMsg = err?.message || String(err);
@@ -446,14 +458,17 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge }) {
   };
 
   // Open with system default application
-  const handleOpenDefault = async (item) => {
-    setContextMenu(null);
-    try {
-      await bridge?.openPathDefault(item.path);
-    } catch (err) {
-      console.error("Open default error:", err);
-    }
-  };
+  const handleOpenDefault = React.useCallback(
+    async (item) => {
+      setContextMenu(null);
+      try {
+        await bridge?.openPathDefault(item.path);
+      } catch (err) {
+        console.error("Open default error:", err);
+      }
+    },
+    [bridge]
+  );
 
   // Reveal in File Explorer / Finder
   const handleRevealInExplorer = async (item) => {
@@ -465,10 +480,77 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge }) {
     }
   };
 
+  // Double-click handler: open files with default application, toggle folders
+  const handleDoubleClick = React.useCallback(
+    (item) => {
+      if (!item.is_dir) {
+        handleOpenDefault(item);
+      } else {
+        handleToggleExpand(item);
+      }
+    },
+    [handleOpenDefault, handleToggleExpand]
+  );
+
+  // Keyboard shortcut: Del key deletes selected file/folder
+  React.useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key !== "Delete" && e.key !== "Del") return;
+      if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable)) {
+        return;
+      }
+      if (renamingPath) return;
+
+      const isPanelFocused =
+        panelRef.current &&
+        (panelRef.current === document.activeElement || panelRef.current.contains(document.activeElement));
+
+      if (isPanelFocused && selectedItem) {
+        e.preventDefault();
+        confirmDelete(selectedItem);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedItem, renamingPath]);
+
+  const handlePanelKeyDown = (e) => {
+    if (e.key === "Delete" || e.key === "Del") {
+      if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
+      if (renamingPath) return;
+      if (selectedItem) {
+        e.preventDefault();
+        confirmDelete(selectedItem);
+      }
+    }
+  };
+
+  // Delete confirmation modal keyboard shortcuts (Enter to delete, Esc to cancel)
+  React.useEffect(() => {
+    if (!deleteTarget) return;
+    const handleModalKeyDown = (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        handleDeleteExecute();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        setDeleteTarget(null);
+      }
+    };
+    window.addEventListener("keydown", handleModalKeyDown);
+    return () => window.removeEventListener("keydown", handleModalKeyDown);
+  }, [deleteTarget, handleDeleteExecute]);
+
   const displayName = projectName || (rootPath ? rootPath.replace(/\\/g, "/").split("/").pop() : "Files");
 
   return (
-    <aside className="files-panel">
+    <aside
+      ref={panelRef}
+      tabIndex={0}
+      className="files-panel"
+      onKeyDown={handlePanelKeyDown}
+    >
       {/* Panel Header */}
       <div className="files-panel-head">
         <Icon name="folder" size={12} color="var(--accent)" />
@@ -512,7 +594,11 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge }) {
               renamingPath={renamingPath}
               renameValue={renameValue}
               contextMenuItem={contextMenu?.item}
-              onSelect={(it) => setSelectedPath(it.path)}
+              onSelect={(it) => {
+                setSelectedItem(it);
+                panelRef.current?.focus();
+              }}
+              onDoubleClick={handleDoubleClick}
               onToggleExpand={handleToggleExpand}
               onContextMenu={handleContextMenu}
               onRenameChange={setRenameValue}
