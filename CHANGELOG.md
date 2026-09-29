@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-09-29
+
+### Added
+
+- **Project Files & Folder Tree Explorer**:
+  - Integrated collapsible files panel in the left sidebar with real-time directory tree visualization and syntax-aware icons
+  - Interactive context menu: Open with Default App, Reveal in File Explorer / Finder, Copy Path (relative & absolute), and Delete
+  - Keyboard and mouse productivity: double-click to open files in default applications, `Delete` key shortcut with confirmation dialog
+  - Cross-platform backend file watcher (`notify`) automatically keeping file tree in sync with disk modifications
+- **Agent Tool Execution & Thought Observability**:
+  - Detailed Tool Log modal to inspect stdout/stderr stream outputs, command parameters, and execution timing
+  - Assistant thinking/reasoning process container with collapsible view, elapsed time counter, and token usage badge
+  - Polished ephemeral tool execution cards with concurrent tracking and automatic cleanup on turn end
+- **Session Management & Peer Session Enhancements**:
+  - Support branching new sessions directly from assistant messages
+  - Resilient session resume with duplicate tab suppression and auto-focus
+
 ## [0.2.8] - 2026-09-25
 
 ### Added
