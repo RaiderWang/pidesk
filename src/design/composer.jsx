@@ -132,7 +132,7 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
   // Derive slash state inline — no useEffect, no stale flicker
   const slashQ = text.startsWith("/") ? text.slice(1).split(" ")[0].toLowerCase() : null;
   const filtered = slashQ !== null
-    ? cmds.filter(c => !slashQ || c.name.startsWith(slashQ) || c.name.includes(slashQ))
+    ? cmds.filter(c => !slashQ || c.name.startsWith(slashQ) || c.name.includes(slashQ) || c.hint?.toLowerCase().includes(slashQ))
     : [];
   const showSlash = filtered.length > 0;
 

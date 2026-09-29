@@ -19,6 +19,24 @@
 }
 .status-cell { display: inline-flex; align-items: center; gap: 5px; }
 .status-sep { color: var(--fg-5); }
+
+@keyframes kanbanPulse {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(45, 212, 191, 0.7);
+    background: transparent;
+  }
+  50% {
+    opacity: 0.55;
+    box-shadow: 0 0 10px 2px var(--accent-glow, rgba(45, 212, 191, 0.45));
+    background: color-mix(in oklab, var(--accent) 18%, transparent);
+  }
+}
+.status-cell.kanban-flashing,
+.tab-add.kanban-flashing {
+  animation: kanbanPulse 1.2s ease-in-out infinite;
+  border-radius: var(--r-1, 4px);
+}
 .status-bar-tube {
   display: inline-flex;
   width: 60px; height: 4px;

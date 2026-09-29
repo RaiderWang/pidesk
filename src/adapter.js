@@ -12,6 +12,7 @@
     write: "write", todo_write: "todo", find: "search",
     web_search: "search", lsp: "search",
     eval: "eval", task: "task", quick_task: "task", debug: "debug", ask: "ask",
+    hub: "hub",
   };
 
   function normalizeToolName(name) {
@@ -43,8 +44,45 @@
     return PHASE_STYLES[index % PHASE_STYLES.length];
   }
 
+  // ── Normalize arbitrary todo payload into standard TodoPhase[] ───────────
+  function normalizeTodoPhases(input) {
+    if (!input) return [];
+    if (Array.isArray(input)) {
+      if (input.length === 0) return [];
+      // If it's already an array of phases (each has .tasks)
+      if (input[0] && Array.isArray(input[0].tasks)) {
+        return input.map((p, idx) => ({
+          name: p.name || p.title || `Phase ${idx + 1}`,
+          tasks: (p.tasks || []).map(t => ({
+            content: t.content ?? t.text ?? "",
+            status: t.status ?? "pending",
+            notes: t.notes ?? (t.reason ? [t.reason] : []),
+          })),
+        }));
+      }
+      // If it's an array of tasks (each has .content or .text)
+      if (input[0] && (input[0].content !== undefined || input[0].text !== undefined)) {
+        return [{
+          name: "Tasks",
+          tasks: input.map(t => ({
+            content: t.content ?? t.text ?? "",
+            status: t.status ?? "pending",
+            notes: t.notes ?? (t.reason ? [t.reason] : []),
+          })),
+        }];
+      }
+    }
+    if (typeof input === "object") {
+      if (Array.isArray(input.phases)) return normalizeTodoPhases(input.phases);
+      if (Array.isArray(input.todos)) return normalizeTodoPhases(input.todos);
+      if (Array.isArray(input.tasks)) return normalizeTodoPhases(input.tasks);
+    }
+    return [];
+  }
+
   // ── Derive plan phase (review/running/done) from task status distribution ─
-  function derivePlanPhase(todoPhases) {
+  function derivePlanPhase(rawPhases) {
+    const todoPhases = normalizeTodoPhases(rawPhases);
     const tasks = todoPhases.flatMap(p => p.tasks);
     if (tasks.length === 0) return "review";
     const allDone = tasks.every(t => t.status === "completed" || t.status === "abandoned");
@@ -54,24 +92,61 @@
   }
 
   // ── TodoPhase[] → design kanban column array ──────────────────────────────
-  function buildKanban(todoPhases) {
+  function buildKanban(rawPhases) {
+    const todoPhases = normalizeTodoPhases(rawPhases);
     return todoPhases.map((phase, idx) => {
       const style = phaseStyle(idx);
+      const name = phase.name || `Phase ${idx + 1}`;
       return {
-        id: phase.name.toLowerCase().replace(/\s+/g, "-"),
-        title: phase.name,
+        id: name.toLowerCase().replace(/\s+/g, "-"),
+        title: name,
         tone: style.tone,
         icon: style.icon,
-        tasks: phase.tasks.map((task, ti) => ({
-          id: `${idx}-${ti}`,
-          text: task.content,
-          status: todoStatusToDesign(task.status),
-          reason: task.notes?.[0] ?? null,
-          // tool/effort/file not available from RPC; defaults
-          tool: "edit",
-          effort: null,
-          file: null,
-        })),
+        tasks: (phase.tasks || []).map((task, ti) => {
+          const content = task.content ?? task.text ?? "";
+          // File extraction from content (e.g. "src/adapter.js", "reducer.ts:102", "package.json")
+          const fileMatch = content.match(/[\w./\\-]+\.[a-zA-Z0-9]{1,8}(?::\d+)?/);
+          const file = fileMatch ? fileMatch[0] : null;
+
+          // Tool inference from content keywords
+          let tool = "edit";
+          const lower = content.toLowerCase();
+          if (/\b(test|spec|verify|assert|validate|check|sanity)\b/.test(lower)) {
+            tool = "eval";
+          } else if (/\b(search|find|locate|grep|trace|inspect|audit)\b/.test(lower)) {
+            tool = "search";
+          } else if (/\b(bash|run|exec|install|build|compile|start|npm|cargo|git)\b/.test(lower)) {
+            tool = "bash";
+          } else if (/\b(read|view|examine|review|load)\b/.test(lower)) {
+            tool = "read";
+          } else if (/\b(write|create|doc|document|readme|rfc)\b/.test(lower)) {
+            tool = "write";
+          } else if (/\b(debug|fix|investigate|diagnose)\b/.test(lower)) {
+            tool = "debug";
+          }
+
+          // Effort inference
+          let effort = null;
+          const effortMatch = content.match(/\[([SMLXlsm]+)\]/);
+          if (effortMatch) {
+            effort = effortMatch[1].toUpperCase();
+          } else if (content.length > 70 || (task.notes && task.notes.length > 1)) {
+            effort = "M";
+          } else {
+            effort = "S";
+          }
+
+          return {
+            id: `${idx}-${ti}`,
+            text: content,
+            status: todoStatusToDesign(task.status),
+            reason: task.notes?.[0] ?? null,
+            notes: task.notes || [],
+            tool,
+            effort,
+            file,
+          };
+        }),
       };
     });
   }
@@ -79,17 +154,18 @@
   // ── planMeta from RPC state ───────────────────────────────────────────────
   // strategy / risks / estimate are not available from RPC — those sections
   // are conditionally rendered in PlanKanban so empty values are safe.
-  function buildPlanMeta(todoPhases, sessionState) {
+  function buildPlanMeta(rawPhases, sessionState) {
+    const todoPhases = normalizeTodoPhases(rawPhases);
     const sessionFile = sessionState?.sessionFile ?? "";
     const branch = sessionFile
       ? sessionFile.replace(/\\/g, "/").split("/").pop().replace(".jsonl", "")
       : "session";
 
     // Best-effort: extract file-like tokens from task content
-    const allTasks = todoPhases.flatMap(p => p.tasks);
+    const allTasks = todoPhases.flatMap(p => p.tasks || []);
     const fileMentionRe = /[\w./\\-]+\.\w{2,6}/g;
     const touches = [...new Set(
-      allTasks.flatMap(t => Array.from(t.content.matchAll(fileMentionRe), m => m[0]))
+      allTasks.flatMap(t => Array.from((t.content ?? t.text ?? "").matchAll(fileMentionRe), m => m[0]))
     )].slice(0, 6);
 
     return {
@@ -171,12 +247,18 @@
     const tool = normalizeToolName(event.toolName ?? "");
     // args is a plain object; extract a display target from common arg names
     const args   = (typeof event.args === "object" && event.args !== null) ? event.args : {};
-    const target = args.path ?? args.pattern ?? args.command ?? args.query
-                ?? args.expression ?? args.url
-                ?? (tool === "eval" && args.input
-                      ? (String(args.input).match(/={5}\s*(.*?)\s*={5}/)?.[1] ?? "")
-                      : "")
-                ?? "";
+    let target = args.path ?? args.pattern ?? args.command ?? args.query
+              ?? args.expression ?? args.url ?? "";
+    if (!target && tool === "eval" && args.input) {
+      target = String(args.input).match(/={5}\s*(.*?)\s*={5}/)?.[1] ?? "";
+    }
+    if (!target && tool === "hub" && args.op) {
+      target = `${args.op}${args.ids?.length ? ` ${args.ids.join(", ")}` : ""}`;
+    }
+    if (!target && tool === "todo") {
+      const count = args.todos?.length ?? args.phases?.length ?? (Array.isArray(args) ? args.length : 0);
+      if (count > 0) target = `${count} tasks`;
+    }
     // Use intent (one-line description written by the agent) when available
     const title = event.intent
       ?? (target ? `${event.toolName} · ${target}` : (event.toolName ?? tool));
@@ -244,6 +326,22 @@
     }
     if (card.tool === "read") {
       extra.summary = details?.lines ? `${details.lines} lines` : card.summary;
+    }
+    if (card.tool === "todo") {
+      const text = event.result?.content?.[0]?.text;
+      if (text) {
+        extra.summary = text;
+      } else if (details?.phases?.length) {
+        let done = 0, total = 0;
+        for (const p of details.phases) {
+          for (const t of (p.tasks || [])) { total++; if (t.status === "completed" || t.status === "abandoned") done++; }
+        }
+        extra.summary = `${done}/${total} tasks completed`;
+      }
+    }
+    if (card.tool === "hub" && details?.jobs?.length) {
+      const summaryJobs = details.jobs.map(j => `${j.id} (${j.status})`).join(", ");
+      extra.summary = `${details.op || "wait"} · ${summaryJobs}`;
     }
     if (card.tool === "task") {
       const progress = details?.progress ?? card.subagents ?? [];
@@ -333,7 +431,26 @@
         };
       });
     }
+    if (card.tool === "hub" && details.jobs?.length) {
+      const summaryJobs = details.jobs.map(j => `${j.id} (${j.status})`).join(", ");
+      extra.summary = `${details.op || "wait"} · ${summaryJobs}`;
+    }
     return { ...card, ...extra };
+  }
+
+  // ── Extract thinking/reasoning text from content blocks ────────────────────
+  function extractThought(blocks) {
+    if (!Array.isArray(blocks)) return null;
+    const parts = [];
+    for (const b of blocks) {
+      if (b && typeof b === "object" && (b.type === "thinking" || b.type === "reasoning" || b.type === "thought")) {
+        const text = b.thinking ?? b.reasoning ?? b.thought ?? b.text ?? "";
+        if (typeof text === "string" && text.trim()) {
+          parts.push(text.trim());
+        }
+      }
+    }
+    return parts.length > 0 ? parts.join("\n\n") : null;
   }
 
   // ── AgentMessage[] (from get_messages) → design message array ─────────────
@@ -359,12 +476,10 @@
         result.push({ kind: "user", time, text, images });
 
       } else if (role === "assistant") {
-        let thought = null;
+        const thought = extractThought(blocks);
         const designBlocks = [];
         for (const block of blocks) {
-          if (block.type === "thinking" && block.thinking?.trim()) {
-            thought = block.thinking;
-          } else if (block.type === "text" && block.text?.trim()) {
+          if (block.type === "text" && block.text?.trim()) {
             designBlocks.push({ type: "text", text: block.text });
           }
           // tool_use blocks already rendered as separate tool cards; skip here
@@ -437,6 +552,7 @@
   // ── Exports ───────────────────────────────────────────────────────────────
   Object.assign(window, {
     normalizeToolName,
+    normalizeTodoPhases,
     todoStatusToDesign,
     phaseStyle,
     derivePlanPhase,
@@ -450,6 +566,7 @@
     finalizeToolCard,
     updateToolCard,
     adaptAgentMessages,
+    extractThought,
     timeNow,
   });
 })();

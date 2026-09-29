@@ -88,6 +88,7 @@ const TOOL_META = {
   task:    { color: "var(--cyan)",    icon: "agent", label: "task"  },
   debug:   { color: "var(--amber)",   icon: "bolt",  label: "debug" },
   ask:     { color: "var(--fg-3)",    icon: "circle",label: "ask"   },
+  hub:     { color: "var(--lilac)",   icon: "clock", label: "hub"   },
 };
 
 Object.assign(window, { Icon, TOOL_META });

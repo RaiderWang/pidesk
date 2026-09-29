@@ -60,6 +60,83 @@
   font-size: var(--d-text-sm);
 }
 
+/* ── Thought / reasoning collapsible block ────────────────────────────── */
+.thought-block {
+  margin: 6px 0 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in oklab, var(--lilac) 25%, var(--line));
+  background: color-mix(in oklab, var(--lilac) 4%, transparent);
+  overflow: hidden;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+.thought-block:hover {
+  border-color: color-mix(in oklab, var(--lilac) 45%, var(--line));
+}
+.thought-block.thinking {
+  border-color: color-mix(in oklab, var(--lilac) 50%, var(--line));
+  background: color-mix(in oklab, var(--lilac) 7%, transparent);
+}
+.thought-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  font-size: var(--d-text-xs);
+  color: var(--fg-3);
+  transition: background 120ms ease, color 120ms ease;
+}
+.thought-head:hover {
+  background: color-mix(in oklab, var(--lilac) 8%, transparent);
+  color: var(--fg-2);
+}
+.thought-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.thought-title {
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.thought-toggle {
+  display: flex;
+  align-items: center;
+  opacity: 0.7;
+}
+.thought-head:hover .thought-toggle {
+  opacity: 1;
+}
+.thought-body {
+  padding: 8px 12px 10px;
+  border-top: 1px solid color-mix(in oklab, var(--lilac) 15%, var(--line));
+  background: color-mix(in oklab, var(--lilac) 3%, transparent);
+  font-size: var(--d-text-sm);
+  line-height: 1.55;
+  color: var(--fg-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.thought-content {
+  font-family: var(--font-sans);
+  font-size: var(--d-text-sm);
+  color: color-mix(in oklab, var(--fg-2) 90%, var(--lilac));
+}
+.thought-body::-webkit-scrollbar {
+  width: 5px;
+}
+.thought-body::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--lilac) 30%, transparent);
+  border-radius: 4px;
+}
+
 /* user bubble — right side, soft gradient */
 .user-bubble {
   max-width: min(820px, 70%);
@@ -234,6 +311,42 @@
   transition: border-color 200ms;
 }
 .tool-card.running { border-color: color-mix(in oklab, var(--accent) 35%, var(--line-bright)); }
+.tool-card.collapsible .tool-card-head {
+  cursor: pointer;
+  user-select: none;
+  transition: background 120ms ease;
+}
+.tool-card.collapsible .tool-card-head:hover {
+  background: var(--bg-hover);
+}
+.tool-card-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  color: var(--fg-4);
+  transition: color 120ms ease;
+  flex-shrink: 0;
+  margin-left: 2px;
+}
+.tool-card.collapsible:hover .tool-card-toggle {
+  color: var(--fg-2);
+}
+.tool-card-body {
+  border-top: 1px solid var(--line);
+  animation: toolBodyIn 140ms ease-out;
+}
+.tool-card-body > .tool-bash,
+.tool-card-body > .tool-eval,
+.tool-card-body > .diff-wrap {
+  border-top: none;
+}
+@keyframes toolBodyIn {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 .tool-card-head {
   display: flex; align-items: center; gap: 8px;
   padding: 8px 12px;

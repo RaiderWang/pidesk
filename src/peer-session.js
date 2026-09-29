@@ -133,7 +133,10 @@
     } else if (type === "tool_execution_start") {
       const tool = window.normalizeToolName(obj.toolName ?? "");
       const args = (typeof obj.args === "object" && obj.args) ? obj.args : {};
-      const target = args.path ?? args.pattern ?? args.command ?? args.query ?? "";
+      let target = args.path ?? args.pattern ?? args.command ?? args.query ?? "";
+      if (!target && tool === "hub" && args.op) {
+        target = `${args.op}${args.ids?.length ? ` ${args.ids.join(", ")}` : ""}`;
+      }
       const short = target ? String(target).split(/[\\/]/).pop() : "";
       peerState.activity = short ? `${tool} · ${short}` : tool;
       // Append to recentTools (rolling window)
@@ -151,17 +154,31 @@
           ? { ...t, status: "ok", duration: t._startMs ? now - t._startMs : null }
           : t
       );
-      if (obj.toolName === "todo_write") {
-        const phases = obj.result?.details?.phases ?? obj.result?.phases ?? [];
+      if (obj.toolName === "todo_write" || obj.toolName === "todo") {
+        const raw = obj.result?.details?.phases ?? obj.result?.details?.todos ?? obj.result?.details ?? obj.result?.phases ?? obj.result?.todos ?? obj.result;
+        const phases = window.normalizeTodoPhases ? window.normalizeTodoPhases(raw) : (raw?.phases ?? raw ?? []);
         if (phases.length > 0) {
           let done = 0, total = 0;
           for (const p of phases) {
-            for (const t of p.tasks) { total++; if (t.status === "completed" || t.status === "abandoned") done++; }
+            for (const t of (p.tasks || [])) { total++; if (t.status === "completed" || t.status === "abandoned") done++; }
           }
           peerState.todo = { done, total };
         }
       }
       changed = true;
+    } else if (type === "custom") {
+      if (obj.customType === "user_todo_edit" || obj.customType === "todo_edit" || obj.customType === "todo" || obj.customType === "todo_write") {
+        const raw = obj.data?.phases ?? obj.data?.todos ?? obj.data;
+        const phases = window.normalizeTodoPhases ? window.normalizeTodoPhases(raw) : (raw?.phases ?? raw ?? []);
+        if (phases.length > 0) {
+          let done = 0, total = 0;
+          for (const p of phases) {
+            for (const t of (p.tasks || [])) { total++; if (t.status === "completed" || t.status === "abandoned") done++; }
+          }
+          peerState.todo = { done, total };
+          changed = true;
+        }
+      }
     } else if (type === "message_update" && obj.message) {
       const blocks = Array.isArray(obj.message.content) ? obj.message.content : [];
       let foundThought = false;
@@ -178,10 +195,11 @@
       if (foundThought) changed = true;
     } else if (type === "response" && obj.command === "get_state" && obj.success && obj.data) {
       const d = obj.data;
-      if (d.todoPhases?.length > 0) {
+      const dPhases = window.normalizeTodoPhases ? window.normalizeTodoPhases(d.todoPhases ?? d.phases ?? d.todos) : (d.todoPhases ?? []);
+      if (dPhases.length > 0) {
         let done = 0, total = 0;
-        for (const p of d.todoPhases) {
-          for (const t of p.tasks) { total++; if (t.status === "completed" || t.status === "abandoned") done++; }
+        for (const p of dPhases) {
+          for (const t of (p.tasks || [])) { total++; if (t.status === "completed" || t.status === "abandoned") done++; }
         }
         peerState.todo = { done, total };
       }

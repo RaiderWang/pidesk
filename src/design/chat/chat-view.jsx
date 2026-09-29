@@ -83,7 +83,7 @@ const CompactRow = React.memo(function CompactRow({ msg }) {
   );
 });
 
-function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, onAskAnswer, onBranch }) {
+function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, onAskAnswer, onBranch, onOpenKanban }) {
   const scrollRef    = React.useRef(null);
   const atBottomRef  = React.useRef(true);   // assume start at bottom
   const prevCountRef = React.useRef(0);
@@ -136,7 +136,8 @@ function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, 
             annotable={i === lastAsstIdx}
             annotations={annotations}
             onAnnotate={onAnnotate}
-            onBranch={onBranch} />;
+            onBranch={onBranch}
+            onOpenKanban={onOpenKanban} />;
         })}
         <div style={{ height: 24 }} />
       </div>

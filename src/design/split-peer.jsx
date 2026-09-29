@@ -51,7 +51,7 @@ function SplitPeer({ peer, onFocus, onClear }) {
           )}
 
           {tools.map((t, i) => {
-            const meta = TOOL_META[t.tool] || TOOL_META.edit;
+            const meta = TOOL_META[t.tool] || { color: "var(--fg-3)", icon: "circle", label: t.tool };
             const isRunning = t.status === "running";
             return (
               <div key={t.id ?? i} className="split-row mono">

@@ -26,8 +26,14 @@
 .hub-compact-tool {
   display: flex; align-items: center; gap: 5px;
   font-size: var(--d-text-xs);
-  padding: 2px 0;
+  padding: 2px 4px;
+  margin: 0 -4px;
+  border-radius: 4px;
   min-width: 0;
+  transition: background 0.15s ease;
+}
+.hub-compact-tool.clickable:hover {
+  background: color-mix(in oklab, var(--accent) 8%, var(--bg-surface));
 }
 .hub-compact-timer {
   color: var(--fg-4);
@@ -55,9 +61,16 @@
 .hub-compact-trail {
   display: flex; align-items: center; gap: 5px;
   font-size: var(--d-text-xs);
-  padding: 1px 0;
+  padding: 1px 4px;
+  margin: 0 -4px;
+  border-radius: 4px;
   min-width: 0;
   opacity: 0.7;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+.hub-compact-trail.clickable:hover {
+  opacity: 1;
+  background: color-mix(in oklab, var(--fg-4) 8%, var(--bg-surface));
 }
 .hub-compact-trail:last-child { opacity: 1; }
 .hub-compact-dur {

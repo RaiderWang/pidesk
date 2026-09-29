@@ -3,7 +3,7 @@
    ═════════════════════════════════════════════════════════════════════ */
 
 .files-panel {
-  width: 240px;
+  width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -15,7 +15,24 @@
   min-height: 0;
   flex-shrink: 0;
   outline: none;
-  transition: width 150ms var(--ease-out, ease-out);
+}
+
+.files-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 20;
+  background: transparent;
+  transition: background 150ms ease;
+}
+
+.files-resizer:hover,
+.files-resizer.is-dragging {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow, rgba(45, 212, 191, 0.4));
 }
 
 .files-panel-head {
@@ -65,6 +82,24 @@
 .files-action-btn:hover {
   background: var(--bg-hover);
   color: var(--fg);
+}
+
+.files-action-btn.is-refreshing {
+  color: var(--accent);
+  pointer-events: none;
+}
+
+.files-action-btn.is-refreshing svg {
+  animation: filesSpin 750ms linear infinite;
+}
+
+@keyframes filesSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .files-tree {

@@ -99,8 +99,8 @@ function App() {
   const handleAbort = () => setStreaming(false);
 
   const handleCommand = (c) => {
-    if (c.name === "plan") { setPlanMode(true); setPlanPhase("review"); setPlanOpen(true); }
-    else if (c.name === "todo") setPlanOpen(true);
+    if (c.name === "plan") { setPlanMode(true); setPlanPhase("review"); }
+    else if (c.name === "todo" || c.name === "kanban") setPlanOpen(true);
     else if (c.name === "model") {} // handled separately by bridge
     else if (c.name === "thinking") cycleThinking();
   };
@@ -123,18 +123,19 @@ function App() {
             onCmd={() => setBridgeOpen(true)} />
           <TabBar projects={data.projects} activeId={activeTabId}
             onSelect={setActiveTabId} peer={data.peer} onNew={() => {}}
-            appVersion={window.PIDESK_APP_VERSION || window.OMP_APP_VERSION || "0.2.8"} theme={t.theme} />
+            onKanban={() => setPlanOpen(prev => !prev)} todoCount={todoCounts.total}
+            appVersion={window.PIDESK_APP_VERSION || window.OMP_APP_VERSION || "0.3.0"} theme={t.theme} />
 
           <div className={`stage ${showRail ? "with-rail" : ""}`}>
             <main className="session">
-              <ChatView messages={messages} />
+              <ChatView messages={messages} onOpenKanban={() => setPlanOpen(true)} />
               <Composer
                 onSend={handleSend}
                 planMode={planMode}
                 onTogglePlan={() => {
                   const next = !planMode;
                   setPlanMode(next);
-                  if (next) { setPlanPhase("review"); setPlanOpen(true); }
+                  if (next) { setPlanPhase("review"); }
                 }}
                 onOpenCmd={() => setBridgeOpen(true)}
                 onOpenModel={() => setBridgeOpen(true)}
@@ -186,6 +187,7 @@ function App() {
           kanban={data.kanban}
           planMeta={data.planMeta}
           mode={planPhase}
+          isStreaming={planPhase === "running"}
           onMode={setPlanPhase}
           onApprove={() => { setPlanMode(false); }}
           onClose={() => setPlanOpen(false)}

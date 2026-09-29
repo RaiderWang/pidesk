@@ -27,7 +27,7 @@ function formatRelativeTime(ts) {
   return date.toLocaleDateString();
 }
 
-function HistoryModal({ open, onClose, onResume, activeCwd }) {
+function HistoryModal({ open, onClose, onResume, activeCwd, openSessions = [] }) {
   const [sessions, setSessions]           = React.useState([]);
   const [loading, setLoading]             = React.useState(false);
   const [filterScope, setFilterScope]     = React.useState("all"); // 'all' | 'current'
@@ -83,6 +83,23 @@ function HistoryModal({ open, onClose, onResume, activeCwd }) {
   const currentProjectName = activeCwd
     ? normPath(activeCwd).split("/").pop() || "current"
     : "current";
+
+  const isSessionOpen = React.useCallback((s) => {
+    if (!openSessions || openSessions.length === 0 || !s) return false;
+    const targetPath = normPath(s.path);
+    const targetId = s.id ? String(s.id).trim() : null;
+    return openSessions.some(os => {
+      if (os.sessionPath && normPath(os.sessionPath) === targetPath) return true;
+      if (os.savedSessionId && targetId && os.savedSessionId === targetId) return true;
+      if (os.sessionFile) {
+        const sfNorm = normPath(os.sessionFile);
+        if (sfNorm === targetPath || (targetId && sfNorm.includes(targetId)) || targetPath.endsWith(sfNorm) || sfNorm.endsWith(targetPath)) {
+          return true;
+        }
+      }
+      return false;
+    });
+  }, [openSessions]);
 
   // Filtered session list
   const filtered = React.useMemo(() => {
@@ -212,6 +229,7 @@ function HistoryModal({ open, onClose, onResume, activeCwd }) {
 
           {filtered.map((s, idx) => {
             const isSelected = idx === clampedIdx;
+            const alreadyOpen = isSessionOpen(s);
             const timeStr = formatRelativeTime(s.updated_at || s.timestamp);
             return (
               <div
@@ -275,6 +293,20 @@ function HistoryModal({ open, onClose, onResume, activeCwd }) {
                     </span>
                   )}
 
+                  {alreadyOpen && (
+                    <span className="chip" style={{
+                      padding: "1px 6px",
+                      background: "color-mix(in oklab, var(--accent) 15%, transparent)",
+                      borderColor: "color-mix(in oklab, var(--accent) 30%, var(--line))",
+                      color: "var(--accent)",
+                      fontSize: "var(--d-text-xs)",
+                      fontWeight: 500,
+                    }}>
+                      <Icon name="check" size={9} color="var(--accent)" />
+                      <span>{window.t ? window.t("history.badge.open", null, "open") : "open"}</span>
+                    </span>
+                  )}
+
                   <div style={{ display: "flex", alignItems: "center", gap: 4, marginLeft: "auto", flexShrink: 0 }}>
                     {confirmDeletePath === s.path ? (
                       <>
@@ -317,7 +349,7 @@ function HistoryModal({ open, onClose, onResume, activeCwd }) {
                         onResume?.(s);
                         onClose();
                       }}>
-                      {window.t("history.resume")} ↵
+                      {alreadyOpen ? (window.t ? window.t("history.switch", null, "Switch") : "Switch") : (window.t ? window.t("history.resume", null, "Resume") : "Resume")} ↵
                     </button>
                   </div>
                 </div>
@@ -341,7 +373,9 @@ function HistoryModal({ open, onClose, onResume, activeCwd }) {
         {/* Footer */}
         <div className="bridge-foot mono" style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span className="kbd">↑↓</span> navigate
-          <span className="kbd">↵</span> resume in new tab
+          <span className="kbd">↵</span> {filtered[clampedIdx] && isSessionOpen(filtered[clampedIdx])
+            ? (window.t ? window.t("history.foot.switchToTab", null, "switch to tab") : "switch to tab")
+            : (window.t ? window.t("history.foot.resumeInNewTab", null, "resume in new tab") : "resume in new tab")}
           <span className="kbd">esc</span> close
           <div style={{ flex: 1 }} />
           <span style={{ color: "var(--fg-4)" }}>~/.omp/agent/sessions</span>

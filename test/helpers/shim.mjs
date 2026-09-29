@@ -76,6 +76,7 @@ loadScript('i18n.js');
 // adapter.js exports (via Object.assign(window, {...}))
 export const {
   normalizeToolName,
+  normalizeTodoPhases,
   todoStatusToDesign,
   phaseStyle,
   derivePlanPhase,
@@ -89,6 +90,7 @@ export const {
   finalizeToolCard,
   updateToolCard,
   adaptAgentMessages,
+  extractThought,
   timeNow,
 } = globalThis;
 

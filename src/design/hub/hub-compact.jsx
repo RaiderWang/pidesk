@@ -7,6 +7,10 @@
 
 const { Icon, TOOL_META: _HC_META } = window;
 
+function _hcToolMeta(tool) {
+  return _HC_META?.[tool] || { color: "var(--fg-3)", icon: "circle", label: tool || "tool" };
+}
+
 function _hcFmtElapsed(ms) {
   const sec = Math.floor(ms / 1000);
   if (sec < 60) return `${sec}s`;
@@ -20,9 +24,9 @@ function _hcFmtDuration(ms) {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
-const RECENT_MAX = 8;
+const RECENT_MAX = 3;
 
-function HubCompact({ runningTools, recentTools, isStreaming, turnStartMs, activity }) {
+function HubCompact({ runningTools, recentTools, isStreaming, turnStartMs, activity, onOpenLog }) {
   const [tick, setTick] = React.useState(Date.now());
 
   React.useEffect(() => {
@@ -43,7 +47,7 @@ function HubCompact({ runningTools, recentTools, isStreaming, turnStartMs, activ
     phaseColor = "var(--fg-5)";
   } else if (tools.length > 0) {
     const latest = tools[tools.length - 1];
-    const meta = _HC_META[latest.tool] || _HC_META.edit;
+    const meta = _hcToolMeta(latest.tool);
     phaseLabel = latest.target ? `${meta.label} · ${latest.target}` : meta.label;
     phaseColor = meta.color;
   } else {
@@ -56,7 +60,7 @@ function HubCompact({ runningTools, recentTools, isStreaming, turnStartMs, activ
     const counts = {};
     let total = 0;
     for (const a of (activity ?? [])) {
-      const k = a.k || "edit";
+      const k = a.k || "tool";
       counts[k] = (counts[k] || 0) + 1;
       total++;
     }
@@ -95,10 +99,16 @@ function HubCompact({ runningTools, recentTools, isStreaming, turnStartMs, activ
       {tools.length > 0 && (
         <div className="hub-compact-running">
           {tools.map(tl => {
-            const meta = _HC_META[tl.tool] || _HC_META.edit;
+            const meta = _hcToolMeta(tl.tool);
             const elapsed = tick - tl.startMs;
             return (
-              <div key={tl.id} className="hub-compact-tool mono">
+              <div
+                key={tl.id}
+                className="hub-compact-tool mono clickable"
+                onClick={() => onOpenLog?.(tl)}
+                title={t ? t("hub.logs.viewLogHint", null, "Click to view terminal log") : "Click to view terminal log"}
+                style={{ cursor: "pointer" }}
+              >
                 <Icon name={meta.icon} size={10} color={meta.color} />
                 <span style={{ color: meta.color }}>{meta.label}</span>
                 <span style={{ color: "var(--fg-3)", overflow: "hidden",
@@ -121,9 +131,15 @@ function HubCompact({ runningTools, recentTools, isStreaming, turnStartMs, activ
             {t ? t("agent.recent", null, "recent") : "recent"}
           </span>
           {recent.map((tl, i) => {
-            const meta = _HC_META[tl.tool] || _HC_META.edit;
+            const meta = _hcToolMeta(tl.tool);
             return (
-              <div key={tl.id ?? i} className="hub-compact-trail mono">
+              <div
+                key={tl.id ?? i}
+                className="hub-compact-trail mono clickable"
+                onClick={() => onOpenLog?.(tl)}
+                title={t ? t("hub.logs.viewLogHint", null, "Click to view terminal log") : "Click to view terminal log"}
+                style={{ cursor: "pointer" }}
+              >
                 <Icon name={meta.icon} size={9} color={meta.color} />
                 <span style={{ color: meta.color }}>{meta.label}</span>
                 <span style={{ color: "var(--fg-4)", overflow: "hidden",
@@ -149,7 +165,7 @@ function HubCompact({ runningTools, recentTools, isStreaming, turnStartMs, activ
         <div className="hub-tool-bar-wrap">
           <div className="hub-tool-bar">
             {Object.entries(dist.counts).map(([k, count]) => {
-              const meta = _HC_META[k] || _HC_META.edit;
+              const meta = _hcToolMeta(k);
               const pct = (count / dist.total) * 100;
               return (
                 <div key={k} className="hub-tool-bar-seg"

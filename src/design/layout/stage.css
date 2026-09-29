@@ -12,10 +12,10 @@
   grid-template-columns: 1fr 280px;
 }
 .stage.with-files {
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: var(--files-width, 240px) 1fr;
 }
 .stage.with-files.with-rail {
-  grid-template-columns: 240px 1fr 280px;
+  grid-template-columns: var(--files-width, 240px) 1fr 280px;
 }
 .window.is-split .stage.with-rail {
   grid-template-columns: 1fr 320px 280px;
@@ -24,10 +24,10 @@
   grid-template-columns: 1fr 320px;
 }
 .window.is-split .stage.with-files.with-rail {
-  grid-template-columns: 240px 1fr 320px 280px;
+  grid-template-columns: var(--files-width, 240px) 1fr 320px 280px;
 }
 .window.is-split .stage.with-files:not(.with-rail) {
-  grid-template-columns: 240px 1fr 320px;
+  grid-template-columns: var(--files-width, 240px) 1fr 320px;
 }
 
 /* ── Session column ─────────────────────────────────────────────────── */

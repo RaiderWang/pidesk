@@ -75,6 +75,7 @@
     hubTaskId:  null,       // active task tool's toolCallId
     hubHistory: [],         // last 3 completed task results [{taskId, agents, time}]
     agentError: null,       // startup/runtime error reason if omp is not running
+    toolLogs:   {},         // toolCallId -> { id, tool, target, title, command, status, startMs, durationMs, lines }
   };
 
   let streamingBubble = null;
@@ -111,14 +112,17 @@
     const prefs = _loadPrefs();
     if (!prefs || typeof prefs !== "object") return;
 
-    // Thinking level — omp doesn't persist this; push it on every fresh session.
     if (prefs.thinkingLevel) {
       state.thinkingLevel = prefs.thinkingLevel;
-      _send({ type: "set_thinking_level", level: prefs.thinkingLevel });
     }
 
     // Model — only override when saved preference differs from omp's default.
-    if (prefs.modelId && prefs.modelProvider && state.model?.id !== prefs.modelId) {
+    // When switching models, do not push set_thinking_level to the old model first:
+    // if omp's default model is non-reasoning (e.g. auto/best-free), pushing a thinking
+    // level will cause omp to clamp/reset it to undefined. Instead, switch model first;
+    // the set_model response handler re-pushes state.thinkingLevel to the new model.
+    const willChangeModel = Boolean(prefs.modelId && prefs.modelProvider && state.model?.id !== prefs.modelId);
+    if (willChangeModel) {
       _send({ type: "set_model", provider: prefs.modelProvider, modelId: prefs.modelId });
       // Optimistic local update to prevent the UI flashing omp's default model.
       state.model = _buildModelEntry({
@@ -129,6 +133,9 @@
       if (state.models.length > 0) {
         state.models = state.models.map(m => ({ ...m, current: m.id === prefs.modelId }));
       }
+    } else if (prefs.thinkingLevel) {
+      // Model unchanged — push thinking level directly to current model.
+      _send({ type: "set_thinking_level", level: prefs.thinkingLevel });
     }
   }
 
@@ -234,6 +241,7 @@
       hubTaskId:       state.hubTaskId,
       hubHistory:      state.hubHistory,
       agentError:      state.agentError,
+      toolLogs:        state.toolLogs,
     };
     subscribers.forEach(cb => cb(snap));
 
@@ -275,6 +283,7 @@
       hubTaskId:     null,
       hubHistory:    [],
       agentError:    null,
+      toolLogs:      {},
     });
     streamingBubble = null;
     pendingAskBubble = null;
@@ -283,6 +292,96 @@
     turnStartTime   = null;
     _compactBackfillId = null;
     activityLog     = [];
+  }
+
+  function _reindexActiveToolCards(targetList = state.messages) {
+    activeToolCards = new Map();
+    for (let i = 0; i < targetList.length; i++) {
+      const m = targetList[i];
+      if (m.kind === "tool" && m.status === "running" && m._toolCallId) {
+        activeToolCards.set(m._toolCallId, i);
+      }
+    }
+  }
+
+  function _settleInFlightActions({ aborted = true } = {}) {
+    const now = Date.now();
+    state.isStreaming = false;
+    state.turnStartMs = null;
+    state.runningTools = [];
+
+    if (streamingBubble) {
+      streamingBubble.streaming = false;
+      streamingBubble.completed = true;
+      streamingBubble = null;
+    }
+
+    if (Array.isArray(state.messages) && state.messages.length > 0) {
+      let changed = false;
+      const settled = state.messages.map(m => {
+        let updated = m;
+        if (m.streaming) {
+          updated = { ...updated, streaming: false, completed: true };
+          changed = true;
+        }
+        if (m.kind === "tool" && m.status === "running") {
+          const duration = m._startMs ? now - m._startMs : (m.duration ?? 0);
+          const subagents = Array.isArray(m.subagents)
+            ? m.subagents.map(sa => sa.status === "running" ? { ...sa, status: aborted ? "aborted" : "ok" } : sa)
+            : m.subagents;
+          updated = {
+            ...updated,
+            status: aborted ? "aborted" : "ok",
+            duration,
+            subagents,
+          };
+          changed = true;
+        }
+        if (m.kind === "compact" && m.pending) {
+          updated = {
+            ...updated,
+            pending: false,
+            error: aborted,
+            errorReason: aborted ? "aborted" : m.errorReason,
+          };
+          changed = true;
+        }
+        return updated;
+      });
+      if (changed) {
+        state.messages = settled;
+      }
+    }
+
+    if (state.toolLogs) {
+      let logsChanged = false;
+      const nextLogs = { ...state.toolLogs };
+      for (const [id, log] of Object.entries(nextLogs)) {
+        if (log && log.status === "running") {
+          nextLogs[id] = {
+            ...log,
+            status: aborted ? "aborted" : "completed",
+            durationMs: log.startMs ? now - log.startMs : (log.durationMs ?? 0),
+          };
+          logsChanged = true;
+        }
+      }
+      if (logsChanged) {
+        state.toolLogs = nextLogs;
+      }
+    }
+
+    if (Array.isArray(state.hubAgents) && state.hubAgents.length > 0) {
+      state.hubAgents = state.hubAgents.map(ag =>
+        ag.status === "running" ? { ...ag, status: aborted ? "aborted" : "ok" } : ag
+      );
+    }
+    if (state.hubTaskId) {
+      state.hubMode = "summary";
+      state.hubTaskId = null;
+    }
+
+    activeToolCards.clear();
   }
 
   // ── Session snapshot helpers ──────────────────────────────────────────────
@@ -314,6 +413,7 @@
       hubTaskId:     state.hubTaskId,
       hubHistory:    state.hubHistory,
       agentError:    state.agentError,
+      toolLogs:      { ...state.toolLogs },
       // volatile vars
       streamingBubble,
       activeToolCards: new Map(activeToolCards),
@@ -348,6 +448,7 @@
       hubTaskId:     snap.hubTaskId ?? null,
       hubHistory:    snap.hubHistory ?? [],
       agentError:    snap.agentError ?? null,
+      toolLogs:      snap.toolLogs ?? {},
     });
     streamingBubble = snap.streamingBubble;
     activeToolCards = snap.activeToolCards;
@@ -562,14 +663,43 @@
       }
       merged.push(...pending); // turns that completed while we were away
       // Rebuild activeToolCards — new entries may have been appended from pending
-      activeToolCards = new Map();
-      for (let i = 0; i < merged.length; i++) {
-        const m = merged[i];
-        if (m.kind === "tool" && m.status === "running" && m._toolCallId) {
-          activeToolCards.set(m._toolCallId, i);
+      _reindexActiveToolCards(merged);
+      state.messages = streamingBubble ? [...merged, streamingBubble] : merged;
+
+      // Restore kanban from persisted message history if not yet set or newer
+      if (Array.isArray(data.messages)) {
+        for (let i = data.messages.length - 1; i >= 0; i--) {
+          const raw = data.messages[i];
+          const toolName = raw?.toolName ?? raw?.name;
+          if (raw?.role === "toolResult" && (toolName === "todo" || toolName === "todo_write")) {
+            const rawPhases = raw.details?.phases ?? raw.details?.todos ?? raw.details ?? raw.phases ?? raw.todos;
+            const phases = window.normalizeTodoPhases ? window.normalizeTodoPhases(rawPhases) : [];
+            if (phases.length > 0) {
+              state.kanban   = window.buildKanban(phases);
+              state.planMeta = window.buildPlanMeta(phases, state.rpcState);
+              _injectInlinePlan(phases);
+              break;
+            }
+          }
+          if (raw?.role === "assistant" && Array.isArray(raw.content)) {
+            let found = false;
+            for (const b of raw.content) {
+              if (b?.type === "toolCall" && (b.name === "todo" || b.name === "todo_write")) {
+                const rawPhases = b.arguments?.phases ?? b.arguments?.todos ?? b.arguments;
+                const phases = window.normalizeTodoPhases ? window.normalizeTodoPhases(rawPhases) : [];
+                if (phases.length > 0) {
+                  state.kanban   = window.buildKanban(phases);
+                  state.planMeta = window.buildPlanMeta(phases, state.rpcState);
+                  _injectInlinePlan(phases);
+                  found = true;
+                  break;
+                }
+              }
+            }
+            if (found) break;
+          }
         }
       }
-      state.messages = streamingBubble ? [...merged, streamingBubble] : merged;
       notify();
 
     } else if (command === "get_available_models") {
@@ -591,6 +721,9 @@
         state.model  = _buildModelEntry(data);
         state.models = state.models.map(m => ({ ...m, current: m.id === data.id }));
         _savePrefs({ modelId: data.id, modelProvider: data.provider, modelName: data.name });
+        if (state.thinkingLevel) {
+          _send({ type: "set_thinking_level", level: state.thinkingLevel });
+        }
         _send({ type: "get_state" });
         notify();
       }
@@ -650,6 +783,19 @@
     const now  = Date.now();
     const time = timeNow();
 
+    if (type === "custom") {
+      if (ev.customType === "user_todo_edit" || ev.customType === "todo_edit" || ev.customType === "todo" || ev.customType === "todo_write") {
+        const raw = ev.data?.phases ?? ev.data?.todos ?? ev.data;
+        const phases = window.normalizeTodoPhases ? window.normalizeTodoPhases(raw) : (raw?.phases ?? raw ?? []);
+        if (phases.length > 0) {
+          state.kanban   = window.buildKanban(phases);
+          state.planMeta = window.buildPlanMeta(phases, state.rpcState);
+          _injectInlinePlan(phases);
+          notify();
+          return;
+        }
+      }
+    }
 
     if (type === "extension_ui_request") {
       // URL to open in the system browser (e.g. OAuth auth page).
@@ -745,6 +891,7 @@
       state.turnStartMs = null;
       state.runningTools = [];
       streamingBubble = null;
+      _settleInFlightActions({ aborted: false });
       const usage = ev.message?.usage;
       if (turnStartTime) {
         const elapsed   = (now - turnStartTime) / 1000;
@@ -790,9 +937,12 @@
           notify();
         }
       } else if (role === "assistant") {
+        const blocks = Array.isArray(msg?.content) ? msg.content : [];
+        const initialThought = window.extractThought ? window.extractThought(blocks) : null;
         streamingBubble = {
           kind: "assistant", time,
-          thought: null, lead: null,
+          thought: initialThought,
+          lead: initialThought ? "thinking" : null,
           blocks: [{ type: "text", text: "" }],
           streaming: true,
           model: state.model?.name ?? "–",
@@ -809,11 +959,16 @@
       if (!msg) return;
 
       const blocks = Array.isArray(msg.content) ? msg.content : [];
-      let thought = null;
+      const newThought = window.extractThought ? window.extractThought(blocks) : null;
+      // Preserve streamingBubble.thought if current update did not contain thinking block
+      const thought = newThought !== null ? newThought : streamingBubble.thought;
       const designBlocks = [];
       for (const block of blocks) {
-        if (block.type === "thinking" && block.thinking?.trim()) thought = block.thinking;
-        else if (block.type === "text" && block.text) designBlocks.push({ type: "text", text: block.text });
+        if (block.type === "text" && block.text) designBlocks.push({ type: "text", text: block.text });
+      }
+      const existingPlan = (streamingBubble.blocks ?? []).find(b => b.type === "plan");
+      if (existingPlan && !designBlocks.some(b => b.type === "plan")) {
+        designBlocks.push(existingPlan);
       }
 
       streamingBubble.thought = thought;
@@ -842,15 +997,21 @@
       const tokens = usage ? ((usage.input ?? 0) + (usage.output ?? 0)) : null;
       if (streamingBubble && msg) {
         const blocks = Array.isArray(msg.content) ? msg.content : [];
-        const thought = blocks.find(b => b.type === "thinking")?.thinking ?? streamingBubble.thought;
+        const endThought = window.extractThought ? window.extractThought(blocks) : null;
+        const thought = endThought !== null ? endThought : streamingBubble.thought;
         const designBlocks = blocks.filter(b => b.type === "text" && b.text?.trim()).map(b => ({ type: "text", text: b.text }));
+        const existingPlan = (streamingBubble?.blocks ?? []).find(b => b.type === "plan");
+        const finalBlocks = designBlocks.length > 0 ? [...designBlocks] : [...(streamingBubble.blocks ?? [])];
+        if (existingPlan && !finalBlocks.some(b => b.type === "plan")) {
+          finalBlocks.push(existingPlan);
+        }
         // Find by streaming flag — extension_ui_request.select may have pushed
         // an ask bubble after the streaming bubble before message_end arrives.
         const completed = {
           ...streamingBubble,
           streaming: false, thought,
           lead:   thought ? "thinking" : null,
-          blocks: designBlocks.length > 0 ? designBlocks : streamingBubble.blocks,
+          blocks: finalBlocks,
           tokens,
           tokensIn:  usage?.input  ?? null,
           tokensOut: usage?.output ?? null,
@@ -888,12 +1049,30 @@
       state.messages = [...state.messages, card];
       // Track running tool for the agent activity card
       const toolName = window.normalizeToolName(ev.toolName ?? "");
-      const args = (typeof ev.args === "object" && ev.args) ? ev.args : {};
-      const rawTarget = args.path ?? args.pattern ?? args.command ?? args.query ?? "";
+      const args = (typeof ev.args === "object" && ev.args !== null) ? ev.args : {};
+      let rawTarget = args.path ?? args.pattern ?? args.command ?? args.query ?? "";
+      if (!rawTarget && toolName === "hub" && args.op) {
+        rawTarget = `${args.op}${args.ids?.length ? ` ${args.ids.join(", ")}` : ""}`;
+      }
       const shortTarget = rawTarget ? String(rawTarget).split(/[\\/]/).pop() : "";
       state.runningTools = [...state.runningTools, {
         id: ev.toolCallId, tool: toolName, target: shortTarget || String(rawTarget), startMs: now,
       }];
+      // Initialize tool log buffer
+      const cmdStr = typeof args.command === "string" ? args.command : (rawTarget || "");
+      state.toolLogs = {
+        ...state.toolLogs,
+        [ev.toolCallId]: {
+          id: ev.toolCallId,
+          tool: toolName,
+          target: shortTarget || String(rawTarget),
+          title: card.title || toolName,
+          command: cmdStr,
+          status: "running",
+          startMs: now,
+          lines: typeof args.command === "string" ? [`$ ${args.command}`] : [],
+        },
+      };
       // Flush any pending ask bubble AFTER the tool card so chat order is
       // [tool_card, ask_bubble] — omp emits select before tool_execution_start.
       if (pendingAskBubble) {
@@ -910,6 +1089,15 @@
         state.hubMode    = "tree";
         state.hubTaskId  = ev.toolCallId;
         state.hubAgents  = [];
+      }
+      if (toolName === "todo" || ev.toolName === "todo_write") {
+        const raw = args.phases ?? args.todos ?? (Array.isArray(args) ? args : null);
+        const phases = window.normalizeTodoPhases ? window.normalizeTodoPhases(raw) : [];
+        if (phases.length > 0) {
+          state.kanban   = window.buildKanban(phases);
+          state.planMeta = window.buildPlanMeta(phases, state.rpcState);
+          _injectInlinePlan(phases);
+        }
       }
       notify();
       return;
@@ -928,9 +1116,22 @@
           if (state.hubTaskId === ev.toolCallId && updated.subagents) {
             state.hubAgents = updated.subagents;
           }
-          notify();
         }
       }
+      if (state.toolLogs[ev.toolCallId]) {
+        const pr = ev.partialResult ?? {};
+        const text = pr.content?.[0]?.text ?? pr.details?.output ?? "";
+        if (text) {
+          const prev = state.toolLogs[ev.toolCallId];
+          const rawLines = text.split("\n");
+          const capped = rawLines.length > 2000 ? rawLines.slice(-2000) : rawLines;
+          state.toolLogs = {
+            ...state.toolLogs,
+            [ev.toolCallId]: { ...prev, lines: capped },
+          };
+        }
+      }
+      notify();
       return;
     }
 
@@ -945,36 +1146,62 @@
           durationMs: now - finished.startMs,
         }].slice(-RECENT_MAX);
       }
-      const idx = activeToolCards.get(ev.toolCallId);
-      if (idx !== undefined) {
-        const card = state.messages[idx];
-        if (card?.kind === "tool") {
-          const updated = window.finalizeToolCard(card, ev);
-          const msgs    = [...state.messages];
-          msgs[idx]     = updated;
-          state.messages = msgs;
-          activeToolCards.delete(ev.toolCallId);
-          // Hub: when the tracked task finishes, switch to summary mode
-          if (state.hubTaskId === ev.toolCallId) {
-            const finalAgents = updated.subagents ?? state.hubAgents;
-            state.hubAgents  = finalAgents;
-            state.hubMode    = "summary";
-            state.hubHistory = [...state.hubHistory, {
-              taskId: ev.toolCallId, agents: finalAgents, time,
-            }].slice(-3);
-            state.hubTaskId  = null;
-          }
-          if (ev.toolName === "todo_write") {
-            const phases = ev.result?.details?.phases ?? ev.result?.phases ?? [];
-            if (phases.length > 0) {
-              state.kanban   = window.buildKanban(phases);
-              state.planMeta = window.buildPlanMeta(phases, state.rpcState);
-              _injectInlinePlan(phases);
-            }
-          }
+      if (state.toolLogs[ev.toolCallId]) {
+        const prev = state.toolLogs[ev.toolCallId];
+        const details = ev.result?.details;
+        let finalLines = prev.lines;
+        if (details?.output) {
+          finalLines = String(details.output).split("\n");
+          if (finalLines.length > 2000) finalLines = finalLines.slice(-2000);
+        } else if (ev.result?.content?.[0]?.text) {
+          finalLines = String(ev.result.content[0].text).split("\n");
+          if (finalLines.length > 2000) finalLines = finalLines.slice(-2000);
         }
-        notify();
+        state.toolLogs = {
+          ...state.toolLogs,
+          [ev.toolCallId]: {
+            ...prev,
+            status: ev.isError ? "failed" : "completed",
+            durationMs: now - prev.startMs,
+            lines: finalLines,
+          },
+        };
       }
+      const idx = activeToolCards.get(ev.toolCallId);
+      let card = idx !== undefined ? state.messages[idx] : null;
+      if (!card || card._toolCallId !== ev.toolCallId) {
+        card = state.messages.find(m => m._toolCallId === ev.toolCallId);
+      }
+      if (card?.kind === "tool") {
+        const updated = window.finalizeToolCard(card, ev);
+        // Hub: when the tracked task finishes, switch to summary mode
+        if (state.hubTaskId === ev.toolCallId) {
+          const finalAgents = updated.subagents ?? state.hubAgents;
+          state.hubAgents  = finalAgents;
+          state.hubMode    = "summary";
+          state.hubHistory = [...state.hubHistory, {
+            taskId: ev.toolCallId, agents: finalAgents, time,
+          }].slice(-3);
+          state.hubTaskId  = null;
+        }
+      }
+      // Update kanban whenever a todo tool completes, even if no tool card was created
+      // (e.g. Cursor agent resolves todo server-side and emits tool_execution_end without tool_execution_start).
+      const finishedTool = window.normalizeToolName ? window.normalizeToolName(ev.toolName ?? "") : (ev.toolName ?? "");
+      if (finishedTool === "todo" || ev.toolName === "todo_write" || ev.toolName === "todo") {
+        const raw = ev.result?.details?.phases ?? ev.result?.details?.todos ?? ev.result?.details ?? ev.result?.phases ?? ev.result?.todos ?? ev.result;
+        const phases = window.normalizeTodoPhases ? window.normalizeTodoPhases(raw) : (raw?.phases ?? raw ?? []);
+        if (phases.length > 0) {
+          state.kanban   = window.buildKanban(phases);
+          state.planMeta = window.buildPlanMeta(phases, state.rpcState);
+          _injectInlinePlan(phases);
+        }
+      }
+      // Ephemeral tool card: remove finished card from chat messages array
+      state.messages = state.messages.filter(m => m !== card && m._toolCallId !== ev.toolCallId);
+      activeToolCards.delete(ev.toolCallId);
+      _reindexActiveToolCards();
+      notify();
       return;
     }
 
@@ -988,7 +1215,6 @@
     if (idx === -1) return;
     const realIdx = state.messages.length - 1 - idx;
     const msg     = state.messages[realIdx];
-    if (msg.blocks?.some(b => b.type === "plan")) return;
     const planBlock = {
       type: "plan", title: "Plan",
       phases: phases.map(ph => ({
@@ -1000,8 +1226,13 @@
       })),
     };
     const msgs    = [...state.messages];
-    msgs[realIdx] = { ...msg, blocks: [...(msg.blocks ?? []), planBlock] };
+    const nonPlanBlocks = (msg.blocks ?? []).filter(b => b.type !== "plan");
+    msgs[realIdx] = { ...msg, blocks: [...nonPlanBlocks, planBlock] };
     state.messages = msgs;
+    if (streamingBubble) {
+      const sbNonPlan = (streamingBubble.blocks ?? []).filter(b => b.type !== "plan");
+      streamingBubble.blocks = [...sbNonPlan, planBlock];
+    }
   }
 
   function _applyRpcState(rpcState) {
@@ -1014,12 +1245,17 @@
     // stale ghost is removed from state.messages here so the minimap doesn't
     // show a pulsating cell until get_messages lands.
     if (!state.isStreaming && streamingBubble) {
+      streamingBubble.streaming = false;
+      state.messages = state.messages.map(m => m.streaming ? { ...m, streaming: false } : m);
       streamingBubble = null;
-      state.messages = state.messages.filter(m => !m.streaming);
     }
     if (!state.isStreaming) {
       state.turnStartMs  = null;
       state.runningTools = [];
+      if (state.messages.some(m => m.kind === "tool")) {
+        state.messages = state.messages.filter(m => m.kind !== "tool");
+        activeToolCards.clear();
+      }
     }
     state.thinkingLevel = state.thinkingLevel ?? rpcState.thinkingLevel ?? "off";
 
@@ -1029,9 +1265,12 @@
     if (rpcState.model && state.models.length > 0) {
       state.models = state.models.map(m => ({ ...m, current: m.id === rpcState.model.id }));
     }
-    if (rpcState.todoPhases?.length > 0) {
-      state.kanban   = window.buildKanban(rpcState.todoPhases);
-      state.planMeta = window.buildPlanMeta(rpcState.todoPhases, rpcState);
+    const rpcPhases = window.normalizeTodoPhases
+      ? window.normalizeTodoPhases(rpcState.todoPhases ?? rpcState.phases ?? rpcState.todos)
+      : (rpcState.todoPhases ?? []);
+    if (rpcPhases.length > 0) {
+      state.kanban   = window.buildKanban(rpcPhases);
+      state.planMeta = window.buildPlanMeta(rpcPhases, rpcState);
     }
 
     // Only update the tab name if omp provides an explicit human-readable
@@ -1040,6 +1279,12 @@
     if (rpcState.sessionName && activeSessionId && sessionRegistry.has(activeSessionId)) {
       const entry = sessionRegistry.get(activeSessionId);
       sessionRegistry.set(activeSessionId, { ...entry, name: rpcState.sessionName });
+    }
+    if (rpcState.sessionFile && activeSessionId && sessionRegistry.has(activeSessionId)) {
+      const entry = sessionRegistry.get(activeSessionId);
+      if (!entry.sessionFile) {
+        sessionRegistry.set(activeSessionId, { ...entry, sessionFile: rpcState.sessionFile });
+      }
     }
 
     // Back-fill tokensAfter for a just-completed compact message.
@@ -1206,7 +1451,11 @@
       notify();
       _send({ type: "prompt", message: text, images: images ?? [] });
     },
-    abort()            { _send({ type: "abort" }); },
+    abort() {
+      _send({ type: "abort" });
+      _settleInFlightActions({ aborted: true });
+      notify();
+    },
     followUp(text)     { _send({ type: "follow_up", message: text }); },
     steer(text) {
       const userMsg = { kind: "user", time: timeNow(), text };
@@ -1318,6 +1567,7 @@
         const label = maxMessages !== null ? `${baseName} (fork @${maxMessages})` : `${baseName} (fork)`;
         sessionRegistry.set(id, {
           id, name: label, path: cwd, color: "var(--lilac)", branch: null,
+          sessionPath: newPath,
         });
         try {
           await window.__TAURI__.core.invoke("start_session", { sessionId: id, cwd, resume: newPath });
@@ -1674,34 +1924,100 @@
       }
     },
 
+    /** Start watching files in a directory for auto-refresh */
+    async startFilesWatch(watchId, path) {
+      if (!window.__TAURI__) return;
+      try {
+        await window.__TAURI__.core.invoke("start_file_watch", { watchId, path });
+      } catch (err) {
+        console.error("[live] startFilesWatch error:", err);
+      }
+    },
+
+    /** Stop watching files in a directory */
+    async stopFilesWatch(watchId) {
+      if (!window.__TAURI__) return;
+      try {
+        await window.__TAURI__.core.invoke("stop_file_watch", { watchId });
+      } catch (err) {
+        console.error("[live] stopFilesWatch error:", err);
+      }
+    },
+
     /** Get application version from Tauri backend. */
     async getAppVersion() {
-      if (!window.__TAURI__) return "0.2.8";
+      if (!window.__TAURI__) return "0.3.0";
       try {
         return await window.__TAURI__.core.invoke("get_app_version");
       } catch (err) {
         console.error("[live] getAppVersion error:", err);
-        return "0.2.8";
+        return "0.3.0";
       }
     },
 
-    /** Resume a saved session into a new tab. */
+    /** Resume a saved session into a new tab (or switch to existing tab if already opened). */
     async resumeSession(session) {
       if (!session || !session.path) return null;
+
+      const norm = p => (p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+      const targetPathNorm = norm(session.path);
+      const targetId = session.id ? String(session.id).trim() : null;
+
+      // Check if this saved session is already open in an existing tab
+      for (const [tabId, entry] of sessionRegistry.entries()) {
+        // 1. Direct match on tracked sessionPath / savedSessionId
+        if (entry.sessionPath && norm(entry.sessionPath) === targetPathNorm) {
+          await this.activateSession(tabId);
+          return tabId;
+        }
+        if (entry.savedSessionId && targetId && entry.savedSessionId === targetId) {
+          await this.activateSession(tabId);
+          return tabId;
+        }
+        // 2. Check tab's rpcState.sessionFile (active tab or cached snapshot)
+        const tabRpcState = (tabId === activeSessionId)
+          ? state.rpcState
+          : sessionSnapshots.get(tabId)?.rpcState;
+        if (tabRpcState?.sessionFile) {
+          const sfNorm = norm(tabRpcState.sessionFile);
+          if (
+            sfNorm === targetPathNorm ||
+            (targetId && (sfNorm === norm(targetId) || sfNorm.includes(targetId))) ||
+            targetPathNorm.endsWith(sfNorm) ||
+            sfNorm.endsWith(targetPathNorm)
+          ) {
+            entry.sessionPath = session.path;
+            if (targetId) entry.savedSessionId = targetId;
+            await this.activateSession(tabId);
+            return tabId;
+          }
+        }
+      }
+
       const id = `session-${Date.now()}`;
       const cwd = session.cwd || "";
       const name = session.title || (cwd ? cwd.replace(/\\/g, "/").split("/").pop() || cwd : "resumed");
-      sessionRegistry.set(id, { id, name, path: cwd, color: "var(--cyan)", branch: null });
-      try {
-        await window.__TAURI__.core.invoke("start_session", {
-          sessionId: id,
-          cwd: cwd,
-          resume: session.path,
-        });
-      } catch (err) {
-        console.warn("[live] resumeSession start_session failed:", err);
+      sessionRegistry.set(id, {
+        id,
+        name,
+        path: cwd,
+        color: "var(--cyan)",
+        branch: null,
+        sessionPath: session.path,
+        savedSessionId: targetId,
+      });
+      if (window.__TAURI__) {
+        try {
+          await window.__TAURI__.core.invoke("start_session", {
+            sessionId: id,
+            cwd: cwd,
+            resume: session.path,
+          });
+        } catch (err) {
+          console.warn("[live] resumeSession start_session failed:", err);
+        }
       }
-      if (cwd) {
+      if (cwd && window.__TAURI__) {
         const branch = await window.__TAURI__.core
           .invoke("start_git_watch", { sessionId: id, path: cwd })
           .catch(() => null);
@@ -1781,11 +2097,32 @@
         hubTaskId:       state.hubTaskId,
         hubHistory:      state.hubHistory,
         agentError:      state.agentError,
+        toolLogs:        state.toolLogs,
       });
       return () => subscribers.delete(cb);
     },
 
+    getToolLog(toolCallId) {
+      return state.toolLogs[toolCallId] || null;
+    },
+
     getState() { return state; },
+
+    getSessions() {
+      return [...sessionRegistry.values()];
+    },
+
+    _handleEvent(ev) {
+      _handleEvent(ev);
+    },
+
+    _handleLine(line) {
+      _dispatchLine(line);
+    },
+
+    _handleResponse(resp) {
+      _handleResponse(resp);
+    },
   };
 
   // ── Connect to Tauri IPC ──────────────────────────────────────────────────

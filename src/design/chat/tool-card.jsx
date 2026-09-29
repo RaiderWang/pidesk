@@ -143,6 +143,36 @@ function TaskPanel({ subagents }) {
 function ToolCard({ msg, idx, highlighted }) {
   const meta    = _TC_TOOL_META[msg.tool] || { color: "var(--fg-3)", icon: "circle", label: msg.tool };
   const running = msg.status === "running";
+
+  // Check if there are details below the header
+  const hasDetails = Boolean(
+    (msg.tool === "search" && msg.preview?.length) ||
+    (msg.tool === "read" && (msg.target || msg.summary)) ||
+    (msg.tool === "edit" && (msg.diff || msg.target || msg.adds || msg.rems)) ||
+    (msg.tool === "bash" && msg.output?.length) ||
+    (msg.tool === "eval" && msg.cells?.length) ||
+    (msg.tool === "task" && msg.subagents?.length > 0) ||
+    (msg.tool === "hub" && (msg.target || msg.summary))
+  );
+
+  // Auto state: open while running, collapsed once completed.
+  // Manual override (userOpen): once user clicks, their choice persists.
+  const [userOpen, setUserOpen] = React.useState(null);
+  const isOpen = hasDetails && (userOpen !== null ? userOpen : running);
+
+  const toggleOpen = React.useCallback((e) => {
+    if (!hasDetails) return;
+    // Avoid collapse when user is selecting text
+    if (window.getSelection && window.getSelection().toString()) return;
+    setUserOpen(prev => !(prev !== null ? prev : running));
+  }, [hasDetails, running]);
+
+  const toggleTitle = hasDetails
+    ? (isOpen
+      ? (window.t ? window.t("chat.collapseTool", null, "Collapse tool details") : "Collapse tool details")
+      : (window.t ? window.t("chat.expandTool", null, "Expand tool details") : "Expand tool details"))
+    : undefined;
+
   return (
     <div className={`row tool fade-up${highlighted ? " mm-hot" : ""}`} data-msg-idx={idx}>
       <div className="ass-rail">
@@ -151,8 +181,12 @@ function ToolCard({ msg, idx, highlighted }) {
         </div>
         <div className="ass-thread" />
       </div>
-      <div className={`tool-card ${running ? "running" : "ok"}`}>
-        <div className="tool-card-head">
+      <div className={`tool-card ${running ? "running" : (msg.status === "aborted" ? "aborted" : "ok")} ${hasDetails ? "collapsible" : ""} ${isOpen ? "expanded" : "collapsed"}`}>
+        <div
+          className="tool-card-head"
+          onClick={toggleOpen}
+          title={toggleTitle}
+        >
           <span className="tool-tag" style={{ color: meta.color, background: `color-mix(in oklab, ${meta.color} 14%, transparent)`, borderColor: `color-mix(in oklab, ${meta.color} 30%, var(--line))` }}>
             {meta.label}
           </span>
@@ -162,62 +196,86 @@ function ToolCard({ msg, idx, highlighted }) {
             <span className="chip accent" style={{ animation: "pulseDot 1.4s infinite" }}>
               <span className="dot live" /> {window.t ? window.t("chat.running", null, "running") : "running"}
             </span>
+          ) : msg.status === "aborted" ? (
+            <span className="chip" style={{ color: "var(--amber)", borderColor: "color-mix(in oklab, var(--amber) 30%, var(--line))" }}>
+              <span className="dot" style={{ background: "var(--amber)" }} /> {window.t ? window.t("chat.aborted", null, "aborted") : "aborted"}
+            </span>
           ) : (
-            <span className="chip muted">
-              <span className="mono">{msg.duration}ms</span>
+            msg.duration != null && (
+              <span className="chip muted">
+                <span className="mono">{msg.duration}ms</span>
+              </span>
+            )
+          )}
+          {msg.time && <span className="chip muted mono">{msg.time}</span>}
+          {hasDetails && (
+            <span className="tool-card-toggle" aria-label={toggleTitle}>
+              <_TC_Icon name={isOpen ? "chev" : "chevR"} size={10} color="var(--fg-4)" />
             </span>
           )}
-          <span className="chip muted mono">{msg.time}</span>
         </div>
 
-        {msg.tool === "search" && msg.preview && (
-          <div className="tool-search">
-            {msg.preview.map((p, i) => (
-              <div key={i} className={`search-row ${p.hot ? "hot" : ""}`}>
-                <_TC_Icon name="file" size={11} color={p.hot ? "var(--accent)" : "var(--fg-3)"} />
-                <span className="mono" style={{ color: p.hot ? "var(--fg)" : "var(--fg-2)" }}>{p.file}</span>
-                <span className="mono" style={{ color: "var(--fg-4)", marginLeft: "auto" }}>
-                  {window.t ? window.t("chat.hits", { count: p.hits }, `${p.hits} hits`) : `${p.hits} hits`}
-                </span>
+        {hasDetails && isOpen && (
+          <div className="tool-card-body">
+            {msg.tool === "search" && msg.preview && (
+              <div className="tool-search">
+                {msg.preview.map((p, i) => (
+                  <div key={i} className={`search-row ${p.hot ? "hot" : ""}`}>
+                    <_TC_Icon name="file" size={11} color={p.hot ? "var(--accent)" : "var(--fg-3)"} />
+                    <span className="mono" style={{ color: p.hot ? "var(--fg)" : "var(--fg-2)" }}>{p.file}</span>
+                    <span className="mono" style={{ color: "var(--fg-4)", marginLeft: "auto" }}>
+                      {window.t ? window.t("chat.hits", { count: p.hits }, `${p.hits} hits`) : `${p.hits} hits`}
+                    </span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+            )}
 
-        {msg.tool === "read" && (
-          <div className="tool-foot mono">
-            <span style={{ color: "var(--fg-3)" }}>↳</span>
-            <span style={{ color: "var(--fg-2)" }}>{msg.target}</span>
-            <span style={{ color: "var(--fg-4)" }}>· {msg.summary}</span>
-          </div>
-        )}
+            {msg.tool === "read" && (
+              <div className="tool-foot mono">
+                <span style={{ color: "var(--fg-3)" }}>↳</span>
+                <span style={{ color: "var(--fg-2)" }}>{msg.target}</span>
+                {msg.summary && <span style={{ color: "var(--fg-4)" }}>· {msg.summary}</span>}
+              </div>
+            )}
 
-        {msg.tool === "edit" && msg.diff && <ScrubbableDiff msg={msg} />}
-        {msg.tool === "edit" && !msg.diff && (
-          <div className="tool-foot mono">
-            <span style={{ color: "var(--fg-3)" }}>↳</span>
-            <span style={{ color: "var(--fg-2)" }}>{msg.target}</span>
-            <span style={{ color: "var(--diff-add-fg)", marginLeft: 8 }} className="mono">+{msg.adds || 0}</span>
-            <span style={{ color: "var(--diff-rm-fg)", marginLeft: 4 }} className="mono">−{msg.rems || 0}</span>
-            {running && <span className="shimmer-text" style={{ marginLeft: "auto" }}>writing patch…</span>}
-          </div>
-        )}
+            {msg.tool === "edit" && msg.diff && <ScrubbableDiff msg={msg} />}
+            {msg.tool === "edit" && !msg.diff && (
+              <div className="tool-foot mono">
+                <span style={{ color: "var(--fg-3)" }}>↳</span>
+                <span style={{ color: "var(--fg-2)" }}>{msg.target}</span>
+                <span style={{ color: "var(--diff-add-fg)", marginLeft: 8 }} className="mono">+{msg.adds || 0}</span>
+                <span style={{ color: "var(--diff-rm-fg)", marginLeft: 4 }} className="mono">−{msg.rems || 0}</span>
+                {running && <span className="shimmer-text" style={{ marginLeft: "auto" }}>writing patch…</span>}
+              </div>
+            )}
 
-        {msg.tool === "bash" && msg.output && (
-          <pre className="tool-bash mono selectable">
-            {msg.output.map((l, i) => (
-              <div key={i} style={{ color: `var(--${l.color})` }}>{l.line}</div>
-            ))}
-          </pre>
-        )}
+            {msg.tool === "bash" && msg.output && (
+              <pre className="tool-bash mono selectable">
+                {msg.output.map((l, i) => (
+                  <div key={i} style={{ color: `var(--${l.color})` }}>{l.line}</div>
+                ))}
+              </pre>
+            )}
 
-        {msg.tool === "eval" && msg.cells && (
-          <div className="tool-eval">
-            {msg.cells.map((cell, i) => <_TC_EvalCell key={i} cell={cell} />)}
+            {msg.tool === "eval" && msg.cells && (
+              <div className="tool-eval">
+                {msg.cells.map((cell, i) => <_TC_EvalCell key={i} cell={cell} />)}
+              </div>
+            )}
+
+            {msg.tool === "task" && msg.subagents?.length > 0 && (
+              <TaskPanel subagents={msg.subagents} />
+            )}
+
+            {msg.tool === "hub" && (msg.target || msg.summary) && (
+              <div className="tool-foot mono">
+                <span style={{ color: "var(--fg-3)" }}>↳</span>
+                {msg.target && <span style={{ color: "var(--fg-2)" }}>{msg.target}</span>}
+                {msg.summary && <span style={{ color: "var(--fg-4)" }}>{msg.target ? ` · ${msg.summary}` : msg.summary}</span>}
+              </div>
+            )}
           </div>
-        )}
-        {msg.tool === "task" && msg.subagents?.length > 0 && (
-          <TaskPanel subagents={msg.subagents} />
         )}
       </div>
     </div>

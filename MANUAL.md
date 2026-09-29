@@ -135,6 +135,8 @@ The frontend calls these Rust commands via `invoke()`:
 | `delete_file_or_dir` | `(path: String) → Result<()>` | Delete a file or directory recursively |
 | `open_path_default` | `(path: String) → Result<()>` | Open with OS default application |
 | `reveal_in_explorer` | `(path: String) → Result<()>` | Reveal and select file or directory in OS file manager (File Explorer / Finder) |
+| `start_file_watch` | `(watchId: String, path: String) → Result<()>` | Start debounced recursive filesystem watcher emitting `files://changed` |
+| `stop_file_watch` | `(watchId: String) → ()` | Stop filesystem watcher and release OS directory handles |
 
 ---
 

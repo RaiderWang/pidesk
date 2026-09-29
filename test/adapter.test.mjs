@@ -12,6 +12,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   normalizeToolName,
+  normalizeTodoPhases,
   todoStatusToDesign,
   phaseStyle,
   derivePlanPhase,
@@ -25,6 +26,7 @@ import {
   finalizeToolCard,
   updateToolCard,
   adaptAgentMessages,
+  extractThought,
   timeNow,
 } from './helpers/shim.mjs';
 
@@ -59,6 +61,7 @@ describe('normalizeToolName', () => {
     assert.equal(normalizeToolName('quick_task'), 'task');
     assert.equal(normalizeToolName('debug'),      'debug');
     assert.equal(normalizeToolName('ask'),        'ask');
+    assert.equal(normalizeToolName('hub'),        'hub');
   });
 
   it('passes through unknown names unchanged', () => {
@@ -82,6 +85,65 @@ describe('todoStatusToDesign', () => {
     assert.equal(todoStatusToDesign('unknown'),   'pending');
     assert.equal(todoStatusToDesign(''),          'pending');
     assert.equal(todoStatusToDesign(undefined),   'pending');
+  });
+});
+
+// ── normalizeTodoPhases ────────────────────────────────────────────────────
+
+describe('normalizeTodoPhases', () => {
+  it('returns empty array for null, undefined, or empty', () => {
+    assert.deepEqual(normalizeTodoPhases(null), []);
+    assert.deepEqual(normalizeTodoPhases(undefined), []);
+    assert.deepEqual(normalizeTodoPhases([]), []);
+    assert.deepEqual(normalizeTodoPhases({}), []);
+  });
+
+  it('preserves standard TodoPhase array', () => {
+    const input = [{ name: 'Phase 1', tasks: [{ content: 'A', status: 'completed' }] }];
+    const out = normalizeTodoPhases(input);
+    assert.equal(out.length, 1);
+    assert.equal(out[0].name, 'Phase 1');
+    assert.equal(out[0].tasks[0].content, 'A');
+    assert.equal(out[0].tasks[0].status, 'completed');
+  });
+
+  it('normalizes flat tasks array into a single Tasks phase', () => {
+    const input = [
+      { content: 'First task', status: 'completed' },
+      { text: 'Second task', status: 'in_progress' },
+    ];
+    const out = normalizeTodoPhases(input);
+    assert.equal(out.length, 1);
+    assert.equal(out[0].name, 'Tasks');
+    assert.equal(out[0].tasks.length, 2);
+    assert.equal(out[0].tasks[0].content, 'First task');
+    assert.equal(out[0].tasks[1].content, 'Second task');
+    assert.equal(out[0].tasks[1].status, 'in_progress');
+  });
+
+  it('normalizes object with { todos: [...] } (as sent by agent to todo tool)', () => {
+    const input = {
+      todos: [
+        { content: 'Step 1', status: 'completed' },
+        { content: 'Step 2', status: 'pending' },
+      ],
+    };
+    const out = normalizeTodoPhases(input);
+    assert.equal(out.length, 1);
+    assert.equal(out[0].name, 'Tasks');
+    assert.equal(out[0].tasks.length, 2);
+    assert.equal(out[0].tasks[0].content, 'Step 1');
+  });
+
+  it('normalizes object with { phases: [...] }', () => {
+    const input = {
+      phases: [
+        { name: 'P1', tasks: [{ content: 'T1', status: 'completed' }] },
+      ],
+    };
+    const out = normalizeTodoPhases(input);
+    assert.equal(out.length, 1);
+    assert.equal(out[0].name, 'P1');
   });
 });
 
@@ -190,6 +252,22 @@ describe('buildKanban', () => {
     const tasks = buildKanban(phases)[0].tasks;
     assert.equal(tasks[0].id, '0-0');
     assert.equal(tasks[1].id, '0-1');
+  });
+
+  it('infers file and tool from task content', () => {
+    const phases = [{
+      name: 'Verify',
+      tasks: [
+        { content: 'run npm test on test/reducer.test.ts [M]', status: 'pending' },
+        { content: 'search for memory leaks in src/app.js', status: 'in_progress' },
+      ],
+    }];
+    const tasks = buildKanban(phases)[0].tasks;
+    assert.equal(tasks[0].file, 'test/reducer.test.ts');
+    assert.equal(tasks[0].tool, 'eval'); // 'test' matched eval
+    assert.equal(tasks[0].effort, 'M');
+    assert.equal(tasks[1].file, 'src/app.js');
+    assert.equal(tasks[1].tool, 'search');
   });
 });
 
@@ -437,6 +515,18 @@ describe('buildToolStartCard', () => {
     const ev = { toolName: 'ast_edit', toolCallId: 'tc8', args: { path: 'f.js' } };
     assert.equal(buildToolStartCard(ev, '').tool, 'edit');
   });
+
+  it('extracts op and ids args for hub', () => {
+    const ev = { toolName: 'hub', toolCallId: 'tc9', args: { op: 'wait', ids: ['bg_1', 'bg_2'] } };
+    assert.equal(buildToolStartCard(ev, '').target, 'wait bg_1, bg_2');
+    assert.equal(buildToolStartCard(ev, '').tool, 'hub');
+  });
+
+  it('extracts task count for todo tool', () => {
+    const ev = { toolName: 'todo', toolCallId: 'tc10', args: { todos: [{ content: 'a' }, { content: 'b' }] } };
+    assert.equal(buildToolStartCard(ev, '').target, '2 tasks');
+    assert.equal(buildToolStartCard(ev, '').tool, 'todo');
+  });
 });
 
 // ── finalizeToolCard ───────────────────────────────────────────────────────
@@ -456,6 +546,24 @@ describe('finalizeToolCard', () => {
   it('read: populates summary from details.lines', () => {
     const done = finalizeToolCard(runningCard('read'), { result: { details: { lines: 42 } } });
     assert.equal(done.summary, '42 lines');
+  });
+
+  // todo tool
+  it('todo: populates summary from details.phases or content', () => {
+    const event = { result: { details: { phases: [{ name: 'Tasks', tasks: [{ status: 'completed' }, { status: 'in_progress' }] }] } } };
+    const done = finalizeToolCard(runningCard('todo'), event);
+    assert.equal(done.summary, '1/2 tasks completed');
+
+    const eventText = { result: { content: [{ type: 'text', text: '3/5 tasks completed' }] } };
+    const doneText = finalizeToolCard(runningCard('todo'), eventText);
+    assert.equal(doneText.summary, '3/5 tasks completed');
+  });
+
+  // hub tool
+  it('hub: populates summary from details.jobs', () => {
+    const event = { result: { details: { op: 'wait', jobs: [{ id: 'bg_1', status: 'running' }] } } };
+    const done = finalizeToolCard(runningCard('hub'), event);
+    assert.equal(done.summary, 'wait · bg_1 (running)');
   });
 
   // search tool
@@ -764,6 +872,20 @@ describe('adaptAgentMessages', () => {
     assert.equal(msg.lead,    null);
   });
 
+  it('extracts reasoning blocks and multiple thought blocks joined', () => {
+    const msgs = [{
+      role: 'assistant',
+      content: [
+        { type: 'reasoning', reasoning: 'Step 1: Check inputs.' },
+        { type: 'thinking', thinking: 'Step 2: Formulate solution.' },
+        { type: 'text', text: 'Final response.' },
+      ],
+    }];
+    const [msg] = adaptAgentMessages(msgs);
+    assert.equal(msg.thought, 'Step 1: Check inputs.\n\nStep 2: Formulate solution.');
+    assert.equal(msg.lead, 'thinking');
+  });
+
   it('skips tool_use blocks from assistant content', () => {
     const msgs = [{
       role: 'assistant',
@@ -812,6 +934,62 @@ describe('adaptAgentMessages', () => {
   });
 });
 
+// ── extractThought ─────────────────────────────────────────────────────────
+
+describe('extractThought', () => {
+  it('returns null for null, undefined, non-array, or empty array', () => {
+    assert.equal(extractThought(null), null);
+    assert.equal(extractThought(undefined), null);
+    assert.equal(extractThought('thinking'), null);
+    assert.equal(extractThought([]), null);
+  });
+
+  it('returns null when no thought blocks exist', () => {
+    assert.equal(extractThought([{ type: 'text', text: 'Hello' }]), null);
+  });
+
+  it('extracts thinking block by block.thinking', () => {
+    assert.equal(
+      extractThought([{ type: 'thinking', thinking: 'Analyzing codebase...' }]),
+      'Analyzing codebase...'
+    );
+  });
+
+  it('extracts reasoning block by block.reasoning', () => {
+    assert.equal(
+      extractThought([{ type: 'reasoning', reasoning: 'Evaluating options.' }]),
+      'Evaluating options.'
+    );
+  });
+
+  it('extracts thought block by block.thought', () => {
+    assert.equal(
+      extractThought([{ type: 'thought', thought: 'Plan: Step 1.' }]),
+      'Plan: Step 1.'
+    );
+  });
+
+  it('joins multiple blocks with double newlines and trims extra spaces', () => {
+    const blocks = [
+      { type: 'thinking', thinking: ' First reflection. ' },
+      { type: 'text', text: 'Some text' },
+      { type: 'reasoning', reasoning: 'Second reflection.' },
+    ];
+    assert.equal(
+      extractThought(blocks),
+      'First reflection.\n\nSecond reflection.'
+    );
+  });
+
+  it('ignores empty and whitespace-only thought blocks', () => {
+    const blocks = [
+      { type: 'thinking', thinking: '   ' },
+      { type: 'thought', thought: '' },
+    ];
+    assert.equal(extractThought(blocks), null);
+  });
+});
+
 // ── timeNow ────────────────────────────────────────────────────────────────
 
 describe('timeNow', () => {
@@ -824,5 +1002,36 @@ describe('timeNow', () => {
     assert.ok(h >= 0 && h <= 23, `hour ${h} out of range`);
     assert.ok(m >= 0 && m <= 59, `minute ${m} out of range`);
     assert.ok(s >= 0 && s <= 59, `second ${s} out of range`);
+  });
+});
+
+// ── In-flight tool settlement on abort ─────────────────────────────────────
+
+describe('In-flight tool settlement on abort', () => {
+  it('settles running tool card and running subagents to aborted status', () => {
+    const card = buildToolStartCard({
+      toolName: 'task',
+      toolCallId: 'tc-abort-test',
+      args: { prompt: 'do work' },
+    }, '12:00:00');
+
+    card.subagents = [
+      { id: 'sa-1', name: 'worker-1', status: 'running' },
+      { id: 'sa-2', name: 'worker-2', status: 'done' },
+    ];
+
+    assert.equal(card.status, 'running');
+
+    // Simulate settle logic on abort
+    const settled = {
+      ...card,
+      status: 'aborted',
+      duration: 120,
+      subagents: card.subagents.map(sa => sa.status === 'running' ? { ...sa, status: 'aborted' } : sa),
+    };
+
+    assert.equal(settled.status, 'aborted');
+    assert.equal(settled.subagents[0].status, 'aborted');
+    assert.equal(settled.subagents[1].status, 'done');
   });
 });

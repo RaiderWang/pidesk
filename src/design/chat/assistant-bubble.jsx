@@ -3,7 +3,7 @@
 
 const { Icon: _ChatIcon, MarkdownContent: _ChatMd, AnnotablePlan: _ChatAP } = window;
 
-function InlinePlan({ plan }) {
+function InlinePlan({ plan, onOpenKanban }) {
   return (
     <div className="inline-plan slide-in">
       <div className="inline-plan-head">
@@ -11,7 +11,9 @@ function InlinePlan({ plan }) {
         <span style={{ color: "var(--fg-2)", fontWeight: 600 }}>{plan.title}</span>
         <span className="chip muted">{plan.phases.reduce((n, p) => n + p.tasks.length, 0)} tasks</span>
         <div style={{ flex: 1 }} />
-        <button className="btn ghost" style={{ height: 22 }}>open kanban →</button>
+        <button className="btn ghost" style={{ height: 22 }} onClick={onOpenKanban}>
+          {window.t ? window.t("plan.openKanbanBtn", null, "open kanban →") : "open kanban →"}
+        </button>
       </div>
       <div className="inline-plan-body">
         {plan.phases.map((ph) => (
@@ -37,7 +39,71 @@ function InlinePlan({ plan }) {
   );
 }
 
-function AssistantBubble({ msg, idx, highlighted, annotable, annotations, onAnnotate, onBranch }) {
+function ThoughtBlock({ thought, streaming, lead }) {
+  if (!thought && (!streaming || lead !== "thinking")) return null;
+
+  // Active thinking: currently streaming and either explicitly marked as thinking
+  // or streaming without thought content yet.
+  const isThinking = Boolean(streaming && (lead === "thinking" || !thought));
+
+  // Auto state: open while actively streaming/thinking, collapsed once finished.
+  // User override (userOpen): once user clicks toggle, their choice persists.
+  const [userOpen, setUserOpen] = React.useState(null);
+  const isOpen = userOpen !== null ? userOpen : isThinking;
+
+  const toggleOpen = React.useCallback(() => {
+    if (window.getSelection && window.getSelection().toString()) return;
+    setUserOpen(prev => !(prev !== null ? prev : isThinking));
+  }, [isThinking]);
+
+  const toggleTitle = isOpen
+    ? (window.t ? window.t("chat.collapseThought", null, "Collapse thinking process") : "Collapse thinking process")
+    : (window.t ? window.t("chat.expandThought", null, "Expand thinking process") : "Expand thinking process");
+
+  return (
+    <div className={`thought-block ${isThinking ? "thinking" : "done"} ${isOpen ? "expanded" : "collapsed"}`}>
+      <button
+        type="button"
+        className="thought-head"
+        onClick={toggleOpen}
+        title={toggleTitle}
+        aria-expanded={isOpen}
+      >
+        <span className="thought-glyph">
+          <_ChatIcon name="thinking" size={11} color="var(--lilac)" />
+        </span>
+        <span className="thought-title">
+          {isThinking
+            ? (window.t ? window.t("chat.thinkingActive", null, "thinking…") : "thinking…")
+            : (window.t ? window.t("chat.thought", null, "thinking process") : "thinking process")}
+        </span>
+        {isThinking ? (
+          <span className="chip" style={{ color: "var(--lilac)", borderColor: "color-mix(in oklab, var(--lilac) 30%, var(--line))", animation: "pulseDot 1.4s infinite" }}>
+            <span className="dot live" />
+          </span>
+        ) : (
+          thought && (
+            <span className="chip muted mono" style={{ fontSize: "var(--d-text-xs)" }}>
+              {thought.length > 1000 ? `${(thought.length / 1000).toFixed(1)}k chars` : `${thought.length} chars`}
+            </span>
+          )
+        )}
+        <div style={{ flex: 1 }} />
+        <span className="thought-toggle" aria-label={toggleTitle}>
+          <_ChatIcon name={isOpen ? "chev" : "chevR"} size={10} color="var(--fg-4)" />
+        </span>
+      </button>
+
+      {isOpen && (
+        <div className="thought-body selectable">
+          <div className="thought-content">{thought || (isThinking ? (window.t ? window.t("chat.thinkingActive", null, "thinking…") : "thinking…") : "")}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AssistantBubble({ msg, idx, highlighted, annotable, annotations, onAnnotate, onBranch, onOpenKanban }) {
   const [copied, setCopied] = React.useState(false);
 
   function handleCopy() {
@@ -61,19 +127,8 @@ function AssistantBubble({ msg, idx, highlighted, annotable, annotations, onAnno
         <div className="ass-meta">
           <span className="mono" style={{ color: "var(--accent)" }}>{msg.model ?? "–"}</span>
           <span className="chip muted">{msg.time}</span>
-          {msg.lead === "thinking" && (
-            <span className="chip" style={{ color: "var(--lilac)", borderColor: "color-mix(in oklab, var(--lilac) 30%, var(--line))" }}>
-              <_ChatIcon name="thinking" size={10} />
-              thinking
-            </span>
-          )}
         </div>
-        {msg.thought && (
-          <div className="thought selectable">
-            <span className="mono" style={{ color: "var(--fg-4)" }}>// </span>
-            <span style={{ color: "var(--fg-3)", fontStyle: "italic" }}>{msg.thought}</span>
-          </div>
-        )}
+        <ThoughtBlock thought={msg.thought} streaming={msg.streaming} lead={msg.lead} />
         {msg.blocks?.map((b, i) => {
           if (b.type === "text") {
             // Last message in plan mode: render annotatable blocks (not streaming)
@@ -90,7 +145,7 @@ function AssistantBubble({ msg, idx, highlighted, annotable, annotations, onAnno
             );
           }
           if (b.type === "plan") {
-            return <InlinePlan key={i} plan={b} />;
+            return <InlinePlan key={i} plan={b} onOpenKanban={onOpenKanban} />;
           }
           return null;
         })}
@@ -117,4 +172,4 @@ function AssistantBubble({ msg, idx, highlighted, annotable, annotations, onAnno
   );
 }
 
-Object.assign(window, { AssistantBubble, InlinePlan });
+Object.assign(window, { AssistantBubble, InlinePlan, ThoughtBlock });

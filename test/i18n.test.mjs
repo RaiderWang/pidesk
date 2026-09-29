@@ -240,5 +240,77 @@ describe('known-key spot-checks', () => {
     assert.equal(t('files.panel.title'), '项目文件');
     setLocale('en');
   });
+
+  it('plan phase and idle/executing status strings resolve in en and zh-CN', () => {
+    setLocale('en');
+    assert.equal(t('plan.phase.running'), 'running');
+    assert.equal(t('plan.phase.done'), 'done');
+    assert.equal(t('plan.phase.queued'), 'queued');
+    assert.equal(t('plan.phase.idle'), 'idle');
+    assert.equal(t('plan.noActivePlan'), 'no active plan');
+    assert.equal(t('plan.agentIdle'), 'agent idle · waiting for next instruction');
+    assert.equal(t('plan.agentExecuting'), 'Agent executing…');
+
+    setLocale('zh-CN');
+    assert.equal(t('plan.phase.running'), '执行中');
+    assert.equal(t('plan.phase.done'), '已完成');
+    assert.equal(t('plan.phase.queued'), '待执行');
+    assert.equal(t('plan.phase.idle'), '空闲');
+    assert.equal(t('plan.noActivePlan'), '暂无活动任务');
+    assert.equal(t('plan.agentIdle'), '智能体空闲 · 等待后续指令');
+    assert.equal(t('plan.agentExecuting'), 'Agent 正在执行…');
+    setLocale('en');
+  });
+
+  it('hub.logs terminal viewer strings resolve in en and zh-CN', () => {
+    setLocale('en');
+    assert.equal(t('hub.logs.title'), 'Terminal Log');
+    assert.equal(t('hub.logs.copy'), 'Copy Log');
+    assert.equal(t('hub.logs.autoscroll'), 'Auto-scroll');
+    assert.equal(t('hub.logs.lineCount', { n: 12 }), '12 lines');
+
+    setLocale('zh-CN');
+    assert.equal(t('hub.logs.title'), '终端执行日志');
+    assert.equal(t('hub.logs.copy'), '复制日志');
+    assert.equal(t('hub.logs.autoscroll'), '自动滚动');
+    assert.equal(t('hub.logs.lineCount', { n: 12 }), '12 行');
+    setLocale('en');
+  });
+
+  it('history modal dynamic switch and open badge strings resolve in en and zh-CN', () => {
+    setLocale('en');
+    assert.equal(t('history.switch'), 'Switch');
+    assert.equal(t('history.badge.open'), 'open');
+    assert.equal(t('history.foot.switchToTab'), 'switch to tab');
+    assert.equal(t('history.foot.resumeInNewTab'), 'resume in new tab');
+
+    setLocale('zh-CN');
+    assert.equal(t('history.switch'), '切换');
+    assert.equal(t('history.badge.open'), '已打开');
+    assert.equal(t('history.foot.switchToTab'), '切换至标签页');
+    assert.equal(t('history.foot.resumeInNewTab'), '在新标签页恢复');
+    setLocale('en');
+  });
+
+  it('chat and tool card collapsible strings resolve in en and zh-CN', () => {
+    setLocale('en');
+    assert.equal(t('chat.running'), 'running');
+    assert.equal(t('chat.hits', { count: 3 }), '3 hits');
+    assert.equal(t('chat.scrub'), 'scrub');
+    assert.equal(t('chat.expandTool'), 'Expand tool details');
+    assert.equal(t('chat.collapseTool'), 'Collapse tool details');
+
+    setLocale('zh-CN');
+    assert.equal(t('chat.running'), '运行中');
+    assert.equal(t('chat.hits', { count: 3 }), '3 处匹配');
+    assert.equal(t('chat.scrub'), '拖动比对');
+    assert.equal(t('chat.expandTool'), '展开工具详情');
+    assert.equal(t('chat.collapseTool'), '折叠工具详情');
+    setLocale('en');
+  });
 });
+
+
+
+
 

@@ -73,8 +73,8 @@ function WindowChrome({ project, peer, onCmd, filesOpen, onToggleFiles }) {
 }
 
 // ── Project tabs ─────────────────────────────────────────────────────
-function TabBar({ projects, activeId, onSelect, onClose, peer, onNew, onNewProject, onNewStandalone, onHistory, onManageModels, appVersion, theme }) {
-  const version = appVersion || window.PIDESK_APP_VERSION || window.OMP_APP_VERSION || "0.2.8";
+function TabBar({ projects, activeId, onSelect, onClose, peer, onNew, onNewProject, onNewStandalone, onHistory, onManageModels, onKanban, todoCount = 0, appVersion, theme, kanbanFlashing = false }) {
+  const version = appVersion || window.PIDESK_APP_VERSION || window.OMP_APP_VERSION || "0.3.0";
   const themeName = theme || "daylight";
   const versionLabel = `v${version}-${themeName}`;
 
@@ -164,6 +164,14 @@ function TabBar({ projects, activeId, onSelect, onClose, peer, onNew, onNewProje
       <button className="tab-add" title={window.t ? window.t("chrome.tabs.models", null, "manage models (Ctrl+M)") : "manage models (Ctrl+M)"} onClick={onManageModels}>
         <Icon name="cpu" size={11} />
       </button>
+      <button
+        className={`tab-add ${todoCount > 0 ? "has-badge" : ""} ${kanbanFlashing ? "kanban-flashing" : ""}`}
+        title={window.t ? window.t("chrome.tabs.kanban", null, "任务看板 (Ctrl+J)") : "任务看板 (Ctrl+J)"}
+        onClick={onKanban}
+      >
+        <Icon name="plan" size={11} color={todoCount > 0 ? "var(--accent)" : "currentColor"} />
+        {todoCount > 0 && <span className="tab-bar-badge">{todoCount}</span>}
+      </button>
       <div style={{ flex: 1 }} />
       <div className="tabs-right mono">
         <span style={{ color: "var(--fg-4)" }} title={`PiDesk v${version}`}>{versionLabel}</span>
@@ -173,7 +181,7 @@ function TabBar({ projects, activeId, onSelect, onClose, peer, onNew, onNewProje
 }
 
 // ── Status bar (footer): connection, model, tokens, todos, extension ─
-function StatusBar({ ctx, model, thinking, todoDone, todoTotal, onTodo, onModel, onTweaks, autosave, onAutosave, agentError }) {
+function StatusBar({ ctx, model, thinking, todoDone, todoTotal, onTodo, onModel, onTweaks, autosave, onAutosave, agentError, kanbanFlashing = false }) {
   const thinkLabel = {
     off: window.t ? window.t("chrome.status.thinking.off", null, "off") : "off",
     minimal: window.t ? window.t("chrome.status.thinking.minimal", null, "min") : "min",
@@ -211,9 +219,9 @@ function StatusBar({ ctx, model, thinking, todoDone, todoTotal, onTodo, onModel,
       <span className="status-sep">·</span>
       <span className="status-cell"><span className="mono" style={{ color: "var(--fg-3)" }}>{ctx.tokensPerSec}</span> t/s</span>
       <div style={{ flex: 1 }} />
-      <button className="status-cell btn ghost" onClick={onTodo} style={{ height: 22, padding: "0 6px", fontSize: "var(--d-text-xs)" }}>
+      <button className={`status-cell btn ghost ${kanbanFlashing ? "kanban-flashing" : ""}`} onClick={onTodo} style={{ height: 22, padding: "0 6px", fontSize: "var(--d-text-xs)" }} title={window.t ? window.t("chrome.tabs.kanban", null, "任务看板 (Ctrl+J)") : "任务看板 (Ctrl+J)"}>
         <Icon name="plan" size={11} color="var(--accent)" />
-        <span style={{ color: "var(--accent)" }}>{window.t ? window.t("chrome.status.todo", null, "todo") : "todo"} <span className="mono">{todoDone}/{todoTotal}</span></span>
+        <span style={{ color: "var(--accent)" }}>{window.t ? window.t("chrome.status.kanban", null, "kanban") : "kanban"} <span className="mono">{todoDone}/{todoTotal}</span></span>
       </button>
       <span className="status-sep">·</span>
       <button className="status-cell btn ghost" onClick={() => onAutosave?.(!autosave)}
@@ -383,7 +391,7 @@ function AmbientRail({ ctx, activity, peer, peerSessionId, sessions, activeSessi
     onSetPeer, onClearPeer, onFocusPeer,
     messages, microcopy, onClose, sparklineValues, hoveredMsgIdx, onMinimapHover, onMinimapClick,
     isStreaming, turnStartMs, runningTools, recentTools,
-    hubMode, hubAgents, hubHistory }) {
+    hubMode, hubAgents, hubHistory, onOpenToolLog }) {
   // Use live tps samples. Before the first turn, sparklineValues is all zeros
   // which renders as a flat baseline — honest, not fake random data.
   const sparkVals = (sparklineValues && sparklineValues.length > 0)
@@ -416,6 +424,7 @@ function AmbientRail({ ctx, activity, peer, peerSessionId, sessions, activeSessi
           hubMode={hubMode} hubAgents={hubAgents} hubHistory={hubHistory}
           runningTools={runningTools} recentTools={recentTools}
           isStreaming={isStreaming} turnStartMs={turnStartMs} activity={activity}
+          onOpenToolLog={onOpenToolLog}
         />
       </div>
 

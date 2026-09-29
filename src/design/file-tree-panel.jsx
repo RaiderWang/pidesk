@@ -201,7 +201,7 @@ function FileTreeNode({
   );
 }
 
-function FileTreePanel({ rootPath, projectName, onClose, bridge }) {
+function FileTreePanel({ rootPath, projectName, onClose, bridge, width, onWidthChange }) {
   const [rootEntries, setRootEntries] = React.useState([]);
   const [expandedPaths, setExpandedPaths] = React.useState(new Set());
   const [childrenMap, setChildrenMap] = React.useState(new Map());
@@ -223,6 +223,15 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge }) {
   // Toast notification state
   const [toastMessage, setToastMessage] = React.useState(null);
   const toastTimeoutRef = React.useRef(null);
+
+  // Auto-refresh and watching state
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
+  const isRefreshingRef = React.useRef(false);
+  const pendingRefreshRef = React.useRef(false);
+  const expandedPathsRef = React.useRef(expandedPaths);
+  expandedPathsRef.current = expandedPaths;
+  const renamingRef = React.useRef(renamingPath);
+  renamingRef.current = renamingPath;
 
   const showToast = React.useCallback((msg) => {
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
@@ -309,16 +318,119 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge }) {
     [expandedPaths, childrenMap, loadDirectory]
   );
 
-  // Full Refresh button
-  const handleRefreshAll = async () => {
-    await refreshRoot();
-    // Refresh all currently expanded folders
-    const paths = Array.from(expandedPaths);
-    for (const p of paths) {
-      const children = await loadDirectory(p);
-      setChildrenMap((prev) => new Map(prev).set(p, children));
+  // Full Refresh (manual or automated)
+  const handleRefreshAll = React.useCallback(
+    async (silent = false) => {
+      if (isRefreshingRef.current) {
+        pendingRefreshRef.current = true;
+        return;
+      }
+
+      isRefreshingRef.current = true;
+      setIsRefreshing(true);
+
+      try {
+        do {
+          pendingRefreshRef.current = false;
+
+          // If currently editing/renaming inline, skip to avoid clobbering input focus
+          if (renamingRef.current) {
+            break;
+          }
+
+          if (rootPath) {
+            try {
+              const rootItems = await (bridge?.listDirectory ? bridge.listDirectory(rootPath) : []);
+              setRootEntries(rootItems);
+            } catch (err) {
+              console.error("Refresh root directory failed:", err);
+              if (!silent) {
+                showToast(
+                  window.t
+                    ? window.t("files.error.load", null, "Failed to load directory")
+                    : "Failed to load directory"
+                );
+              }
+            }
+          }
+
+          const currentExpanded = Array.from(expandedPathsRef.current);
+          if (currentExpanded.length > 0 && bridge?.listDirectory) {
+            const updates = [];
+            for (const p of currentExpanded) {
+              try {
+                const children = await bridge.listDirectory(p);
+                updates.push([p, children]);
+              } catch (err) {
+                console.error("Refresh subfolder failed:", p, err);
+              }
+            }
+            if (updates.length > 0) {
+              setChildrenMap((prev) => {
+                const next = new Map(prev);
+                for (const [p, ch] of updates) {
+                  next.set(p, ch);
+                }
+                return next;
+              });
+            }
+          }
+        } while (pendingRefreshRef.current);
+      } finally {
+        isRefreshingRef.current = false;
+        setIsRefreshing(false);
+      }
+    },
+    [rootPath, bridge, showToast]
+  );
+
+  // Auto-watch filesystem changes for rootPath
+  React.useEffect(() => {
+    if (!rootPath) return;
+
+    const watchId = rootPath;
+    let unlisten = null;
+    let active = true;
+
+    // Start watching directory via Tauri backend
+    bridge?.startFilesWatch?.(watchId, rootPath);
+
+    if (window.__TAURI__?.event?.listen) {
+      window.__TAURI__.event
+        .listen("files://changed", (event) => {
+          if (!active) return;
+          const payload = event.payload;
+          const normRoot = rootPath.replace(/\\/g, "/").toLowerCase();
+          const eventRoot = (payload?.path || "").replace(/\\/g, "/").toLowerCase();
+          const eventId = payload?.watchId;
+
+          // Check if the change corresponds to this rootPath
+          if (
+            !payload ||
+            eventId === watchId ||
+            (eventRoot && (eventRoot === normRoot || normRoot.startsWith(eventRoot)))
+          ) {
+            handleRefreshAll(true);
+          }
+        })
+        .then((fn) => {
+          if (active) {
+            unlisten = fn;
+          } else {
+            fn();
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to listen for files://changed:", err);
+        });
     }
-  };
+
+    return () => {
+      active = false;
+      if (unlisten) unlisten();
+      bridge?.stopFilesWatch?.(watchId);
+    };
+  }, [rootPath, bridge, handleRefreshAll]);
 
   // Close context menu on outside click or escape
   React.useEffect(() => {
@@ -544,6 +656,45 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge }) {
 
   const displayName = projectName || (rootPath ? rootPath.replace(/\\/g, "/").split("/").pop() : "Files");
 
+  const [isDragging, setIsDragging] = React.useState(false);
+
+  const handleResizerMouseDown = React.useCallback((e) => {
+    e.preventDefault();
+    setIsDragging(true);
+    const startX = e.clientX;
+    const initialWidth = width || panelRef.current?.getBoundingClientRect().width || 240;
+
+    const onMouseMove = (ev) => {
+      const delta = ev.clientX - startX;
+      const minW = 160;
+      const maxW = Math.max(minW, Math.min(600, Math.floor(window.innerWidth * 0.5)));
+      const nextW = Math.round(Math.max(minW, Math.min(maxW, initialWidth + delta)));
+      if (onWidthChange) {
+        onWidthChange(nextW);
+      }
+    };
+
+    const onMouseUp = () => {
+      setIsDragging(false);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  }, [width, onWidthChange]);
+
+  const handleResetWidth = React.useCallback((e) => {
+    e.preventDefault();
+    if (onWidthChange) {
+      onWidthChange(240);
+    }
+  }, [onWidthChange]);
+
   return (
     <aside
       ref={panelRef}
@@ -551,6 +702,13 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge }) {
       className="files-panel"
       onKeyDown={handlePanelKeyDown}
     >
+      {/* Resizer Handle */}
+      <div
+        className={`files-resizer ${isDragging ? "is-dragging" : ""}`}
+        onMouseDown={handleResizerMouseDown}
+        onDoubleClick={handleResetWidth}
+        title={window.t ? window.t("files.panel.resizeHint", null, "Drag to resize · Double-click to reset") : "Drag to resize · Double-click to reset"}
+      />
       {/* Panel Header */}
       <div className="files-panel-head">
         <Icon name="folder" size={12} color="var(--accent)" />
@@ -559,9 +717,9 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge }) {
         </span>
         <div className="files-panel-actions">
           <button
-            className="files-action-btn"
+            className={`files-action-btn ${isRefreshing ? "is-refreshing" : ""}`}
             title={window.t ? window.t("files.panel.refresh", null, "Refresh") : "Refresh"}
-            onClick={handleRefreshAll}
+            onClick={() => handleRefreshAll(false)}
           >
             <Icon name="refresh" size={10} />
           </button>

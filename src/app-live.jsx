@@ -16,7 +16,7 @@
 
 const {
   Icon, ChatView, Composer, CommandBridge, WindowChrome, TabBar,
-  StatusBar, AmbientRail, SplitPeer, PlanKanban, HistoryModal, ModelManagerModal, AgentErrorBanner, useTweaks,
+  StatusBar, AmbientRail, SplitPeer, PlanKanban, HistoryModal, ModelManagerModal, ToolLogModal, AgentErrorBanner, useTweaks,
   FileTreePanel,
   TweaksPanel, TweakSection, TweakRadio, TweakToggle, TweakColor, TweakSlider, TweakShortcut,
   TWEAK_DEFAULTS, NULL_MODEL, EMPTY_PROJECT, NULL_PEER,
@@ -37,6 +37,8 @@ function App() {
   const [bridgeView,  setBridgeView]  = React.useState("commands");
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const [modelManagerOpen, setModelManagerOpen] = React.useState(false);
+  const [activeLogTool, setActiveLogTool] = React.useState(null);
+  const [toolLogs, setToolLogs] = React.useState({});
   const [planOpen,    setPlanOpen]    = React.useState(false);
   const [planMode,    setPlanMode]    = React.useState(false);
   const [filesOpen,   setFilesOpen]   = React.useState(() => {
@@ -48,6 +50,20 @@ function App() {
     }
   });
 
+  const [filesWidth, setFilesWidth] = React.useState(() => {
+    try {
+      const saved = Number(localStorage.getItem("pidesk:files-panel-width"));
+      return saved >= 160 && saved <= 600 ? saved : 240;
+    } catch {
+      return 240;
+    }
+  });
+
+  const handleFilesWidthChange = React.useCallback((width) => {
+    setFilesWidth(width);
+    try { localStorage.setItem("pidesk:files-panel-width", String(width)); } catch {}
+  }, []);
+
   const handleToggleFiles = React.useCallback(() => {
     setFilesOpen(prev => {
       const next = !prev;
@@ -56,6 +72,7 @@ function App() {
     });
   }, []);
   const planStartedRef = React.useRef(false); // true after first send in plan mode
+  const [planActive, setPlanActive] = React.useState(false);
   const [planAnnotations, setPlanAnnotations] = React.useState({});
   const handleAnnotate = React.useCallback((idx, value) => setPlanAnnotations(prev => {
     const next = { ...prev };
@@ -148,7 +165,7 @@ function App() {
     setPeer, setPeerSessionId,
     setRunningTools, setRecentTools, setTurnStartMs,
     setHubMode, setHubAgents, setHubHistory,
-    setAgentError,
+    setAgentError, setToolLogs,
   });
   useThemeEffect(t);
   useCommandShortcut(setBridgeOpen, setBridgeView);
@@ -171,6 +188,9 @@ function App() {
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
         e.preventDefault();
         handleToggleFiles();
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
+        e.preventDefault();
+        setPlanOpen(prev => !prev);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -200,6 +220,10 @@ function App() {
     },
     { total: 0, done: 0 }
   );
+
+  const hasPlanTasks   = todoCounts.total > 0;
+  const isPlanDone     = hasPlanTasks && todoCounts.done >= todoCounts.total;
+  const kanbanFlashing = planActive && hasPlanTasks && !isPlanDone;
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleSend = (text, images = []) => {
@@ -238,7 +262,7 @@ function App() {
     }
   };
 
-  const handleAbort      = () => { bridge?.abort(); setStreaming(false); };
+  const handleAbort      = () => { bridge?.abort(); setStreaming(false); setPlanActive(false); };
   const handlePickModel  = m  => { setModelState(m); bridge?.setModel(m); };
   const handleAskAnswer  = React.useCallback((id, value) => { bridge?.answerAsk(id, value); }, [bridge]); // bridge = window.OMP_BRIDGE, assigned once before React renders — stable ref
   const handlePickLogin = async (provider) => {
@@ -259,8 +283,8 @@ function App() {
   const cycleThinking    = () => bridge?.cycleThinking();
 
   const handleCommand = c => {
-    if      (c.name === "plan")     { setPlanMode(true); planStartedRef.current = false; }
-    else if (c.name === "todo")     { setPlanOpen(true); }
+    if      (c.name === "plan")     { setPlanMode(true); setPlanActive(true); planStartedRef.current = false; }
+    else if (c.name === "todo" || c.name === "kanban") { setPlanOpen(true); }
     else if (c.name === "compact")  { bridge?.compact(); }
     else if (c.name === "export")   { bridge?.exportHtml(); }
     else if (c.name === "thinking") { cycleThinking(); }
@@ -303,13 +327,14 @@ function App() {
     bridge?.followUp(APPROVAL_PROMPT());
     setPlanMode(false);
     planStartedRef.current = false;
-    setPlanOpen(true);
+    setPlanActive(true);
   };
 
   // Tab select — switches the active session; bridge resets all per-session state
   // and re-fetches from the new session's omp → notify() pushes fresh data.
   const handleSelectTab = id => {
     if (id === activeSessionId) return;
+    setPlanActive(false);
     bridge?.activateSession(id);
     // setActiveSessionId is driven by snap.activeSessionId from onUpdate
   };
@@ -319,6 +344,7 @@ function App() {
     if (!bridge) return;
     const path = await bridge.pickFolder();
     if (!path) return;
+    setPlanActive(false);
     await bridge.openSession(path);
     // Tab list and activeSessionId are updated via onUpdate from the bridge
   };
@@ -326,11 +352,15 @@ function App() {
   // Open standalone session (no project folder)
   const handleNewStandalone = async () => {
     if (!bridge) return;
+    setPlanActive(false);
     await bridge.openSession(null);
   };
 
   // Close tab → kills that session's omp process; bridge updates tab list
-  const handleCloseTab = id => { bridge?.closeSession(id); };
+  const handleCloseTab = id => {
+    setPlanActive(false);
+    bridge?.closeSession(id);
+  };
 
   // ── Peer session handlers ───────────────────────────────────────────────
   const handleSetPeer   = id  => bridge?.setPeer(id);
@@ -365,17 +395,25 @@ function App() {
             onClose={handleCloseTab}
             onHistory={() => setHistoryOpen(true)}
             onManageModels={() => setModelManagerOpen(true)}
+            onKanban={() => setPlanOpen(prev => !prev)}
+            todoCount={todoCounts.total}
             appVersion={appVersion}
             theme={t.theme}
+            kanbanFlashing={kanbanFlashing}
           />
 
-          <div className={`stage ${showFiles ? "with-files " : ""}${showRail ? "with-rail" : ""}`}>
+          <div
+            className={`stage ${showFiles ? "with-files " : ""}${showRail ? "with-rail" : ""}`}
+            style={{ "--files-width": `${filesWidth}px` }}
+          >
             {showFiles && (
               <FileTreePanel
                 rootPath={activeProject.path}
                 projectName={activeProject.name}
                 onClose={handleToggleFiles}
                 bridge={bridge}
+                width={filesWidth}
+                onWidthChange={handleFilesWidthChange}
               />
             )}
             <main className="session">
@@ -393,6 +431,7 @@ function App() {
                 onAskAnswer={handleAskAnswer}
                 hoveredMsgIdx={hoveredMsgIdx}
                 onBranch={handleBranch}
+                onOpenKanban={() => setPlanOpen(true)}
               />
               <Composer
                 onSend={handleSend}
@@ -400,7 +439,12 @@ function App() {
                 onTogglePlan={() => {
                   const next = !planMode;
                   setPlanMode(next);
-                  if (!next) planStartedRef.current = false;
+                  if (!next) {
+                    planStartedRef.current = false;
+                    setPlanActive(false);
+                  } else {
+                    setPlanActive(true);
+                  }
                 }}
                 onOpenCmd={() => openBridge("commands")}
                 onOpenModel={() => openBridge("models")}
@@ -428,6 +472,7 @@ function App() {
                 autosave={t.autosave ?? true}
                 onAutosave={v => setTweak("autosave", v)}
                 agentError={agentError}
+                kanbanFlashing={kanbanFlashing}
               />
             </main>
 
@@ -460,6 +505,7 @@ function App() {
                 hubMode={hubMode}
                 hubAgents={hubAgents}
                 hubHistory={hubHistory}
+                onOpenToolLog={setActiveLogTool}
               />
             )}
           </div>
@@ -486,6 +532,7 @@ function App() {
         <PlanKanban
           kanban={kanban}
           planMeta={planMeta}
+          isStreaming={streaming || runningTools.length > 0}
           onClose={() => setPlanOpen(false)}
           onAbort={handleAbort}
         />
@@ -497,6 +544,7 @@ function App() {
           onClose={() => setHistoryOpen(false)}
           onResume={handleResumeSession}
           activeCwd={activeProject?.path}
+          openSessions={sessions}
         />
       )}
 
@@ -505,6 +553,14 @@ function App() {
           open={modelManagerOpen}
           onClose={() => setModelManagerOpen(false)}
           onModelUpdated={() => bridge?.refreshModels()}
+        />
+      )}
+
+      {activeLogTool && (
+        <ToolLogModal
+          tool={activeLogTool}
+          toolLogs={toolLogs}
+          onClose={() => setActiveLogTool(null)}
         />
       )}
 
