@@ -41,6 +41,9 @@ function useBridgeSnapshot(bridge, setters) {
       setters.setAgentError?.(snap.agentError ?? null);
       // Tool logs buffer
       setters.setToolLogs?.(snap.toolLogs ?? {});
+      // Background async work & settlement (omp 18.4+)
+      setters.setHasPendingAsyncWork?.(snap.hasPendingAsyncWork ?? false);
+      setters.setIsSettled?.(snap.isSettled ?? true);
     });
     return unsub;
   }, [bridge]);

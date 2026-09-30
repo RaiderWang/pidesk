@@ -309,6 +309,11 @@
       "tray.showMain": "Show PiDesk",
       "tray.quickBar": "Quick Bar",
       "tray.quit": "Quit",
+
+      // Agent & Chat status
+      "agent.backgroundPending": "background work…",
+      "chat.error.providerError": "Provider Error",
+      "chat.error.retryable": "Retryable",
     },
 
     "zh-CN": {
@@ -614,6 +619,11 @@
       "tray.showMain": "显示 PiDesk",
       "tray.quickBar": "Quick Bar",
       "tray.quit": "退出",
+
+      // Agent & Chat status
+      "agent.backgroundPending": "后台任务进行中…",
+      "chat.error.providerError": "模型服务异常",
+      "chat.error.retryable": "可重试",
     }
   };
 

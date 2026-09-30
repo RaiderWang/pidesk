@@ -9,7 +9,7 @@
 const { Icon, HubCompact, HubTree, HubSummary } = window;
 
 function AgentHub({ hubMode, hubAgents, hubHistory, runningTools, recentTools,
-                    isStreaming, turnStartMs, activity, onOpenToolLog }) {
+                    isStreaming, turnStartMs, activity, hasPendingAsyncWork = false, onOpenToolLog }) {
   const [mode, setMode] = React.useState(hubMode);
 
   // Sync with external mode changes (driven by live.js hub state)
@@ -29,6 +29,7 @@ function AgentHub({ hubMode, hubAgents, hubHistory, runningTools, recentTools,
       {mode === "compact" && (
         <HubCompact runningTools={runningTools} recentTools={recentTools}
           isStreaming={isStreaming} turnStartMs={turnStartMs} activity={activity}
+          hasPendingAsyncWork={hasPendingAsyncWork}
           onOpenLog={onOpenToolLog} />
       )}
     </div>

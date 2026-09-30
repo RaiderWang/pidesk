@@ -76,6 +76,8 @@
     hubHistory: [],         // last 3 completed task results [{taskId, agents, time}]
     agentError: null,       // startup/runtime error reason if omp is not running
     toolLogs:   {},         // toolCallId -> { id, tool, target, title, command, status, startMs, durationMs, lines }
+    hasPendingAsyncWork: false, // omp 18.4+: background jobs or subagents still pending
+    isSettled:           true,  // omp 18.4+: true when agent is completely idle with no pending async work
   };
 
   let streamingBubble = null;
@@ -242,6 +244,8 @@
       hubHistory:      state.hubHistory,
       agentError:      state.agentError,
       toolLogs:        state.toolLogs,
+      hasPendingAsyncWork: state.hasPendingAsyncWork,
+      isSettled:           state.isSettled,
     };
     subscribers.forEach(cb => cb(snap));
 
@@ -284,6 +288,8 @@
       hubHistory:    [],
       agentError:    null,
       toolLogs:      {},
+      hasPendingAsyncWork: false,
+      isSettled:           true,
     });
     streamingBubble = null;
     pendingAskBubble = null;
@@ -414,6 +420,8 @@
       hubHistory:    state.hubHistory,
       agentError:    state.agentError,
       toolLogs:      { ...state.toolLogs },
+      hasPendingAsyncWork: state.hasPendingAsyncWork,
+      isSettled:           state.isSettled,
       // volatile vars
       streamingBubble,
       activeToolCards: new Map(activeToolCards),
@@ -449,6 +457,8 @@
       hubHistory:    snap.hubHistory ?? [],
       agentError:    snap.agentError ?? null,
       toolLogs:      snap.toolLogs ?? {},
+      hasPendingAsyncWork: snap.hasPendingAsyncWork ?? false,
+      isSettled:           snap.isSettled ?? true,
     });
     streamingBubble = snap.streamingBubble;
     activeToolCards = snap.activeToolCards;
@@ -1208,6 +1218,64 @@
     if (type === "agent_start" || type === "agent_end") {
       _send({ type: "get_state" });
     }
+
+    if (type === "session_settled") {
+      state.hasPendingAsyncWork = false;
+      state.isSettled = true;
+      notify();
+      return;
+    }
+
+    if (type === "prompt_result") {
+      if (ev.sessionSettled !== undefined) {
+        state.isSettled = Boolean(ev.sessionSettled);
+        if (ev.sessionSettled) {
+          state.hasPendingAsyncWork = false;
+        }
+      }
+      if (ev.status === "error" && ev.error) {
+        _applyPromptError(ev.error);
+      }
+      notify();
+      return;
+    }
+  }
+
+  function _applyPromptError(err) {
+    if (!err) return;
+    let lastAsst = null;
+    for (let i = state.messages.length - 1; i >= 0; i--) {
+      if (state.messages[i].kind === "assistant") {
+        lastAsst = state.messages[i];
+        break;
+      }
+    }
+    const errObj = {
+      message: err.message || String(err),
+      provider: err.provider,
+      model: err.model,
+      httpStatus: err.httpStatus,
+      retryable: Boolean(err.retryable),
+    };
+    if (lastAsst) {
+      lastAsst.error = errObj;
+      lastAsst.streaming = false;
+      if (streamingBubble === lastAsst) {
+        streamingBubble = null;
+      }
+    } else {
+      const errBubble = {
+        kind: "assistant",
+        time: timeNow(),
+        thought: null,
+        lead: null,
+        blocks: [],
+        streaming: false,
+        model: state.model?.name ?? "–",
+        error: errObj,
+      };
+      state.messages = [...state.messages, errBubble];
+    }
   }
 
   function _injectInlinePlan(phases) {
@@ -1239,6 +1307,8 @@
     if (!rpcState) return;
     state.rpcState      = rpcState;
     state.isStreaming   = rpcState.isStreaming ?? false;
+    state.hasPendingAsyncWork = rpcState.hasPendingAsyncWork ?? false;
+    state.isSettled     = rpcState.isSettled ?? true;
     // If the turn completed while we were away (snapshot had streamingBubble
     // with streaming:true, but omp now says isStreaming:false), retire the
     // bubble immediately. The completed text arrives with get_messages; the
@@ -2098,6 +2168,8 @@
         hubHistory:      state.hubHistory,
         agentError:      state.agentError,
         toolLogs:        state.toolLogs,
+        hasPendingAsyncWork: state.hasPendingAsyncWork,
+        isSettled:           state.isSettled,
       });
       return () => subscribers.delete(cb);
     },

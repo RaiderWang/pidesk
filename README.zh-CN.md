@@ -96,6 +96,44 @@ PiDesk 内置可视化**模型管理器**（`Ctrl+M` / `/models`），统一管�
 
 ---
 
+## 安装指南
+
+### macOS
+
+#### 方式一：Homebrew Cask（推荐）
+
+通过 Homebrew 一键安装，会自动处理 Gatekeeper 隔离，无需额外命令即可直接打开：
+
+```bash
+brew install --cask raiderwang/tap/pidesk
+```
+
+后续升级：
+```bash
+brew upgrade --cask pidesk
+```
+
+#### 方式二：手动下载（.dmg）
+
+1. 从 [GitHub Releases](https://github.com/RaiderWang/pidesk/releases) 下载最新的 `.dmg` 安装包（Apple Silicon 选 `aarch64`，Intel 芯片选 `x64`）。
+2. 打开 DMG 磁盘镜像，将 **PiDesk.app** 拖动到 `/Applications`（应用程序）文件夹。
+3. **如果 macOS 提示“PiDesk 已损坏，您应该将它移到废纸篓”**：  
+   这是由于从网页下载的文件带有系统隔离标记（`com.apple.quarantine`），且未进行付费开发者证书签名所致。在终端中执行以下命令清除隔离属性即可正常打开：
+   ```bash
+   xattr -cr /Applications/PiDesk.app
+   ```
+
+### Windows
+
+从 [GitHub Releases](https://github.com/RaiderWang/pidesk/releases) 下载 `.msi`（推荐）或 `.exe` 安装程序。  
+*若首次启动时出现 Windows SmartScreen 弹窗拦截，点击 **“更多信息” → “仍要运行”** 即可。*
+
+### Linux
+
+从 [GitHub Releases](https://github.com/RaiderWang/pidesk/releases) 下载 `.AppImage` 或 `.deb` 安装包。
+
+---
+
 ## 环境要求
 
 | 工具 | 版本 |

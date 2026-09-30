@@ -391,7 +391,7 @@ function AmbientRail({ ctx, activity, peer, peerSessionId, sessions, activeSessi
     onSetPeer, onClearPeer, onFocusPeer,
     messages, microcopy, onClose, sparklineValues, hoveredMsgIdx, onMinimapHover, onMinimapClick,
     isStreaming, turnStartMs, runningTools, recentTools,
-    hubMode, hubAgents, hubHistory, onOpenToolLog }) {
+    hubMode, hubAgents, hubHistory, hasPendingAsyncWork = false, onOpenToolLog }) {
   // Use live tps samples. Before the first turn, sparklineValues is all zeros
   // which renders as a flat baseline — honest, not fake random data.
   const sparkVals = (sparklineValues && sparklineValues.length > 0)
@@ -424,6 +424,7 @@ function AmbientRail({ ctx, activity, peer, peerSessionId, sessions, activeSessi
           hubMode={hubMode} hubAgents={hubAgents} hubHistory={hubHistory}
           runningTools={runningTools} recentTools={recentTools}
           isStreaming={isStreaming} turnStartMs={turnStartMs} activity={activity}
+          hasPendingAsyncWork={hasPendingAsyncWork}
           onOpenToolLog={onOpenToolLog}
         />
       </div>

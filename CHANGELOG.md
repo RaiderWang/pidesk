@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+## [0.3.1] - 2026-09-30
+
+### Added
+
+- **omp 18.4+ Protocol Compatibility & Incremental Optimizations**:
+  - Structured prompt error presentation: intercept and parse structured `error` payloads from `prompt_result` (provider, HTTP status, message, and `retryable` indicator) directly rendered in assistant bubbles
+  - Background async work & settlement lifecycle: integrate `hasPendingAsyncWork` and `session_settled` events, showing background work activity in Agent Hub and smoothly transitioning to idle only when all async work settles
+  - Full backward compatibility: built on progressive enhancement and safe fallbacks, ensuring 100% compatibility when running against older omp versions (such as 18.0.x)
+  - Bilingual i18n support in English and Chinese for all new status indicators and error tags
+  - Dual-compatibility test suite (`test/live-omp-compat.test.mjs`) verifying legacy and modern RPC behaviors
+- **Distribution & Installation Improvements**:
+  - Official macOS Homebrew Cask distribution via `raiderwang/tap/pidesk` with automated `postflight` quarantine bypass
+  - Automated release workflow step (`update-cask`) in `release.yml` syncing SHA256 hashes and version bumps directly to `homebrew-tap`
+  - Comprehensive macOS installation guides in English and Chinese documentation covering Homebrew and manual DMG Gatekeeper resolution
+
 ## [0.3.0] - 2026-09-29
 
 ### Added

@@ -96,6 +96,44 @@ Three auto-switching display modes driven by live session state:
 
 ---
 
+## Installation
+
+### macOS
+
+#### Option A: Homebrew Cask (Recommended)
+
+Installs the app and automatically handles Gatekeeper quarantine:
+
+```bash
+brew install --cask raiderwang/tap/pidesk
+```
+
+To update later:
+```bash
+brew upgrade --cask pidesk
+```
+
+#### Option B: Manual Download (.dmg)
+
+1. Download the latest `.dmg` from [GitHub Releases](https://github.com/RaiderWang/pidesk/releases) (`aarch64` for Apple Silicon, `x64` for Intel).
+2. Open the disk image and drag **PiDesk.app** to your `/Applications` folder.
+3. **If macOS reports "PiDesk is damaged and can't be opened"**:  
+   This is macOS Gatekeeper blocking downloaded unsigned binaries via quarantine flags. Run this command once in your terminal to clear the quarantine attribute:
+   ```bash
+   xattr -cr /Applications/PiDesk.app
+   ```
+
+### Windows
+
+Download the `.msi` (recommended) or `.exe` installer from [GitHub Releases](https://github.com/RaiderWang/pidesk/releases).  
+*If Windows SmartScreen prompts on first run, click **More info → Run anyway**.*
+
+### Linux
+
+Download `.AppImage` or `.deb` from [GitHub Releases](https://github.com/RaiderWang/pidesk/releases).
+
+---
+
 ## Requirements
 
 | Tool | Version |

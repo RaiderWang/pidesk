@@ -149,6 +149,41 @@ function AssistantBubble({ msg, idx, highlighted, annotable, annotations, onAnno
           }
           return null;
         })}
+        {msg.error && (
+          <div className="msg-error-card" style={{
+            margin: "8px 0 4px",
+            padding: "8px 10px",
+            borderRadius: "6px",
+            background: "color-mix(in oklab, var(--rose) 10%, transparent)",
+            border: "1px solid color-mix(in oklab, var(--rose) 30%, var(--line))",
+            color: "var(--fg-1)",
+            fontSize: "var(--d-text-xs, 12px)",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+              <_ChatIcon name="warn" size={12} color="var(--rose)" />
+              <span style={{ fontWeight: 600, color: "var(--rose)" }}>
+                {window.t ? window.t("chat.error.providerError", null, "Provider Error") : "Provider Error"}
+              </span>
+              {(msg.error.provider || msg.error.httpStatus) && (
+                <span className="chip muted mono" style={{ fontSize: "11px" }}>
+                  {[msg.error.provider, msg.error.httpStatus].filter(Boolean).join(" · ")}
+                </span>
+              )}
+              {msg.error.retryable && (
+                <span className="chip" style={{
+                  fontSize: "11px",
+                  color: "var(--amber)",
+                  borderColor: "color-mix(in oklab, var(--amber) 40%, var(--line))",
+                }}>
+                  {window.t ? window.t("chat.error.retryable", null, "Retryable") : "Retryable"}
+                </span>
+              )}
+            </div>
+            <div className="selectable" style={{ color: "var(--fg-2)", lineHeight: 1.4, wordBreak: "break-word" }}>
+              {msg.error.message}
+            </div>
+          </div>
+        )}
         <div className="msg-actions">
           <button
             className="msg-act-btn"

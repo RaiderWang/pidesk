@@ -115,6 +115,8 @@ function App() {
   const [hubAgents,  setHubAgents]  = React.useState([]);
   const [hubHistory, setHubHistory] = React.useState([]);
   const [agentError, setAgentError] = React.useState(null);
+  const [hasPendingAsyncWork, setHasPendingAsyncWork] = React.useState(false);
+  const [isSettled,           setIsSettled]           = React.useState(true);
 
   // ── Tab list — driven by bridge session registry ──────────────────────────
   // Each entry: { id, name, path, color, branch }
@@ -166,6 +168,7 @@ function App() {
     setRunningTools, setRecentTools, setTurnStartMs,
     setHubMode, setHubAgents, setHubHistory,
     setAgentError, setToolLogs,
+    setHasPendingAsyncWork, setIsSettled,
   });
   useThemeEffect(t);
   useCommandShortcut(setBridgeOpen, setBridgeView);
@@ -505,6 +508,7 @@ function App() {
                 hubMode={hubMode}
                 hubAgents={hubAgents}
                 hubHistory={hubHistory}
+                hasPendingAsyncWork={hasPendingAsyncWork}
                 onOpenToolLog={setActiveLogTool}
               />
             )}

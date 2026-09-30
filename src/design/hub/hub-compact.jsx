@@ -26,7 +26,7 @@ function _hcFmtDuration(ms) {
 
 const RECENT_MAX = 3;
 
-function HubCompact({ runningTools, recentTools, isStreaming, turnStartMs, activity, onOpenLog }) {
+function HubCompact({ runningTools, recentTools, isStreaming, turnStartMs, activity, hasPendingAsyncWork = false, onOpenLog }) {
   const [tick, setTick] = React.useState(Date.now());
 
   React.useEffect(() => {
@@ -43,8 +43,13 @@ function HubCompact({ runningTools, recentTools, isStreaming, turnStartMs, activ
   // Phase label
   let phaseLabel, phaseColor;
   if (!isStreaming) {
-    phaseLabel = t ? t("agent.idle", null, "idle") : "idle";
-    phaseColor = "var(--fg-5)";
+    if (hasPendingAsyncWork) {
+      phaseLabel = t ? t("agent.backgroundPending", null, "background work…") : "background work…";
+      phaseColor = "var(--cyan)";
+    } else {
+      phaseLabel = t ? t("agent.idle", null, "idle") : "idle";
+      phaseColor = "var(--fg-5)";
+    }
   } else if (tools.length > 0) {
     const latest = tools[tools.length - 1];
     const meta = _hcToolMeta(latest.tool);
@@ -89,7 +94,7 @@ function HubCompact({ runningTools, recentTools, isStreaming, turnStartMs, activ
 
       {/* Current phase */}
       <div className="hub-compact-phase mono" style={{ color: phaseColor }}>
-        {isStreaming && <span className="dot live" style={{ background: phaseColor }} />}
+        {(isStreaming || hasPendingAsyncWork) && <span className="dot live" style={{ background: phaseColor }} />}
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {phaseLabel}
         </span>
