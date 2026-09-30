@@ -109,6 +109,8 @@ jobs:
             libpipewire-0.3-dev \
             libspa-0.2-dev \
             libclang-dev \
+            libgbm-dev \
+            libdrm-dev \
             patchelf
 
       # ── Node deps (Tauri CLI) ───────────────────────────────────────────────
