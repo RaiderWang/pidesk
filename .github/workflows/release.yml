@@ -106,6 +106,9 @@ jobs:
             libwebkit2gtk-4.1-dev \
             libappindicator3-dev \
             librsvg2-dev \
+            libpipewire-0.3-dev \
+            libspa-0.2-dev \
+            libclang-dev \
             patchelf
 
       # ── Node deps (Tauri CLI) ───────────────────────────────────────────────
