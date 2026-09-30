@@ -71,7 +71,7 @@ jobs:
 
           # ── Linux ──────────────────────────────────────────────────────────
           - label: linux-x64
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             args: ''
 
     runs-on: ${{ matrix.os }}
@@ -99,12 +99,12 @@ jobs:
 
       # ── Linux system deps ───────────────────────────────────────────────────
       - name: Install system dependencies (Linux only)
-        if: matrix.os == 'ubuntu-22.04'
+        if: startsWith(matrix.os, 'ubuntu')
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
+            libayatana-appindicator3-dev \
             librsvg2-dev \
             libpipewire-0.3-dev \
             libspa-0.2-dev \
