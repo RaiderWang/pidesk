@@ -196,41 +196,41 @@ jobs:
           mkdir -p Casks
 
           cat <<EOF > Casks/pidesk.rb
-cask "pidesk" do
-  arch arm: "aarch64", intel: "x64"
+          cask "pidesk" do
+            arch arm: "aarch64", intel: "x64"
 
-  version "${VERSION}"
-  sha256 arm:   "${SHA_ARM}",
-         intel: "${SHA_X64}"
+            version "${VERSION}"
+            sha256 arm:   "${SHA_ARM}",
+                   intel: "${SHA_X64}"
 
-  url "https://github.com/RaiderWang/pidesk/releases/download/v#{version}/PiDesk_#{version}_#{arch}.dmg"
-  name "PiDesk"
-  desc "GUI desktop companion for oh-my-pi (omp)"
-  homepage "https://github.com/RaiderWang/pidesk"
+            url "https://github.com/RaiderWang/pidesk/releases/download/v#{version}/PiDesk_#{version}_#{arch}.dmg"
+            name "PiDesk"
+            desc "GUI desktop companion for oh-my-pi (omp)"
+            homepage "https://github.com/RaiderWang/pidesk"
 
-  livecheck do
-    url :url
-    strategy :github_latest
-  end
+            livecheck do
+              url :url
+              strategy :github_latest
+            end
 
-  auto_updates true
+            auto_updates true
 
-  app "PiDesk.app"
+            app "PiDesk.app"
 
-  postflight do
-    system_command "/usr/bin/xattr",
-                   args: ["-cr", "#{appdir}/PiDesk.app"],
-                   sudo: false
-  end
+            postflight do
+              system_command "/usr/bin/xattr",
+                             args: ["-cr", "#{appdir}/PiDesk.app"],
+                             sudo: false
+            end
 
-  zap trash: [
-    "~/Library/Application Support/com.raiderwang.pidesk",
-    "~/Library/Caches/com.raiderwang.pidesk",
-    "~/Library/Preferences/com.raiderwang.pidesk.plist",
-    "~/Library/Saved Application State/com.raiderwang.pidesk.savedState",
-  ]
-end
-EOF
+            zap trash: [
+              "~/Library/Application Support/com.raiderwang.pidesk",
+              "~/Library/Caches/com.raiderwang.pidesk",
+              "~/Library/Preferences/com.raiderwang.pidesk.plist",
+              "~/Library/Saved Application State/com.raiderwang.pidesk.savedState",
+            ]
+          end
+          EOF
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
