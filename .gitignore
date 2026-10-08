@@ -50,3 +50,6 @@ docs/
 
 # ── Nucleus MCP index (local tool state) ─────────────────────────────────────
 .nucleus/
+
+# Release build artifacts
+release_body.md

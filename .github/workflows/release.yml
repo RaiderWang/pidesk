@@ -82,7 +82,7 @@ jobs:
       # ── Node (Tauri CLI is an npm dev-dep) ──────────────────────────────────
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
 
       # ── Rust ────────────────────────────────────────────────────────────────
@@ -117,6 +117,11 @@ jobs:
       - name: npm ci
         run: npm ci
 
+      # ── Generate Release Body from CHANGELOG ────────────────────────────────
+      - name: Generate release notes
+        id: release-notes
+        run: node scripts/generate-release-body.mjs "${{ inputs.tag || github.ref_name }}"
+
       # ── Build + publish ─────────────────────────────────────────────────────
       - name: Build and publish release
         uses: tauri-apps/tauri-action@v0
@@ -134,35 +139,7 @@ jobs:
         with:
           tagName: ${{ inputs.tag || github.ref_name }}
           releaseName: 'PiDesk ${{ inputs.tag || github.ref_name }}'
-          releaseBody: |
-            ## PiDesk ${{ inputs.tag || github.ref_name }}
-
-            ### 📦 Installation Guide / 安装指南
-
-            #### 🍎 macOS
-            - **Homebrew (Recommended / 推荐)**:
-              ```bash
-              brew install --cask raiderwang/tap/pidesk
-              ```
-              *Automatically bypasses Gatekeeper quarantine, no extra command needed.*
-            - **Manual DMG (.dmg)**:
-              Download `.dmg` (`aarch64` for Apple Silicon, `x64` for Intel).
-              **If macOS says "PiDesk is damaged and can't be opened"（提示已损坏）**, run this command in terminal to clear the quarantine attribute:
-              ```bash
-              xattr -cr /Applications/PiDesk.app
-              ```
-
-            #### 🪟 Windows
-            - Download `.msi` (recommended) or `.exe` installer.
-            - If Windows SmartScreen prompts on launch, click **More info → Run anyway**（点击“更多信息” → “仍要运行”）.
-
-            #### 🐧 Linux
-            - Download `.AppImage` or `.deb`.
-
-            ---
-
-            ### ⚙️ Requirements
-            - [oh-my-pi](https://github.com/can1357/oh-my-pi) (`omp`) must be installed and available on your `PATH`.
+          releaseBody: ${{ steps.release-notes.outputs.body }}
           releaseDraft: false
           prerelease: ${{ contains(inputs.tag || github.ref_name, '-') }}
           args: ${{ matrix.args }}
