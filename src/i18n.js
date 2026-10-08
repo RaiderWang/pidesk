@@ -305,6 +305,26 @@
       "quickbar.hint.region": "region capture",
       "quickbar.removeImage": "remove screenshot",
 
+      // Screenshot Annotation & Overlay
+      "screenshot.overlay.hint": "Drag to select region · Esc to cancel",
+      "screenshot.overlay.adjustHint": "Drag edges or corners to resize · Double click or Enter to finish",
+      "screenshot.overlay.tool.rect": "Rectangle",
+      "screenshot.overlay.tool.circle": "Circle",
+      "screenshot.overlay.tool.arrow": "Arrow",
+      "screenshot.overlay.tool.pen": "Pen",
+      "screenshot.overlay.tool.mosaic": "Mosaic",
+      "screenshot.overlay.tool.text": "Text",
+      "screenshot.overlay.tool.undo": "Undo (Ctrl+Z)",
+      "screenshot.overlay.tool.redo": "Redo (Ctrl+Y)",
+      "screenshot.overlay.tool.save": "Save to file (Ctrl+S)",
+      "screenshot.overlay.tool.copy": "Copy to clipboard (Ctrl+C)",
+      "screenshot.overlay.tool.cancel": "Cancel (Esc)",
+      "screenshot.overlay.tool.done": "Done (Enter)",
+      "screenshot.overlay.copied": "Copied to clipboard",
+      "screenshot.overlay.saved": "Saved to file",
+      "screenshot.overlay.saveFailed": "Failed to save file",
+      "screenshot.overlay.textPlaceholder": "Type here…",
+
       // Tray
       "tray.showMain": "Show PiDesk",
       "tray.quickBar": "Quick Bar",
@@ -614,6 +634,26 @@
       "quickbar.placeholder.screen": "依据当前屏幕提问…",
       "quickbar.hint.region": "选区截屏",
       "quickbar.removeImage": "移除截屏",
+
+      // Screenshot Annotation & Overlay
+      "screenshot.overlay.hint": "拖动鼠标截取选区 · 按 Esc 取消",
+      "screenshot.overlay.adjustHint": "拖动边缘或四角调整选区 · 双击或按回车完成",
+      "screenshot.overlay.tool.rect": "矩形",
+      "screenshot.overlay.tool.circle": "圆形",
+      "screenshot.overlay.tool.arrow": "箭头",
+      "screenshot.overlay.tool.pen": "画笔",
+      "screenshot.overlay.tool.mosaic": "马赛克",
+      "screenshot.overlay.tool.text": "文字",
+      "screenshot.overlay.tool.undo": "撤销 (Ctrl+Z)",
+      "screenshot.overlay.tool.redo": "重做 (Ctrl+Y)",
+      "screenshot.overlay.tool.save": "保存到文件 (Ctrl+S)",
+      "screenshot.overlay.tool.copy": "复制到剪贴板 (Ctrl+C)",
+      "screenshot.overlay.tool.cancel": "取消 (Esc)",
+      "screenshot.overlay.tool.done": "完成并发送 (Enter)",
+      "screenshot.overlay.copied": "已复制到剪贴板",
+      "screenshot.overlay.saved": "已保存到文件",
+      "screenshot.overlay.saveFailed": "保存文件失败",
+      "screenshot.overlay.textPlaceholder": "在此输入文字…",
 
       // Tray
       "tray.showMain": "显示 PiDesk",

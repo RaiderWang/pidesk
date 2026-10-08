@@ -463,6 +463,140 @@ pub fn cancel_region_capture(
     Ok(())
 }
 
+/// Complete region capture with an annotated image synthesized on the frontend.
+///
+/// Hides the overlay, restores the target window (Main or QuickBar),
+/// cleans up frozen buffers, and delivers the payload via events.
+#[tauri::command]
+pub fn finish_annotated_capture(
+    app: AppHandle,
+    state: State<'_, ScreenshotState>,
+    base64_data: String,
+    width: u32,
+    height: u32,
+) -> Result<(), String> {
+    if let Some(overlay) = app.get_webview_window(OVERLAY_LABEL) {
+        let _ = overlay.hide();
+    }
+
+    {
+        let mut guard = state.frozen_image.lock().unwrap();
+        *guard = None;
+    }
+    {
+        let mut bg_guard = state.current_background.lock().unwrap();
+        *bg_guard = None;
+    }
+    let target = {
+        let mut target_guard = state.target.lock().unwrap();
+        let current = *target_guard;
+        *target_guard = CaptureTarget::QuickBar;
+        current
+    };
+
+    let raw_base64 = if let Some(idx) = base64_data.find(',') {
+        base64_data[idx + 1..].to_string()
+    } else {
+        base64_data
+    };
+
+    let result = RegionResult {
+        base64: raw_base64,
+        mime_type: "image/png".to_string(),
+        width,
+        height,
+    };
+
+    match target {
+        CaptureTarget::Main => {
+            if let Some(main) = app.get_webview_window(MAIN_WINDOW_LABEL) {
+                let _ = main.show();
+                let _ = main.set_focus();
+                let _ = main.emit("main://screenshot-result", result);
+            }
+        }
+        CaptureTarget::QuickBar => {
+            if let Some(qb) = app.get_webview_window(QUICK_BAR_LABEL) {
+                let _ = qb.show();
+                let _ = qb.set_focus();
+                let _ = qb.emit("quickbar://region-result", result);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Save an annotated screenshot to disk via native save dialog.
+///
+/// Prompts the user with a save-file picker. If chosen, decodes base64 and writes to disk.
+/// Returns the saved absolute file path, or `None` if the user cancelled.
+#[tauri::command]
+pub async fn save_screenshot_to_disk(
+    app: AppHandle,
+    base64_data: String,
+    default_filename: Option<String>,
+) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let default_name = default_filename.unwrap_or_else(|| "screenshot.png".to_string());
+
+    let overlay = app.get_webview_window(OVERLAY_LABEL);
+    if let Some(ref win) = overlay {
+        let _ = win.set_always_on_top(false);
+    }
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut builder = app.dialog()
+        .file()
+        .set_title("Save Screenshot")
+        .add_filter("PNG Image", &["png"])
+        .add_filter("JPEG Image", &["jpg", "jpeg"])
+        .set_file_name(&default_name);
+
+    if let Some(ref win) = overlay {
+        builder = builder.set_parent(win);
+    }
+
+    builder.save_file(move |result| {
+        let _ = tx.send(result);
+    });
+
+    let picked = tauri::async_runtime::spawn_blocking(move || rx.recv())
+        .await
+        .map_err(|e| format!("join error: {e}"))?
+        .map_err(|e| format!("channel error: {e}"))?;
+
+    if let Some(ref win) = overlay {
+        let _ = win.set_always_on_top(true);
+        let _ = win.set_focus();
+    }
+
+    let Some(picked) = picked else {
+        return Ok(None);
+    };
+
+    let dest = picked
+        .into_path()
+        .map_err(|e| format!("invalid path: {e}"))?;
+
+    let raw_base64 = if let Some(idx) = base64_data.find(',') {
+        &base64_data[idx + 1..]
+    } else {
+        &base64_data
+    };
+
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(raw_base64)
+        .map_err(|e| format!("invalid base64: {e}"))?;
+
+    std::fs::write(&dest, bytes).map_err(|e| format!("failed to write file: {e}"))?;
+
+    Ok(Some(dest.to_string_lossy().into_owned()))
+}
+
+
+
 // ── Tests ───────────────────────────────────────────────────────────────
 
 #[cfg(test)]

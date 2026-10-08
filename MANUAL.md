@@ -137,6 +137,13 @@ The frontend calls these Rust commands via `invoke()`:
 | `reveal_in_explorer` | `(path: String) → Result<()>` | Reveal and select file or directory in OS file manager (File Explorer / Finder) |
 | `start_file_watch` | `(watchId: String, path: String) → Result<()>` | Start debounced recursive filesystem watcher emitting `files://changed` |
 | `stop_file_watch` | `(watchId: String) → ()` | Stop filesystem watcher and release OS directory handles |
+| `capture_screen` | `() → Result<String>` | Capture primary monitor via `xcap`, downscale if >1920px, and return JPEG base64 |
+| `start_region_capture` | `(target: Option<String>) → Result<()>` | Hide caller, capture screen, freeze buffer, and open fullscreen overlay window |
+| `finish_region_capture` | `(x: u32, y: u32, width: u32, height: u32, scaleFactor: f64) → Result<()>` | Crop raw frozen image on Rust side and emit `main://screenshot-result` or `quickbar://region-result` |
+| `finish_annotated_capture` | `(base64Data: String, width: u32, height: u32) → Result<()>` | Deliver frontend-composited annotated PNG to the active window |
+| `save_screenshot_to_disk` | `(base64Data: String, defaultFilename: Option<String>) → Result<Option<String>>` | Prompt native OS file save dialog (unpinning overlay & attaching parent) and write decoded image |
+| `cancel_region_capture` | `() → Result<()>` | Hide screenshot overlay and restore target window focus |
+| `get_screenshot_background` | `() → Option<String>` | Proactively fetch frozen background Data URL during overlay mounting |
 
 ---
 
@@ -240,6 +247,23 @@ The omp compact response contains `tokensBefore` (may be 0 in some versions) but
 ### Single instance lifecycle
 
 PiDesk enforces single-instance execution via `tauri-plugin-single-instance`. When a secondary process is launched, it detects the running primary instance, notifies it, and terminates immediately. The primary instance's callback locates the `"main"` window, unminimizes it if minimized, makes it visible if hidden, and brings it to the foreground (`set_focus()`).
+
+### High-DPI Offscreen Canvas Annotation & Compositing
+
+Screenshot annotations (shapes, streamlined notched arrows, freehand lines, mosaic blur, and text) are rendered and composited entirely on an offscreen HTML5 Canvas matching the physical pixel dimensions (`logical bounds × DPR`).  
+**Why not Rust-side `imageproc`?**
+- Eliminates cross-platform font rendering inconsistencies and missing Chinese/system font fallbacks across Windows, macOS, and Linux.
+- Zero extra heavy dependencies: avoids adding font loaders or heavy drawing crates.
+- 100% WYSIWYG antialiasing matching the user's interactive preview.
+
+### Native Dialog Parenting & Always-on-top Unpinning on Save
+
+The screenshot overlay runs in a fullscreen, frameless, `always_on_top(true)` Webview window. On Windows, launching an OS file save dialog while the caller window is permanently pinned topmost causes the Desktop Window Manager (DWM) to render the non-topmost common dialog *underneath* the fullscreen overlay, leaving the UI seemingly unresponsive.  
+**Solution in `save_screenshot_to_disk`**:
+1. Temporarily unpin the overlay: `win.set_always_on_top(false)`.
+2. Attach the overlay as the modal dialog parent: `builder.set_parent(&win)`.
+3. After the dialog completes or cancels, re-pin and restore focus: `win.set_always_on_top(true)` and `win.set_focus()`.
+4. Keep the overlay open after copying or saving so users can continue their workflow uninterrupted.
 
 ---
 

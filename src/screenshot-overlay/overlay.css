@@ -1,4 +1,4 @@
-/* screenshot-overlay/overlay.css — Styling for region selection overlay */
+/* screenshot-overlay/overlay.css — Modern dark theme styling for annotation UI */
 
 * {
   box-sizing: border-box;
@@ -13,6 +13,7 @@ html, body {
   user-select: none;
   background: #000;
   cursor: crosshair;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 #screen-canvas {
@@ -23,6 +24,8 @@ html, body {
   height: 100vh;
   display: block;
 }
+
+/* ── Top hint bubble ──────────────────────────────────────────────────── */
 
 .hint-bubble {
   position: fixed;
@@ -35,7 +38,6 @@ html, body {
   backdrop-filter: blur(8px);
   padding: 6px 16px;
   border-radius: 20px;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   font-size: 13px;
   letter-spacing: 0.02em;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
@@ -46,4 +48,274 @@ html, body {
 
 .hint-bubble.hidden {
   opacity: 0;
+  pointer-events: none;
 }
+
+/* ── Selection dimension badge ────────────────────────────────────────── */
+
+.dim-badge {
+  position: absolute;
+  background: rgba(15, 23, 42, 0.88);
+  color: #f8fafc;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(6px);
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  pointer-events: none;
+  z-index: 80;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.dim-badge.hidden {
+  display: none;
+}
+
+/* ── Selection Box & Resize Handles ───────────────────────────────────── */
+
+.selection-box {
+  position: absolute;
+  pointer-events: none;
+  border: 1.5px solid #38bdf8;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+  z-index: 50;
+}
+
+.selection-box.hidden {
+  display: none;
+}
+
+.resize-handle {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  background: #38bdf8;
+  border: 1.5px solid #ffffff;
+  border-radius: 2px;
+  pointer-events: auto;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  z-index: 55;
+}
+
+.handle-tl { top: -5px; left: -5px; cursor: nwse-resize; }
+.handle-tc { top: -5px; left: calc(50% - 4.5px); cursor: ns-resize; }
+.handle-tr { top: -5px; right: -5px; cursor: nesw-resize; }
+.handle-ml { top: calc(50% - 4.5px); left: -5px; cursor: ew-resize; }
+.handle-mr { top: calc(50% - 4.5px); right: -5px; cursor: ew-resize; }
+.handle-bl { bottom: -5px; left: -5px; cursor: nesw-resize; }
+.handle-bc { bottom: -5px; left: calc(50% - 4.5px); cursor: ns-resize; }
+.handle-br { bottom: -5px; right: -5px; cursor: nwse-resize; }
+
+/* ── Annotation Toolbar ───────────────────────────────────────────────── */
+
+.annotation-toolbar {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 6px;
+  background: rgba(18, 20, 26, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.2);
+  z-index: 90;
+  user-select: none;
+  transition: opacity 120ms ease;
+}
+
+.annotation-toolbar.hidden {
+  display: none;
+}
+
+.tool-group {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.toolbar-sep {
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 0 3px;
+}
+
+.tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #94a3b8;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 100ms ease;
+}
+
+.tool-btn svg {
+  width: 17px;
+  height: 17px;
+}
+
+.tool-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+}
+
+.tool-btn.active {
+  background: rgba(56, 189, 248, 0.18);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+.tool-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* Action button accents */
+.tool-btn.done-btn {
+  background: #10b981;
+  color: #ffffff;
+  border-color: #059669;
+}
+
+.tool-btn.done-btn:hover {
+  background: #059669;
+  color: #ffffff;
+}
+
+.tool-btn.cancel-btn:hover {
+  background: rgba(239, 68, 68, 0.18);
+  color: #ef4444;
+}
+
+/* Color palette */
+.color-palette {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 3px;
+}
+
+.color-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 100ms ease, box-shadow 100ms ease;
+  position: relative;
+}
+
+.color-dot:hover {
+  transform: scale(1.2);
+}
+
+.color-dot.active {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 2px #0f172a, 0 0 0 3.5px #38bdf8;
+}
+
+/* Stroke size selector */
+.stroke-selector {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.stroke-dot {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.stroke-preview {
+  background: #94a3b8;
+  border-radius: 50%;
+  display: block;
+  transition: background 100ms ease;
+}
+
+.stroke-dot:hover .stroke-preview {
+  background: #f8fafc;
+}
+
+.stroke-dot.active {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.stroke-dot.active .stroke-preview {
+  background: #38bdf8;
+}
+
+/* ── Inline Text Editor Overlay ───────────────────────────────────────── */
+
+.text-input-wrap {
+  position: absolute;
+  z-index: 85;
+}
+
+.text-input-wrap.hidden {
+  display: none;
+}
+
+#annotation-textarea {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1.5px dashed #38bdf8;
+  border-radius: 3px;
+  color: #ef4444;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Microsoft YaHei", "PingFang SC", sans-serif;
+  font-weight: 500;
+  line-height: 1.35;
+  padding: 4px 6px;
+  margin: 0;
+  resize: none;
+  outline: none;
+  min-width: 60px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* ── Toast notification ───────────────────────────────────────────────── */
+
+.toast {
+  position: fixed;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.94);
+  color: #f8fafc;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(12px);
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  z-index: 150;
+  opacity: 1;
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+
+.toast.hidden {
+  opacity: 0;
+  transform: translate(-50%, 10px);
+}
+

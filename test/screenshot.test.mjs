@@ -308,3 +308,152 @@ describe('Composer Screenshot Deduplication', () => {
     assert.equal(second.length, 2);
   });
 });
+
+// ── Screenshot Annotation i18n & Logic ────────────────────────────────────
+
+describe('Screenshot Annotation i18n keys', () => {
+  it('resolves all annotation keys in English', () => {
+    setLocale('en');
+    assert.equal(t('screenshot.overlay.tool.rect'), 'Rectangle');
+    assert.equal(t('screenshot.overlay.tool.circle'), 'Circle');
+    assert.equal(t('screenshot.overlay.tool.arrow'), 'Arrow');
+    assert.equal(t('screenshot.overlay.tool.pen'), 'Pen');
+    assert.equal(t('screenshot.overlay.tool.mosaic'), 'Mosaic');
+    assert.equal(t('screenshot.overlay.tool.text'), 'Text');
+    assert.equal(t('screenshot.overlay.tool.undo'), 'Undo (Ctrl+Z)');
+    assert.equal(t('screenshot.overlay.tool.redo'), 'Redo (Ctrl+Y)');
+    assert.equal(t('screenshot.overlay.tool.save'), 'Save to file (Ctrl+S)');
+    assert.equal(t('screenshot.overlay.tool.copy'), 'Copy to clipboard (Ctrl+C)');
+    assert.equal(t('screenshot.overlay.tool.cancel'), 'Cancel (Esc)');
+    assert.equal(t('screenshot.overlay.tool.done'), 'Done (Enter)');
+    assert.equal(t('screenshot.overlay.copied'), 'Copied to clipboard');
+    assert.equal(t('screenshot.overlay.saved'), 'Saved to file');
+    assert.equal(t('screenshot.overlay.saveFailed'), 'Failed to save file');
+  });
+
+  it('resolves all annotation keys in Chinese', () => {
+    setLocale('zh-CN');
+    assert.equal(t('screenshot.overlay.tool.rect'), '矩形');
+    assert.equal(t('screenshot.overlay.tool.circle'), '圆形');
+    assert.equal(t('screenshot.overlay.tool.arrow'), '箭头');
+    assert.equal(t('screenshot.overlay.tool.pen'), '画笔');
+    assert.equal(t('screenshot.overlay.tool.mosaic'), '马赛克');
+    assert.equal(t('screenshot.overlay.tool.text'), '文字');
+    assert.equal(t('screenshot.overlay.tool.undo'), '撤销 (Ctrl+Z)');
+    assert.equal(t('screenshot.overlay.tool.redo'), '重做 (Ctrl+Y)');
+    assert.equal(t('screenshot.overlay.tool.save'), '保存到文件 (Ctrl+S)');
+    assert.equal(t('screenshot.overlay.tool.copy'), '复制到剪贴板 (Ctrl+C)');
+    assert.equal(t('screenshot.overlay.tool.cancel'), '取消 (Esc)');
+    assert.equal(t('screenshot.overlay.tool.done'), '完成并发送 (Enter)');
+    assert.equal(t('screenshot.overlay.copied'), '已复制到剪贴板');
+    assert.equal(t('screenshot.overlay.saved'), '已保存到文件');
+    assert.equal(t('screenshot.overlay.saveFailed'), '保存文件失败');
+    setLocale('en');
+  });
+});
+
+describe('Screenshot Annotation Undo/Redo State Machine', () => {
+  function createHistoryManager() {
+    let shapes = [];
+    let undoStack = [];
+    let redoStack = [];
+
+    return {
+      getShapes: () => shapes,
+      addShape: (shape) => {
+        undoStack.push(shapes.slice());
+        redoStack = [];
+        shapes = [...shapes, shape];
+      },
+      undo: () => {
+        if (undoStack.length === 0) return false;
+        redoStack.push(shapes.slice());
+        shapes = undoStack.pop();
+        return true;
+      },
+      redo: () => {
+        if (redoStack.length === 0) return false;
+        undoStack.push(shapes.slice());
+        shapes = redoStack.pop();
+        return true;
+      },
+      canUndo: () => undoStack.length > 0,
+      canRedo: () => redoStack.length > 0,
+    };
+  }
+
+  it('manages empty history initial state', () => {
+    const mgr = createHistoryManager();
+    assert.equal(mgr.canUndo(), false);
+    assert.equal(mgr.canRedo(), false);
+    assert.equal(mgr.undo(), false);
+    assert.equal(mgr.redo(), false);
+  });
+
+  it('pushes shapes and supports undo/redo step-by-step', () => {
+    const mgr = createHistoryManager();
+    mgr.addShape({ type: 'rect', x: 10, y: 10, w: 50, h: 50 });
+    assert.equal(mgr.getShapes().length, 1);
+    assert.equal(mgr.canUndo(), true);
+    assert.equal(mgr.canRedo(), false);
+
+    mgr.addShape({ type: 'arrow', x1: 0, y1: 0, x2: 20, y2: 20 });
+    assert.equal(mgr.getShapes().length, 2);
+
+    // Undo arrow
+    assert.equal(mgr.undo(), true);
+    assert.equal(mgr.getShapes().length, 1);
+    assert.equal(mgr.getShapes()[0].type, 'rect');
+    assert.equal(mgr.canRedo(), true);
+
+    // Redo arrow
+    assert.equal(mgr.redo(), true);
+    assert.equal(mgr.getShapes().length, 2);
+    assert.equal(mgr.getShapes()[1].type, 'arrow');
+
+    // Adding shape clears redo stack
+    mgr.undo();
+    mgr.addShape({ type: 'circle', x: 5, y: 5, w: 20, h: 20 });
+    assert.equal(mgr.canRedo(), false);
+    assert.equal(mgr.getShapes().length, 2);
+    assert.equal(mgr.getShapes()[1].type, 'circle');
+  });
+});
+
+describe('Screenshot Annotation Handle Resizing', () => {
+  function resizeRect(init, handle, dx, dy) {
+    let { x, y, w, h } = init;
+    if (handle.includes('r')) w = Math.max(20, init.w + dx);
+    if (handle.includes('b')) h = Math.max(20, init.h + dy);
+    if (handle.includes('l')) {
+      const newW = Math.max(20, init.w - dx);
+      x = init.x + (init.w - newW);
+      w = newW;
+    }
+    if (handle.includes('t')) {
+      const newH = Math.max(20, init.h - dy);
+      y = init.y + (init.h - newH);
+      h = newH;
+    }
+    return { x, y, w, h };
+  }
+
+  it('resizes bottom-right handle smoothly', () => {
+    const initial = { x: 100, y: 100, w: 200, h: 150 };
+    const next = resizeRect(initial, 'br', 50, 30);
+    assert.deepEqual(next, { x: 100, y: 100, w: 250, h: 180 });
+  });
+
+  it('resizes top-left handle adjusting position and size', () => {
+    const initial = { x: 100, y: 100, w: 200, h: 150 };
+    const next = resizeRect(initial, 'tl', 30, 20);
+    assert.deepEqual(next, { x: 130, y: 120, w: 170, h: 130 });
+  });
+
+  it('clamps to minimum 20px size when shrinking past zero', () => {
+    const initial = { x: 100, y: 100, w: 50, h: 50 };
+    const next = resizeRect(initial, 'br', -100, -100);
+    assert.deepEqual(next, { x: 100, y: 100, w: 20, h: 20 });
+  });
+});
+

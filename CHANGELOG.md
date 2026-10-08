@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-08
+
+### Added
+
+- **Manual Screenshot Annotation & Multi-Channel Export**:
+  - Two-stage region capture workflow: drag to select an area, fine-tune with 8-direction resize handles or move the selection box, and annotate via a floating dark-mode glassmorphism toolbar.
+  - Comprehensive annotation toolset:
+    - Rectangle and circle/ellipse vector bounding boxes
+    - Streamlined swallowtail arrow with inward notched wings, natural shaft termination, and adaptive head sizing for clean, distortion-free pointers
+    - Smooth freehand pen / brush sketching
+    - Mosaic privacy blurring with local pixel-averaging to mask sensitive credentials, tokens, or personal information
+    - In-place text typing with color matching, multi-line support, and system font integration
+    - Palette of 6 high-contrast preset colors and 3 stroke widths (thin, medium, thick)
+    - Full undo/redo history stack with `Ctrl+Z` / `Ctrl+Y` keyboard shortcuts
+  - Multi-channel export actions:
+    - Send directly into the active conversation composer (Enter / Done button)
+    - Copy annotated image directly to system clipboard (Ctrl+C / Copy button) with toast notification, keeping the overlay active for continued editing
+    - Save to disk via native cross-platform file save dialog (Ctrl+S / Save button) with automatic window unpinning and parent attachment
+  - Preserved Quick Bar behavior: auto-screenshot mode continues to capture full screen directly in the background without launching the annotation overlay.
+  - Full bilingual i18n support in English and Chinese across all tools, shortcuts, and toast messages.
+
+
 ## [0.3.1] - 2026-09-30
 
 ### Added

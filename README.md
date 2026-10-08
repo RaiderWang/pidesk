@@ -94,6 +94,26 @@ Three auto-switching display modes driven by live session state:
 - System tray: single-click toggles Quick Bar; double-click opens the main window; right-click menu has **Show PiDesk**, **Quick Bar**, **Quit**
 - Closing the main window **hides** it (tray and Quick Bar keep working); exit fully via tray **Quit**
 
+### Screenshot Capture & Annotation
+
+- **Quick Trigger** — Global shortcut `Alt+S` (customizable in Tweaks), or click the screenshot action in the chat composer image menu or Quick Bar
+- **Two-stage Region Selection** — Drag to select a region, adjust freely with 8-direction resize handles or move the selection box, and annotate via a floating dark-mode glassmorphic toolbar
+- **Rich Annotation Suite**:
+  - **Rectangle & Circle/Ellipse** — Clean bounding boxes
+  - **Streamlined Arrow** — Professional swallowtail notched arrow with sharp pointers
+  - **Freehand Pen** — Smooth sketching and underlining
+  - **Mosaic Blur** — Local pixel-averaging to redact sensitive credentials, tokens, or personal information
+  - **Inline Text** — In-place multi-line typing with automatic font sizing and color sync
+  - **Color & Stroke Pickers** — 6 vibrant preset colors and 3 stroke widths
+  - **Undo / Redo** — Full history stack via `Ctrl+Z` / `Ctrl+Y` (`⌘Z` / `⌘⇧Z`)
+- **Multi-channel Export**:
+  - **Done** (`Enter` or ✔) — Synthesizes high-DPI annotated image directly into the active session composer
+  - **Copy to Clipboard** (`Ctrl+C` or 📋) — Writes image to system clipboard with a toast notification, keeping the overlay open for continuous workflow
+  - **Save to Disk** (`Ctrl+S` or 💾) — Prompts native cross-platform save dialog to export as PNG or JPEG
+  - **Cancel** (`Esc` or ✕) — Discards selection and returns
+- **Headless Quick Bar Screen Mode** — When auto-screenshot is enabled in Quick Bar, pressing Enter sends screen context directly in the background without opening the annotation overlay
+
+
 ---
 
 ## Installation

@@ -315,6 +315,8 @@ pub fn run() {
             screenshot::capture_screen,
             screenshot::start_region_capture,
             screenshot::finish_region_capture,
+            screenshot::finish_annotated_capture,
+            screenshot::save_screenshot_to_disk,
             screenshot::cancel_region_capture,
             screenshot::get_screenshot_background,
             files::list_directory,
