@@ -407,8 +407,9 @@ function ModelManagerModal({ open, onClose, onModelUpdated }) {
                                 </span>
                               )}
                               {m.reasoning && (
-                                <span className="chip mono" style={{ fontSize: 10, padding: "1px 5px", color: "var(--lilac)", borderColor: "var(--lilac)" }}>
-                                  reasoning
+                                <span className="chip mono" style={{ fontSize: 10, padding: "1px 5px", color: "var(--lilac)", borderColor: "var(--lilac)" }}
+                                  title={m.thinking?.efforts ? `Thinking levels: ${m.thinking.efforts.join(", ")}${m.thinking.defaultLevel ? ` (default: ${m.thinking.defaultLevel})` : ""}` : "Reasoning supported"}>
+                                  {m.thinking?.efforts ? `thinking (${m.thinking.efforts.length})` : "reasoning"}
                                 </span>
                               )}
                               {((Array.isArray(m.input) && m.input.includes("image")) || m.images || m.vision) && (
@@ -511,6 +512,15 @@ function EditModelModal({ item, pKeys, onClose, onSave }) {
   const [ctx, setCtx]                 = React.useState(item.model?.contextWindow ?? 200000);
   const [maxTok, setMaxTok]           = React.useState(item.model?.maxTokens ?? 8192);
   const [reasoning, setReasoning]     = React.useState(!!item.model?.reasoning);
+  const existingEfforts = Array.isArray(item.model?.thinking?.efforts)
+    ? item.model.thinking.efforts
+    : [];
+  const [thinkingEfforts, setThinkingEfforts] = React.useState(
+    existingEfforts.length > 0 ? existingEfforts.join(", ") : ""
+  );
+  const [thinkingDefault, setThinkingDefault] = React.useState(
+    item.model?.thinking?.defaultLevel || ""
+  );
   const [vision, setVision]           = React.useState(
     Array.isArray(item.model?.input)
       ? item.model.input.includes("image")
@@ -521,7 +531,10 @@ function EditModelModal({ item, pKeys, onClose, onSave }) {
   const handleSubmit = (e) => {
     e?.preventDefault();
     if (!id.trim()) { setErr("Model ID is required"); return; }
-    onSave(providerKey, {
+    const parsedEfforts = reasoning
+      ? thinkingEfforts.split(/[,\s]+/).map(s => s.trim().toLowerCase()).filter(Boolean)
+      : [];
+    const modelData = {
       ...item.model,
       id: id.trim(),
       name: name.trim() || id.trim(),
@@ -529,7 +542,21 @@ function EditModelModal({ item, pKeys, onClose, onSave }) {
       maxTokens: Number(maxTok) || 8192,
       reasoning: !!reasoning,
       input: vision ? ["text", "image"] : ["text"],
-    }, item.isNew, item.oldId);
+    };
+    if (reasoning && parsedEfforts.length > 0) {
+      const defLevel = thinkingDefault && parsedEfforts.includes(thinkingDefault)
+        ? thinkingDefault
+        : undefined;
+      modelData.thinking = {
+        mode: item.model?.thinking?.mode || "effort",
+        efforts: parsedEfforts,
+        ...(defLevel ? { defaultLevel: defLevel } : {}),
+        ...(item.model?.thinking?.effortMap ? { effortMap: item.model.thinking.effortMap } : {}),
+      };
+    } else {
+      delete modelData.thinking;
+    }
+    onSave(providerKey, modelData, item.isNew, item.oldId);
   };
 
   return (
@@ -578,8 +605,63 @@ function EditModelModal({ item, pKeys, onClose, onSave }) {
 
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "var(--d-text-xs)", color: "var(--fg-2)", cursor: "pointer", marginTop: 4 }}>
             <input type="checkbox" checked={reasoning} onChange={e => setReasoning(e.target.checked)} />
-            Support reasoning / thinking effort
+            {window.t ? window.t("models.edit.reasoning", null, "Support reasoning / thinking effort") : "Support reasoning / thinking effort"}
           </label>
+
+          {reasoning && (
+            <div style={{
+              display: "flex", flexDirection: "column", gap: 8,
+              padding: "10px 12px", borderRadius: 6,
+              background: "color-mix(in oklab, var(--lilac) 8%, var(--bg-surface))",
+              border: "1px solid color-mix(in oklab, var(--lilac) 25%, transparent)",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", fontSize: "var(--d-text-xs)", color: "var(--fg-3)" }}>
+                <span>{window.t ? window.t("models.edit.thinkingPresets", null, "Presets:") : "Presets:"}</span>
+                <button type="button" className="btn ghost" style={{ height: 20, padding: "0 6px", fontSize: 10 }}
+                  onClick={() => { setThinkingEfforts("low, medium, high"); setThinkingDefault("medium"); }}>
+                  {window.t ? window.t("models.edit.presetOpenAI", null, "OpenAI (3 levels)") : "OpenAI (3 levels)"}
+                </button>
+                <button type="button" className="btn ghost" style={{ height: 20, padding: "0 6px", fontSize: 10 }}
+                  onClick={() => { setThinkingEfforts("minimal, low, medium, high, xhigh, max"); setThinkingDefault("high"); }}>
+                  {window.t ? window.t("models.edit.presetClaude", null, "Claude (6 levels)") : "Claude (6 levels)"}
+                </button>
+                <button type="button" className="btn ghost" style={{ height: 20, padding: "0 6px", fontSize: 10 }}
+                  onClick={() => { setThinkingEfforts("low, high"); setThinkingDefault("high"); }}>
+                  {window.t ? window.t("models.edit.presetDeepSeek", null, "DeepSeek / Dual (2 levels)") : "DeepSeek / Dual (2 levels)"}
+                </button>
+              </div>
+
+              <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "var(--d-text-xs)", color: "var(--fg-3)" }}>
+                {window.t ? window.t("models.edit.thinkingEfforts", null, "Thinking Levels (comma-separated):") : "Thinking Levels (comma-separated):"}
+                <input
+                  className="bridge-input mono"
+                  value={thinkingEfforts}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setThinkingEfforts(val);
+                    if (!val.trim()) {
+                      setThinkingDefault("");
+                    }
+                  }}
+                  placeholder={window.t ? window.t("models.edit.thinkingEffortsPlaceholder", null, "e.g. low, medium, high") : "e.g. low, medium, high"}
+                />
+              </label>
+
+              <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "var(--d-text-xs)", color: "var(--fg-3)" }}>
+                {window.t ? window.t("models.edit.thinkingDefault", null, "Default Thinking Level:") : "Default Thinking Level:"}
+                <select
+                  value={thinkingDefault}
+                  onChange={e => setThinkingDefault(e.target.value)}
+                  className="bridge-input mono"
+                  style={{ height: 26, padding: "0 6px", background: "var(--bg-surface)", border: "1px solid var(--line)", borderRadius: 4, color: "var(--fg)" }}>
+                  <option value="">{window.t ? window.t("models.edit.thinkingDefaultNone", null, "None (not set)") : "None (not set)"}</option>
+                  {thinkingEfforts.split(/[,\s]+/).map(s => s.trim().toLowerCase()).filter(Boolean).map(lvl => (
+                    <option key={lvl} value={lvl}>{lvl}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
 
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "var(--d-text-xs)", color: "var(--fg-2)", cursor: "pointer", marginTop: 2 }}>
             <input type="checkbox" checked={vision} onChange={e => setVision(e.target.checked)} />

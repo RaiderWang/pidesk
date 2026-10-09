@@ -57,6 +57,8 @@
 }
 .composer-pill:hover { border-color: var(--line-bright); background: var(--bg-hover); }
 .composer-pill.on { border-color: color-mix(in oklab, var(--amber) 50%, var(--line)); background: color-mix(in oklab, var(--amber) 12%, transparent); }
+.composer-pill.disabled { opacity: 0.45; cursor: not-allowed; }
+.composer-pill.disabled:hover { border-color: var(--line); background: var(--bg-elevated); }
 
 /* slash palette pop */
 .slash-pop {

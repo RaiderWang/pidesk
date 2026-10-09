@@ -165,6 +165,7 @@
 }
 
 .qb-result {
+  user-select: text;
   min-height: 32px;
   max-height: 360px;
   overflow-y: auto;

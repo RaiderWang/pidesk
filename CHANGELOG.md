@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-09
+
+### Added
+
+- **Dynamic Thinking Levels & Model Reasoning Configuration**:
+  - Support configuring custom thinking effort level sequences per model in `models.yml` (e.g. OpenAI 3 levels, Claude 6 levels, DeepSeek dual levels `low, high`, or arbitrary sequences).
+  - Recommended presets in Model Manager modal for rapid configuration (OpenAI, Claude, DeepSeek) alongside default thinking level selection.
+  - Model card chip indicators in Model Manager showing configured thinking effort counts and details.
+  - Dynamic runtime thinking level cycling based on the current model's supported levels queried via `get_available_thinking_levels` RPC or `models.yml` configuration.
+  - Automatic isolation and fallback: switching to non-reasoning models automatically resets thinking mode to `off` preventing cross-model pollution; unsupported models render the thinking pill disabled with descriptive tooltip.
+  - Real-time synchronization with upstream `thinking_level_changed` backend RPC events.
+  - Complete bilingual i18n support in English and Chinese across all model configuration controls and tooltips.
+
+### Fixed
+
+- **Instant Hot-Reload for Custom Model Thinking Levels**: Fixed an issue where editing a model's thinking effort sequence in Model Manager (e.g. from default to `low, medium, high`) did not take effect immediately and still cycled through stale levels (such as `xhigh`) until app restart. Thinking level cycling is now determined client-side based on the active model's configured efforts, with automatic sanitization of backend events and instantaneous model parameter synchronization upon saving.
+
 ## [0.3.2] - 2026-10-08
 
 ### Added

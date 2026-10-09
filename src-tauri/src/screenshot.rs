@@ -44,6 +44,8 @@ pub struct ScreenshotState {
     pub current_background: Mutex<Option<String>>,
     /// Window that should receive the capture result and be restored.
     pub target: Mutex<CaptureTarget>,
+    /// Whether the target window was visible prior to capture and should be restored on cancel.
+    pub restore_on_cancel: Mutex<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -146,6 +148,13 @@ pub fn capture_primary_screen() -> Result<RgbaImage, String> {
         .map_err(|e| format!("screen capture failed: {e}"))
 }
 
+/// Determine whether the target window should be re-shown when region capture is cancelled.
+/// Only restore if the target window was actually visible before capture started.
+#[must_use]
+pub fn should_restore_target_on_cancel(target_was_visible: bool) -> bool {
+    target_was_visible
+}
+
 // ── Tauri Commands ──────────────────────────────────────────────────────
 
 /// Capture full screen, downscaling if wider than [`DEFAULT_MAX_WIDTH`].
@@ -221,6 +230,18 @@ pub fn warm_up(app: &AppHandle) -> Result<(), String> {
 
 /// Begin region capture: hide target/source window, freeze screen, show overlay.
 pub async fn begin_region_capture(app: &AppHandle, target: CaptureTarget) -> Result<(), String> {
+    let target_was_visible = match target {
+        CaptureTarget::Main => app
+            .get_webview_window(MAIN_WINDOW_LABEL)
+            .and_then(|w| w.is_visible().ok())
+            .unwrap_or(false),
+        CaptureTarget::QuickBar => app
+            .get_webview_window(QUICK_BAR_LABEL)
+            .and_then(|w| w.is_visible().ok())
+            .unwrap_or(false),
+    };
+    let restore_on_cancel = should_restore_target_on_cancel(target_was_visible);
+
     let raw_img_res = tauri::async_runtime::spawn_blocking({
         let app = app.clone();
         move || {
@@ -249,17 +270,19 @@ pub async fn begin_region_capture(app: &AppHandle, target: CaptureTarget) -> Res
     let raw_img = match raw_img_res {
         Ok(img) => img,
         Err(e) => {
-            match target {
-                CaptureTarget::Main => {
-                    if let Some(main) = app.get_webview_window(MAIN_WINDOW_LABEL) {
-                        let _ = main.show();
-                        let _ = main.set_focus();
+            if restore_on_cancel {
+                match target {
+                    CaptureTarget::Main => {
+                        if let Some(main) = app.get_webview_window(MAIN_WINDOW_LABEL) {
+                            let _ = main.show();
+                            let _ = main.set_focus();
+                        }
                     }
-                }
-                CaptureTarget::QuickBar => {
-                    if let Some(qb) = app.get_webview_window(QUICK_BAR_LABEL) {
-                        let _ = qb.show();
-                        let _ = qb.set_focus();
+                    CaptureTarget::QuickBar => {
+                        if let Some(qb) = app.get_webview_window(QUICK_BAR_LABEL) {
+                            let _ = qb.show();
+                            let _ = qb.set_focus();
+                        }
                     }
                 }
             }
@@ -282,6 +305,10 @@ pub async fn begin_region_capture(app: &AppHandle, target: CaptureTarget) -> Res
     {
         let mut target_guard = state.target.lock().unwrap();
         *target_guard = target;
+    }
+    {
+        let mut restore_guard = state.restore_on_cancel.lock().unwrap();
+        *restore_guard = restore_on_cancel;
     }
 
     let win = get_or_create_overlay(app)?;
@@ -355,25 +382,30 @@ pub fn finish_region_capture(
         let mut bg_guard = state.current_background.lock().unwrap();
         *bg_guard = None;
     }
-    let target = {
+    let (target, restore) = {
         let mut target_guard = state.target.lock().unwrap();
+        let mut restore_guard = state.restore_on_cancel.lock().unwrap();
         let current = *target_guard;
+        let current_restore = *restore_guard;
         *target_guard = CaptureTarget::QuickBar;
-        current
+        *restore_guard = false;
+        (current, current_restore)
     };
 
     let Some(raw_img) = frozen else {
-        match target {
-            CaptureTarget::Main => {
-                if let Some(main) = app.get_webview_window(MAIN_WINDOW_LABEL) {
-                    let _ = main.show();
-                    let _ = main.set_focus();
+        if restore {
+            match target {
+                CaptureTarget::Main => {
+                    if let Some(main) = app.get_webview_window(MAIN_WINDOW_LABEL) {
+                        let _ = main.show();
+                        let _ = main.set_focus();
+                    }
                 }
-            }
-            CaptureTarget::QuickBar => {
-                if let Some(qb) = app.get_webview_window(QUICK_BAR_LABEL) {
-                    let _ = qb.show();
-                    let _ = qb.set_focus();
+                CaptureTarget::QuickBar => {
+                    if let Some(qb) = app.get_webview_window(QUICK_BAR_LABEL) {
+                        let _ = qb.show();
+                        let _ = qb.set_focus();
+                    }
                 }
             }
         }
@@ -421,7 +453,7 @@ pub fn finish_region_capture(
     Ok(())
 }
 
-/// Cancel region selection and re-show target window.
+/// Cancel region selection and re-show target window only if it was originally visible.
 #[tauri::command]
 pub fn cancel_region_capture(
     app: AppHandle,
@@ -438,24 +470,29 @@ pub fn cancel_region_capture(
         let mut bg_guard = state.current_background.lock().unwrap();
         *bg_guard = None;
     }
-    let target = {
+    let (target, restore) = {
         let mut target_guard = state.target.lock().unwrap();
+        let mut restore_guard = state.restore_on_cancel.lock().unwrap();
         let current = *target_guard;
+        let current_restore = *restore_guard;
         *target_guard = CaptureTarget::QuickBar;
-        current
+        *restore_guard = false;
+        (current, current_restore)
     };
 
-    match target {
-        CaptureTarget::Main => {
-            if let Some(main) = app.get_webview_window(MAIN_WINDOW_LABEL) {
-                let _ = main.show();
-                let _ = main.set_focus();
+    if restore {
+        match target {
+            CaptureTarget::Main => {
+                if let Some(main) = app.get_webview_window(MAIN_WINDOW_LABEL) {
+                    let _ = main.show();
+                    let _ = main.set_focus();
+                }
             }
-        }
-        CaptureTarget::QuickBar => {
-            if let Some(qb) = app.get_webview_window(QUICK_BAR_LABEL) {
-                let _ = qb.show();
-                let _ = qb.set_focus();
+            CaptureTarget::QuickBar => {
+                if let Some(qb) = app.get_webview_window(QUICK_BAR_LABEL) {
+                    let _ = qb.show();
+                    let _ = qb.set_focus();
+                }
             }
         }
     }
@@ -489,8 +526,10 @@ pub fn finish_annotated_capture(
     }
     let target = {
         let mut target_guard = state.target.lock().unwrap();
+        let mut restore_guard = state.restore_on_cancel.lock().unwrap();
         let current = *target_guard;
         *target_guard = CaptureTarget::QuickBar;
+        *restore_guard = false;
         current
     };
 
@@ -647,16 +686,25 @@ mod tests {
         assert!(state.frozen_image.lock().unwrap().is_none());
         assert!(state.current_background.lock().unwrap().is_none());
         assert_eq!(*state.target.lock().unwrap(), CaptureTarget::QuickBar);
+        assert!(!*state.restore_on_cancel.lock().unwrap());
 
         *state.current_background.lock().unwrap() = Some("data:image/jpeg;base64,abc".to_string());
         *state.target.lock().unwrap() = CaptureTarget::Main;
+        *state.restore_on_cancel.lock().unwrap() = true;
         assert_eq!(
             state.current_background.lock().unwrap().as_deref(),
             Some("data:image/jpeg;base64,abc")
         );
         assert_eq!(*state.target.lock().unwrap(), CaptureTarget::Main);
+        assert!(*state.restore_on_cancel.lock().unwrap());
 
         *state.current_background.lock().unwrap() = None;
         assert!(state.current_background.lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn restore_on_cancel_decision() {
+        assert!(!should_restore_target_on_cancel(false));
+        assert!(should_restore_target_on_cancel(true));
     }
 }

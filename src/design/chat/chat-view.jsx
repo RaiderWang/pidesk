@@ -89,7 +89,8 @@ function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, 
   const prevCountRef = React.useRef(0);
 
   // Track whether user is near the bottom
-  const onScroll = () => {
+  const onScroll = (e) => {
+    if (e && e.target && e.target !== scrollRef.current) return;
     const el = scrollRef.current;
     if (!el) return;
     atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;

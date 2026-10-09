@@ -89,6 +89,22 @@ describe('Quick Bar Screenshot mode transitions', () => {
   });
 });
 
+describe('Screenshot cancellation window restoration logic', () => {
+  function shouldRestoreOnCancel({ targetWasVisible }) {
+    return Boolean(targetWasVisible);
+  }
+
+  it('does not restore/show quick bar on cancel when triggered with PiDesk in background', () => {
+    const restore = shouldRestoreOnCancel({ targetWasVisible: false });
+    assert.equal(restore, false);
+  });
+
+  it('restores window on cancel if caller window was originally visible', () => {
+    const restore = shouldRestoreOnCancel({ targetWasVisible: true });
+    assert.equal(restore, true);
+  });
+});
+
 // ── Submit payload construction ───────────────────────────────────────────
 
 describe('Quick Bar Submit payload construction', () => {

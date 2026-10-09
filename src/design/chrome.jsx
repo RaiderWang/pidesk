@@ -189,7 +189,7 @@ function StatusBar({ ctx, model, thinking, todoDone, todoTotal, onTodo, onModel,
     medium: window.t ? window.t("chrome.status.thinking.medium", null, "med") : "med",
     high: window.t ? window.t("chrome.status.thinking.high", null, "high") : "high",
     xhigh: window.t ? window.t("chrome.status.thinking.xhigh", null, "max") : "max",
-  }[thinking] ?? "—";
+  }[thinking] ?? thinking ?? "—";
   const isConnected = !agentError;
   return (
     <div className="status">

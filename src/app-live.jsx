@@ -93,6 +93,7 @@ function App() {
   const [streaming,     setStreaming]     = React.useState(false);
   const [model,         setModelState]    = React.useState(NULL_MODEL);
   const [thinkingLevel, setThinkingLevel] = React.useState(null);
+  const [availableThinkingLevels, setAvailableThinkingLevels] = React.useState(null);
   const [ctx,           setCtx]           = React.useState(data.ctx);
   const [kanban,        setKanban]        = React.useState([]);
   const [planMeta,      setPlanMeta]      = React.useState(data.planMeta);
@@ -162,7 +163,7 @@ function App() {
   useBridgeSnapshot(bridge, {
     setMessages, setStreaming, setCtx, setKanban, setPlanMeta,
     setModels, setActivity, setSparkline,
-    setModelState, setThinkingLevel,
+    setModelState, setThinkingLevel, setAvailableThinkingLevels,
     setSessions, setActiveSessionId,
     setPeer, setPeerSessionId,
     setRunningTools, setRecentTools, setTurnStartMs,
@@ -453,6 +454,7 @@ function App() {
                 onOpenModel={() => openBridge("models")}
                 currentModel={model}
                 thinking={thinkingLevel}
+                availableThinkingLevels={availableThinkingLevels}
                 onCycleThinking={cycleThinking}
                 isStreaming={streaming}
                 onAbort={handleAbort}

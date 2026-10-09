@@ -106,7 +106,11 @@ function App() {
   };
 
   const cycleThinking = () => setThinkingLevel((x) => {
-    const levels = ["off", "low", "medium", "high"];
+    const hasReasoning = Boolean(model?.reasoning || model?.thinking);
+    if (!hasReasoning) return "off";
+    const levels = (Array.isArray(model?.thinking?.efforts) && model.thinking.efforts.length > 0)
+      ? ["off", ...model.thinking.efforts]
+      : ["off", "low", "medium", "high"];
     const idx = levels.indexOf(x);
     return levels[(idx + 1) % levels.length];
   });

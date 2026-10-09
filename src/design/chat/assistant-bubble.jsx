@@ -51,10 +51,35 @@ function ThoughtBlock({ thought, streaming, lead }) {
   const [userOpen, setUserOpen] = React.useState(null);
   const isOpen = userOpen !== null ? userOpen : isThinking;
 
+  const bodyRef = React.useRef(null);
+  const atBottomRef = React.useRef(true);
+
+  const handleScroll = React.useCallback((e) => {
+    e.stopPropagation();
+    const el = bodyRef.current;
+    if (!el) return;
+    atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight <= 40;
+  }, []);
+
+  React.useEffect(() => {
+    if (!isOpen || !streaming) return;
+    const el = bodyRef.current;
+    if (!el) return;
+    if (atBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [thought, isOpen, streaming]);
+
   const toggleOpen = React.useCallback(() => {
     if (window.getSelection && window.getSelection().toString()) return;
-    setUserOpen(prev => !(prev !== null ? prev : isThinking));
-  }, [isThinking]);
+    setUserOpen(prev => {
+      const next = !(prev !== null ? prev : isThinking);
+      if (next && streaming) {
+        atBottomRef.current = true;
+      }
+      return next;
+    });
+  }, [isThinking, streaming]);
 
   const toggleTitle = isOpen
     ? (window.t ? window.t("chat.collapseThought", null, "Collapse thinking process") : "Collapse thinking process")
@@ -95,7 +120,7 @@ function ThoughtBlock({ thought, streaming, lead }) {
       </button>
 
       {isOpen && (
-        <div className="thought-body selectable">
+        <div className="thought-body selectable" ref={bodyRef} onScroll={handleScroll}>
           <div className="thought-content">{thought || (isThinking ? (window.t ? window.t("chat.thinkingActive", null, "thinking…") : "thinking…") : "")}</div>
         </div>
       )}

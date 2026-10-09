@@ -291,6 +291,36 @@ describe('round-trip (dump then parse)', () => {
     assert.strictEqual(parsed.providers.test.models[0].reasoning, false);
   });
 
+  it('preserves thinking block (efforts and defaultLevel) across dump and parse', () => {
+    const original = {
+      providers: {
+        custom: {
+          apiKey: '',
+          models: [
+            {
+              id: 'deepseek-reasoner',
+              reasoning: true,
+              thinking: {
+                mode: 'effort',
+                efforts: ['low', 'high'],
+                defaultLevel: 'high',
+              },
+            },
+          ],
+        },
+      },
+    };
+    const dumped = dumpModelsYaml(original);
+    assert.ok(dumped.includes('thinking:'), 'should dump thinking block');
+    assert.ok(dumped.includes('efforts:'), 'should dump efforts');
+    assert.ok(dumped.includes('- low'), 'should dump effort values');
+    const parsed = parseModelsYaml(dumped);
+    const m = parsed.providers.custom.models[0];
+    assert.strictEqual(m.reasoning, true);
+    assert.deepEqual(m.thinking.efforts, ['low', 'high']);
+    assert.strictEqual(m.thinking.defaultLevel, 'high');
+  });
+
   it('preserves oauth auth mode', () => {
     const original = {
       providers: {

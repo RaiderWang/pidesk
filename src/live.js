@@ -56,6 +56,7 @@
     isStreaming:    false,
     model:          null,
     thinkingLevel:  null,
+    availableThinkingLevels: null,
     ctx:            { ...DEFAULT_DATA.ctx },
     kanban:         [],
     planMeta:       { ...DEFAULT_DATA.planMeta },
@@ -221,6 +222,7 @@
       isStreaming:     state.isStreaming,
       model:           state.model,
       thinkingLevel:   state.thinkingLevel,
+      availableThinkingLevels: state.availableThinkingLevels,
       ctx:             state.ctx,
       kanban:          state.kanban,
       planMeta:        state.planMeta,
@@ -269,6 +271,7 @@
       isStreaming:   false,
       model:         null,
       thinkingLevel: null,
+      availableThinkingLevels: null,
       ctx:           { ...DEFAULT_DATA.ctx },
       kanban:        [],
       planMeta:      { ...DEFAULT_DATA.planMeta },
@@ -399,6 +402,7 @@
       isStreaming:   state.isStreaming,
       model:         state.model,
       thinkingLevel: state.thinkingLevel,
+      availableThinkingLevels: state.availableThinkingLevels,
       ctx:           { ...state.ctx },
       kanban:        state.kanban,
       planMeta:      state.planMeta,
@@ -439,6 +443,7 @@
       isStreaming:   snap.isStreaming,
       model:         snap.model,
       thinkingLevel: snap.thinkingLevel,
+      availableThinkingLevels: snap.availableThinkingLevels ?? null,
       ctx:           snap.ctx,
       kanban:        snap.kanban,
       planMeta:      snap.planMeta,
@@ -719,21 +724,57 @@
       }));
       _loadCustomModelsFromConfig().then(customData => {
         state.models = _mergeModels(rpcModels, customData);
+        _syncCurrentModel();
         notify();
         console.log(`[live] models loaded (${state.models.length} total) for session '${activeSessionId}'`);
       }).catch(() => {
         state.models = rpcModels;
+        _syncCurrentModel();
         notify();
       });
+
+    } else if (command === "get_available_thinking_levels") {
+      if (Array.isArray(data?.levels)) {
+        const customModel = state.models?.find(m => m.id === state.model?.id && (!state.model?.provider || m.provider === state.model?.provider))
+          || state.models?.find(m => m.id === state.model?.id);
+        const customEfforts = customModel?.thinking?.efforts ?? state.model?.thinking?.efforts;
+
+        if (Array.isArray(customEfforts) && customEfforts.length > 0) {
+          state.availableThinkingLevels = ["off", ...customEfforts];
+        } else if (state.model?.reasoning === false) {
+          state.availableThinkingLevels = ["off"];
+        } else {
+          state.availableThinkingLevels = data.levels;
+        }
+        if (state.thinkingLevel && state.thinkingLevel !== "off" && !state.availableThinkingLevels.includes(state.thinkingLevel)) {
+          const fallback = state.availableThinkingLevels.length > 1
+            ? (state.model?.thinking?.defaultLevel || state.availableThinkingLevels[1] || "off")
+            : "off";
+          state.thinkingLevel = fallback;
+          _savePrefs({ thinkingLevel: fallback });
+          if (fallback !== "off") {
+            _send({ type: "set_thinking_level", level: fallback });
+          }
+        }
+        notify();
+      }
 
     } else if (command === "set_model") {
       if (data) {
         state.model  = _buildModelEntry(data);
         state.models = state.models.map(m => ({ ...m, current: m.id === data.id }));
         _savePrefs({ modelId: data.id, modelProvider: data.provider, modelName: data.name });
-        if (state.thinkingLevel) {
-          _send({ type: "set_thinking_level", level: state.thinkingLevel });
+        _syncCurrentModel();
+        const isExplicitlyNonReasoning = state.model?.reasoning === false;
+        if (state.thinkingLevel && state.thinkingLevel !== "off") {
+          if (isExplicitlyNonReasoning) {
+            state.thinkingLevel = "off";
+            _savePrefs({ thinkingLevel: "off" });
+          } else {
+            _send({ type: "set_thinking_level", level: state.thinkingLevel });
+          }
         }
+        _send({ type: "get_available_thinking_levels" });
         _send({ type: "get_state" });
         notify();
       }
@@ -745,21 +786,32 @@
         state.models = state.models.map(m => ({ ...m, current: m.id === data.model.id }));
         _savePrefs({ modelId: data.model.id, modelProvider: data.model.provider, modelName: data.model.name });
         if (data.thinkingLevel != null) _savePrefs({ thinkingLevel: data.thinkingLevel });
+        _send({ type: "get_available_thinking_levels" });
         notify();
       }
 
     } else if (command === "cycle_thinking_level") {
-      if (data?.level != null) {
-        // omp reported the new level — use it.
-        state.thinkingLevel = data.level;
+      const hasReasoning = Boolean(
+        state.model?.reasoning ||
+        state.model?.thinking ||
+        (Array.isArray(state.availableThinkingLevels) && state.availableThinkingLevels.length > 1)
+      );
+      if (!hasReasoning) {
+        state.thinkingLevel = "off";
       } else {
-        // omp didn't report a level (null response). Cycle client-side
-        // through the practical tiers and push the choice via set_thinking_level.
-        const LEVELS = ["off", "low", "medium", "high"];
-        const idx = LEVELS.indexOf(state.thinkingLevel);
-        const next = LEVELS[(idx + 1) % LEVELS.length];
-        state.thinkingLevel = next;
-        _send({ type: "set_thinking_level", level: next });
+        const validLevels = (Array.isArray(state.availableThinkingLevels) && state.availableThinkingLevels.length > 1)
+          ? state.availableThinkingLevels
+          : (Array.isArray(state.model?.thinking?.efforts) && state.model.thinking.efforts.length > 0)
+            ? ["off", ...state.model.thinking.efforts]
+            : ["off", "low", "medium", "high"];
+        if (data?.level != null && validLevels.includes(data.level)) {
+          state.thinkingLevel = data.level;
+        } else {
+          const idx = validLevels.indexOf(state.thinkingLevel);
+          const next = validLevels[(idx + 1) % validLevels.length];
+          state.thinkingLevel = next;
+          _send({ type: "set_thinking_level", level: next });
+        }
       }
       _savePrefs({ thinkingLevel: state.thinkingLevel });
       notify();
@@ -784,7 +836,60 @@
       latency:  0,
       current:  true,
       input:    m.input,
+      reasoning: m.reasoning,
+      thinking:  m.thinking,
     };
+  }
+
+  function _syncCurrentModel() {
+    if (!state.model || !Array.isArray(state.models) || state.models.length === 0) return;
+    const match = state.models.find(m => m.id === state.model.id && (!state.model.provider || m.provider === state.model.provider))
+      || state.models.find(m => m.id === state.model.id);
+    if (!match) return;
+
+    const prevReasoning = Boolean(state.model.reasoning || state.model.thinking);
+    const hasReasoning = Boolean(match.reasoning || match.thinking);
+
+    state.model = {
+      ...state.model,
+      name:          match.name || state.model.name,
+      provider:      match.provider || state.model.provider,
+      reasoning:     match.reasoning,
+      thinking:      match.thinking,
+      input:         match.input || state.model.input,
+      contextWindow: match.contextWindow || state.model.contextWindow,
+      maxTokens:     match.maxTokens || state.model.maxTokens,
+    };
+
+    if (!hasReasoning) {
+      state.availableThinkingLevels = ["off"];
+      if (state.thinkingLevel && state.thinkingLevel !== "off") {
+        state.thinkingLevel = "off";
+        _savePrefs({ thinkingLevel: "off" });
+        _send({ type: "set_thinking_level", level: "off" });
+      }
+    } else {
+      const configuredEfforts = Array.isArray(match.thinking?.efforts) && match.thinking.efforts.length > 0
+        ? match.thinking.efforts
+        : ["low", "medium", "high"];
+      state.availableThinkingLevels = ["off", ...configuredEfforts];
+
+      if (!prevReasoning && (state.thinkingLevel === "off" || !state.thinkingLevel)) {
+        const defaultLevel = match.thinking?.defaultLevel || configuredEfforts[0] || "off";
+        state.thinkingLevel = defaultLevel;
+        _savePrefs({ thinkingLevel: defaultLevel });
+        if (defaultLevel !== "off") {
+          _send({ type: "set_thinking_level", level: defaultLevel });
+        }
+      } else if (state.thinkingLevel && state.thinkingLevel !== "off" && !state.availableThinkingLevels.includes(state.thinkingLevel)) {
+        const nextLevel = match.thinking?.defaultLevel || configuredEfforts[0] || "off";
+        state.thinkingLevel = nextLevel;
+        _savePrefs({ thinkingLevel: nextLevel });
+        if (nextLevel !== "off") {
+          _send({ type: "set_thinking_level", level: nextLevel });
+        }
+      }
+    }
   }
 
   // ── AgentSessionEvent handler ─────────────────────────────────────────────
@@ -882,6 +987,21 @@
       const NEEDS_RESPONSE = ["confirm", "editor"];
       if (NEEDS_RESPONSE.includes(ev.method)) {
         _send({ type: "extension_ui_response", id: ev.id, cancelled: true });
+      }
+      return;
+    }
+
+    if (type === "thinking_level_changed") {
+      let newLevel = ev.thinkingLevel ?? "off";
+      if (Array.isArray(state.availableThinkingLevels) && state.availableThinkingLevels.length > 0) {
+        if (!state.availableThinkingLevels.includes(newLevel)) {
+          newLevel = state.availableThinkingLevels[0] || "off";
+        }
+      }
+      if (state.thinkingLevel !== newLevel) {
+        state.thinkingLevel = newLevel;
+        _savePrefs({ thinkingLevel: newLevel });
+        notify();
       }
       return;
     }
@@ -1331,6 +1451,7 @@
 
     if (rpcState.model) {
       state.model = _buildModelEntry(rpcState.model);
+      _syncCurrentModel();
     }
     if (rpcState.model && state.models.length > 0) {
       state.models = state.models.map(m => ({ ...m, current: m.id === rpcState.model.id }));
@@ -1416,6 +1537,7 @@
             contextWindow: m.contextWindow,
             maxTokens:     m.maxTokens,
             reasoning:     !!m.reasoning,
+            thinking:      m.thinking,
             input:         m.input ?? (m.images ? ["text", "image"] : ["text"]),
           });
         }
@@ -1430,6 +1552,7 @@
   function _mergeModels(baseList, { customModels }) {
     const modelKey = m => `${m.provider || ""}/${m.id || ""}`;
     const customMap = new Map((customModels || []).map(m => [modelKey(m), m]));
+    const customById = new Map((customModels || []).map(m => [m.id, m]));
 
     // Retain all base models (including OAuth & builtins), enriching matching ones with custom metadata
     const merged = (baseList || []).map(m => {
@@ -1437,6 +1560,13 @@
       if (customMap.has(key)) {
         const custom = customMap.get(key);
         customMap.delete(key);
+        customById.delete(m.id);
+        return { ...m, ...custom };
+      }
+      if (customById.has(m.id)) {
+        const custom = customById.get(m.id);
+        customMap.delete(modelKey(custom));
+        customById.delete(m.id);
         return { ...m, ...custom };
       }
       return m;
@@ -1444,7 +1574,10 @@
 
     // Append any additional custom models not present in baseList
     for (const cm of customMap.values()) {
-      merged.push(cm);
+      if (customById.has(cm.id)) {
+        merged.push(cm);
+        customById.delete(cm.id);
+      }
     }
     return merged;
   }
@@ -1453,9 +1586,11 @@
     _send({ type: "get_state" });
     _send({ type: "get_messages" });
     _send({ type: "get_available_models" });
+    _send({ type: "get_available_thinking_levels" });
     _loadCustomModelsFromConfig().then(customData => {
       if (customData.customModels.length > 0) {
         state.models = _mergeModels(state.models, customData);
+        _syncCurrentModel();
         notify();
       }
     }).catch(() => {});
@@ -1568,7 +1703,29 @@
       await _switchToSession(id);
     },
     cycleModel()       { _send({ type: "cycle_model" }); },
-    cycleThinking()    { _send({ type: "cycle_thinking_level" }); },
+    cycleThinking() {
+      const hasReasoning = Boolean(
+        state.model?.reasoning ||
+        state.model?.thinking ||
+        (state.availableThinkingLevels && state.availableThinkingLevels.length > 1)
+      );
+      if (!hasReasoning) {
+        state.thinkingLevel = "off";
+      } else {
+        const levels = (Array.isArray(state.availableThinkingLevels) && state.availableThinkingLevels.length > 1)
+          ? state.availableThinkingLevels
+          : (Array.isArray(state.model?.thinking?.efforts) && state.model.thinking.efforts.length > 0)
+            ? ["off", ...state.model.thinking.efforts]
+            : ["off", "low", "medium", "high"];
+        const idx = levels.indexOf(state.thinkingLevel);
+        const next = levels[(idx + 1) % levels.length];
+        state.thinkingLevel = next;
+        _savePrefs({ thinkingLevel: next });
+        _send({ type: "set_thinking_level", level: next });
+      }
+      notify();
+    },
+    getAvailableThinkingLevels() { return state.availableThinkingLevels; },
     compact() {
       const id  = "cmpct-" + (_nextCmdId++);
       // Snapshot current context usage as the "before" value so the card
@@ -1750,12 +1907,13 @@
           }
         }
       }
-      _initFetch();
       const customData = await _loadCustomModelsFromConfig();
       if (customData.customModels.length > 0 || customData.customProviders.size > 0) {
         state.models = _mergeModels(state.models, customData);
-        notify();
       }
+      _syncCurrentModel();
+      notify();
+      _initFetch();
     },
 
     // ── Login ─────────────────────────────────────────────────────────────────

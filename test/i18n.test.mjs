@@ -308,6 +308,31 @@ describe('known-key spot-checks', () => {
     assert.equal(t('chat.collapseTool'), '折叠工具详情');
     setLocale('en');
   });
+
+  it('thinking mode and model reasoning keys resolve in en and zh-CN', () => {
+    setLocale('en');
+    assert.equal(t('composer.thinkingUnsupported'), 'Thinking mode is not supported by current model');
+    assert.equal(t('models.edit.reasoning'), 'Support reasoning / thinking effort');
+    assert.equal(t('models.edit.thinkingPresets'), 'Presets:');
+    assert.equal(t('models.edit.presetOpenAI'), 'OpenAI (low, medium, high)');
+    assert.equal(t('models.edit.presetClaude'), 'Claude (minimal to max)');
+    assert.equal(t('models.edit.presetDeepSeek'), 'DeepSeek / Dual (low, high)');
+    assert.equal(t('models.edit.thinkingEfforts'), 'Thinking Levels (comma-separated):');
+    assert.equal(t('models.edit.thinkingDefault'), 'Default Thinking Level:');
+    assert.equal(t('models.edit.thinkingDefaultNone'), 'None (not set)');
+
+    setLocale('zh-CN');
+    assert.equal(t('composer.thinkingUnsupported'), '当前模型不支持思考模式');
+    assert.equal(t('models.edit.reasoning'), '支持推理 / 思考模式');
+    assert.equal(t('models.edit.thinkingPresets'), '推荐预设：');
+    assert.equal(t('models.edit.presetOpenAI'), 'OpenAI 标准 (low, medium, high)');
+    assert.equal(t('models.edit.presetClaude'), 'Claude 扩展 (minimal 至 max)');
+    assert.equal(t('models.edit.presetDeepSeek'), 'DeepSeek / 双档 (low, high)');
+    assert.equal(t('models.edit.thinkingEfforts'), '思考级别序列 (英文逗号分隔)：');
+    assert.equal(t('models.edit.thinkingDefault'), '默认思考级别：');
+    assert.equal(t('models.edit.thinkingDefaultNone'), '未设置 (空)');
+    setLocale('en');
+  });
 });
 
 

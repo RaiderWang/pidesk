@@ -142,7 +142,7 @@ The frontend calls these Rust commands via `invoke()`:
 | `finish_region_capture` | `(x: u32, y: u32, width: u32, height: u32, scaleFactor: f64) → Result<()>` | Crop raw frozen image on Rust side and emit `main://screenshot-result` or `quickbar://region-result` |
 | `finish_annotated_capture` | `(base64Data: String, width: u32, height: u32) → Result<()>` | Deliver frontend-composited annotated PNG to the active window |
 | `save_screenshot_to_disk` | `(base64Data: String, defaultFilename: Option<String>) → Result<Option<String>>` | Prompt native OS file save dialog (unpinning overlay & attaching parent) and write decoded image |
-| `cancel_region_capture` | `() → Result<()>` | Hide screenshot overlay and restore target window focus |
+| `cancel_region_capture` | `() → Result<()>` | Hide screenshot overlay and restore target window focus only if originally visible |
 | `get_screenshot_background` | `() → Option<String>` | Proactively fetch frozen background Data URL during overlay mounting |
 
 ---
@@ -238,7 +238,7 @@ With 8 command rows, the model section was below `max-height: 60vh` and invisibl
 
 ### Client-side thinking-level cycle
 
-omp 18.x `get_state` does not include `thinkingLevel`; `cycle_thinking_level` returns null. PiDesk cycles client-side through `off → low → medium → high` and pushes the choice to omp via `set_thinking_level`. **Never use `"auto"`** — it is not a valid RPC level; omp silently ignores it.
+omp 18.x `get_state` does not include `thinkingLevel`; `cycle_thinking_level` returns null or default omp levels. PiDesk cycles client-side through the active model's configured efforts (`off` followed by `thinking.efforts` defined in `models.yml`, falling back to `off → low → medium → high`) and pushes the choice to omp via `set_thinking_level`. **Never use `"auto"`** — it is not a valid RPC level; omp silently ignores it.
 
 ### Compact response token backfill
 

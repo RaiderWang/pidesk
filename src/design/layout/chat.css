@@ -123,6 +123,7 @@
   word-break: break-word;
   max-height: 400px;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
 }
 .thought-content {
   font-family: var(--font-sans);

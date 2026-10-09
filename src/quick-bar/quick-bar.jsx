@@ -332,7 +332,7 @@ function QuickBarApp() {
       ),
       submitted && React.createElement("div", { className: "qb-result-wrap" },
         React.createElement("div", {
-          className: "qb-result md-content" + (streaming ? " qb-streaming" : ""),
+          className: "qb-result md-content selectable" + (streaming ? " qb-streaming" : ""),
           dangerouslySetInnerHTML: result.html ? { __html: result.html } : undefined,
         }, result.html ? undefined : (streaming ? (window.t?.("quickbar.thinking") ?? "thinking…") : "")),
         result.markdown && React.createElement("button", {

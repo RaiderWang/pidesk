@@ -21,7 +21,7 @@ function modelSupportsImages(m) {
 }
 
 // ── The composer (input + plan/steer modes + send) ────────────────────
-function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenModel, currentModel, thinking, onCycleThinking, isStreaming, onAbort, onApprove, annotationCount = 0, microcopy, screenshotShortcut: screenshotShortcutProp, agentError }) {
+function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenModel, currentModel, thinking, onCycleThinking, isStreaming, onAbort, onApprove, annotationCount = 0, microcopy, screenshotShortcut: screenshotShortcutProp, agentError, availableThinkingLevels }) {
   const [text, setText]             = React.useState("");
   const [activeIdx, setActiveIdx]   = React.useState(0);
   const [images, setImages]         = React.useState([]);
@@ -41,6 +41,12 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
 
   const cmds = window.OMP_DATA?.commands || [];
   const supportsImages = React.useMemo(() => modelSupportsImages(currentModel), [currentModel]);
+  const isThinkingSupported = React.useMemo(() => {
+    if (Array.isArray(availableThinkingLevels)) {
+      return availableThinkingLevels.length > 1;
+    }
+    return Boolean(currentModel?.reasoning || currentModel?.thinking);
+  }, [availableThinkingLevels, currentModel]);
 
   const supportsImagesRef = React.useRef(supportsImages);
   supportsImagesRef.current = supportsImages;
@@ -498,9 +504,18 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
           <span style={{ color: "var(--fg-2)" }}>{currentModel?.name}</span>
           <Icon name="chev" size={10} color="var(--fg-4)" />
         </button>
-        <button className="composer-pill" onClick={onCycleThinking}>
-          <Icon name="thinking" size={11} color="var(--lilac)" />
-          <span style={{ color: "var(--fg-2)" }}>
+        <button
+          className={`composer-pill ${!isThinkingSupported ? "disabled" : ""}`}
+          onClick={isThinkingSupported ? onCycleThinking : undefined}
+          disabled={!isThinkingSupported}
+          title={
+            !isThinkingSupported
+              ? (window.t ? window.t("composer.thinkingUnsupported", null, "Thinking mode is not supported by current model") : "Thinking mode is not supported by current model")
+              : (window.t ? window.t("composer.thinking", { level: thinking || "off" }, `thinking · ${thinking || "off"}`) : `thinking · ${thinking || "off"}`)
+          }
+        >
+          <Icon name="thinking" size={11} color={!isThinkingSupported ? "var(--fg-4)" : "var(--lilac)"} />
+          <span style={{ color: !isThinkingSupported ? "var(--fg-4)" : "var(--fg-2)" }}>
             {window.t ? window.t("composer.thinking", { level: thinking || "off" }, `thinking · ${thinking || "off"}`) : `thinking · ${thinking || "off"}`}
           </span>
         </button>
