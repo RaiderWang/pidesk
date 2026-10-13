@@ -6,6 +6,64 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-13
+
+### Added
+
+- **Recent Projects List in New Session Menu**:
+  - Added a divider line and a list of the 10 most recently opened projects below "Open Project Folder..." and "New Session (No Project)" in the TabBar `+` dropdown menu.
+  - Displays project folder icon, project directory name, and truncated path with full path on hover tooltip.
+  - Clicking a recent project switches directly to its existing tab if already opened, or opens a new session tab for that folder if not currently open.
+  - Real-time project tracking: automatically saves project folders opened via the folder picker dialog or `openSession(cwd)`.
+  - Asynchronous background synchronization: merges and backfills historical project directories discovered in saved sessions on disk (`~/.omp/agent/sessions/`).
+  - Standalone session filtering & auto-purge: filters out "no project" sessions so internal dev build directories (e.g. `target/debug`, `target/release`) and installation roots (e.g. `Program Files/PiDesk`) are never listed as projects, and automatically purges any stale entries from local storage.
+  - Backend `get_default_cwd` command and `SavedSession.is_standalone` tagging in Rust for cross-layer detection.
+  - Modular frontend architecture in `src/app/recent-projects.js` with path normalization across platforms, persistent caching, and unit tests in `test/recent-projects.test.mjs`.
+  - Full bilingual i18n support in English and Simplified Chinese (`chrome.tabs.recentProjects`, `chrome.tabs.noRecentProjects`).
+
+- **Review Drawer Full-Width Toggle**:
+  - Added an expand/collapse icon button at the top-left corner of the Code Review drawer header.
+  - Clicking the button smoothly expands the drawer leftwards to full width (`100%`) for spacious split-diff viewing.
+  - Clicking again smoothly collapses the drawer back to its initial default position (`580px`).
+  - Graceful drag interaction: dragging the resize handle while in expanded state smoothly transitions into standard width resizing.
+  - Bilingual tooltips and aria-labels in English and Simplified Chinese (`review.expand`, `review.collapse`).
+
+- **Interactive Code Review Drawer (`/review`)**:
+  - Right-side resizable drawer for inspecting code diffs and conducting human-in-the-loop reviews alongside the active session chat.
+  - Drag-to-resize handle with boundary clamping (400px to 85vw) and automatic width persistence in `localStorage`.
+  - Multi-target diff switching:
+    - **Uncommitted Changes**: Staged + unstaged modifications combined with untracked files.
+    - **Branch Comparison**: PR-style base branch comparison using `git merge-base`.
+    - **Specific Commit**: Review individual commits from recent repository history.
+  - Full-featured diff inspection with file tree sidebar, additions/deletions badges (`+x -y`), unified and split view toggle, and automatic exclusion of lockfiles, vendor bundles, and build outputs.
+  - Inline line-level annotations: click `+` on any code line to attach reviewer comments, questions, or modification requirements.
+  - Direct actions:
+    - **Send to Current Session**: Formats a structured review prompt incorporating diff snippets, user focus directives, and line-level annotations directly into the active session.
+    - **Insert into Input**: Pastes the formatted review markdown into the composer textarea for manual edits before sending.
+  - Full environment detection with friendly fallback cards when Git CLI is missing or the current project is not a Git repository.
+  - Dual triggers: input interception for `/review` without external URL parameters, and direct access via the `⌘K` command bridge.
+  - Dynamic loading state: replaced static text with an animated motion experience featuring an orbital diff radar scanner, shimmering typography with bouncing pulse dots, and an animated code diff skeleton preview during environment detection and diff fetching.
+  - Complete bilingual i18n support in English and Simplified Chinese.
+  - Annotation correctness: notes are keyed per side (`old:<n>` / `new:<n>`), so a removed line and an added line with the same number no longer share a note; the review prompt quotes the annotated code line and labels removed lines. The annotation "Edit" button now actually reopens the editor.
+  - Lockfiles / vendor / build output excluded from the sidebar are no longer inlined into the prompt (the prompt is rebuilt from the displayed files only); SVG diffs are reviewable again; diffs containing Markdown code fences no longer break the prompt block.
+  - Robust diff parsing: file names containing spaces, renames, octal-escaped UTF-8 paths, and removed lines that look like `--- ` headers are handled correctly.
+  - Git hardening: git runs off the UI thread with a hard 8 MiB read cap, never colours output or runs repo-configured external diff/textconv programs, ignores `diff.noprefix` / `mnemonicPrefix`, diffs from the repo root even when the project is a sub-directory, and supports repositories with no commits yet. Truncated diffs (including skipped untracked files) now show a warning and are flagged in the prompt.
+  - Reliability: superseded diff requests are discarded (no stale diff after quickly switching targets), the drawer reloads when you switch tabs, Esc inside an annotation only cancels the edit, and "Insert into Input" now really updates the composer (and keeps the drawer open if the composer is unavailable).
+  - `/review <focus text>` pre-fills the review focus field; "Send to Current Session" steers the running turn instead of failing while the agent is busy.
+  - Drawer width is clamped to 85% of the viewport on load and resize; collapsing restores your previous width; annotation storage is bounded (LRU of 40 diffs) and hashes the whole diff.
+
+### Fixed
+
+- **Resuming "no project" history sessions**: Saved sessions recorded with the executable directory (e.g. `target/debug`) as cwd are now resumed as standalone tabs (no project folder / file tree / git watch) and the backend pins the current default cwd, instead of being reopened as a project pointing at the debug directory.
+
+### Changed
+
+- **Compact Tool Card Typography**:
+  - Scaled down the font hierarchy of in-session tool invocation cards by one notch for better visual hierarchy and readability.
+  - Primary tool content (header text, title, bash command output, search preview rows, eval code/output, diff bodies, compact summary bodies, footers) scaled from `--d-text-sm` (~13px) to `--d-text-xs` (~12px).
+  - Secondary metadata & badges (tool type tags, status/duration chips, diff line-number gutters, diff headers, scrub bar trackers, eval language headers, subagent task agent tags, stream lines) scaled from `--d-text-xs` (~12px) to a newly defined `--d-text-xxs` (~11px) scale.
+  - Added `--d-text-xxs` support across all UI density modes (`cozy`, `compact`, and `dense`) in `src/design/styles.css`.
+
 ## [0.3.3] - 2026-10-09
 
 ### Added

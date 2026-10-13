@@ -1,0 +1,175 @@
+/* ═════════════════════════════════════════════════════════════════════
+   review-split.css — Side-by-Side (Split) Diff View Styles
+   Two-column synchronized diff view with aligned modifications,
+   line gutters, +/- marks, and full-width inline annotations.
+   ═════════════════════════════════════════════════════════════════════ */
+
+.review-diff-scroll.view-split {
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.rd-split-table {
+  display: flex;
+  flex-direction: column;
+  min-width: 100%;
+  width: max-content;
+}
+
+/* ── Split Table Header ────────────────────────────────────────────── */
+.rd-split-head-row {
+  display: flex;
+  min-width: 100%;
+  height: 28px;
+  background: color-mix(in oklab, var(--bg-surface) 80%, var(--bg-window));
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--fg-3);
+  user-select: none;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.rd-split-head-col {
+  flex: 1 1 50%;
+  min-width: 280px;
+  padding: 5px 12px;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.rd-split-head-col.pane-left {
+  border-right: 1px solid var(--line-soft);
+}
+
+/* ── Split Hunk Header ─────────────────────────────────────────────── */
+.rd-split-hunk {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-hover);
+  color: var(--fg-4);
+  font-style: italic;
+  padding: 4px 12px;
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 11px;
+}
+
+.rd-split-no-newline {
+  color: var(--fg-4);
+  font-size: 11px;
+  font-style: italic;
+  opacity: 0.8;
+}
+
+/* ── Split Line Row ────────────────────────────────────────────────── */
+.rd-split-row {
+  display: flex;
+  min-width: 100%;
+  position: relative;
+}
+
+.rd-split-row:hover {
+  background: var(--bg-hover);
+}
+
+.rd-split-pane {
+  flex: 1 1 50%;
+  min-width: 280px;
+  display: flex;
+  position: relative;
+  box-sizing: border-box;
+}
+
+.rd-split-pane.pane-left {
+  border-right: 1px solid var(--line-soft);
+}
+
+/* Pane State Colors */
+.rd-split-pane.k-rem {
+  background: var(--diff-rm-bg);
+  color: var(--diff-rm-fg);
+}
+
+.rd-split-pane.k-add {
+  background: var(--diff-add-bg);
+  color: var(--diff-add-fg);
+}
+
+.rd-split-pane.k-empty {
+  background: color-mix(in oklab, var(--bg-window) 35%, var(--bg-surface));
+  opacity: 0.65;
+}
+
+/* Internal elements of each pane */
+.rd-split-pane .rd-gutter {
+  width: 38px;
+  padding: 0 6px;
+  text-align: right;
+  color: var(--fg-4);
+  user-select: none;
+  flex-shrink: 0;
+  border-right: 1px solid var(--line-soft);
+  background: color-mix(in oklab, var(--bg-window) 50%, var(--bg-surface));
+}
+
+.rd-split-pane .rd-mark {
+  width: 18px;
+  text-align: center;
+  color: var(--fg-3);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.rd-split-pane.k-rem .rd-mark {
+  color: var(--diff-rm-fg);
+}
+
+.rd-split-pane.k-add .rd-mark {
+  color: var(--diff-add-fg);
+}
+
+.rd-split-pane .rd-code {
+  flex: 1;
+  padding: 0 8px;
+  white-space: pre;
+  color: var(--fg);
+  overflow-x: hidden;
+}
+
+.rd-split-pane.k-rem .rd-code {
+  color: var(--diff-rm-fg);
+}
+
+.rd-split-pane.k-add .rd-code {
+  color: var(--diff-add-fg);
+}
+
+/* Add note button inside split pane */
+.rd-split-pane .rd-split-add-btn {
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: none;
+  z-index: 5;
+}
+
+.rd-split-pane:hover .rd-split-add-btn {
+  display: flex;
+}
+
+/* ── Inline Annotation Wrap for Split View ─────────────────────────── */
+.rd-split-annotation-wrap {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.rd-split-annotation-wrap .rd-annotation-box {
+  padding: 8px 16px;
+}

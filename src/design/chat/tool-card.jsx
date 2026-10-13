@@ -56,7 +56,7 @@ function ScrubbableDiff({ msg }) {
         </div>
       </div>
       <div className="diff-track-wrap">
-        <span className="mono" style={{ color: "var(--fg-4)", fontSize: "var(--d-text-xs)" }}>
+        <span className="mono" style={{ color: "var(--fg-4)", fontSize: "var(--d-text-xxs)" }}>
           {window.t ? window.t("chat.scrub", null, "scrub") : "scrub"}
         </span>
         <div className="diff-track" ref={trackRef}
@@ -70,7 +70,7 @@ function ScrubbableDiff({ msg }) {
           <div className="diff-track-cursor"
             style={{ left: `${(visiblePos / total) * 100}%` }} />
         </div>
-        <span className="mono" style={{ color: "var(--fg-4)", fontSize: "var(--d-text-xs)" }}>
+        <span className="mono" style={{ color: "var(--fg-4)", fontSize: "var(--d-text-xxs)" }}>
           {visiblePos}/{total}
         </span>
       </div>

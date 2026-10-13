@@ -85,8 +85,17 @@
 }
 .slash-row:hover { background: var(--bg-hover); }
 .slash-row.active { background: var(--bg-hover); }
-.slash-row:last-child { border-bottom: 0; }
-.slash-glyph { width: 18px; color: var(--fg-3); font-family: var(--font-mono); }
+.slash-glyph {
+  width: 18px;
+  min-width: 18px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--fg-3);
+  font-family: var(--font-mono);
+}
 
 /* ── Model vision warning banner ────────────────────────────────── */
 .composer-model-warning {

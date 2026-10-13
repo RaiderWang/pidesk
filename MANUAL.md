@@ -143,6 +143,10 @@ The frontend calls these Rust commands via `invoke()`:
 | `finish_annotated_capture` | `(base64Data: String, width: u32, height: u32) → Result<()>` | Deliver frontend-composited annotated PNG to the active window |
 | `save_screenshot_to_disk` | `(base64Data: String, defaultFilename: Option<String>) → Result<Option<String>>` | Prompt native OS file save dialog (unpinning overlay & attaching parent) and write decoded image |
 | `cancel_region_capture` | `() → Result<()>` | Hide screenshot overlay and restore target window focus only if originally visible |
+| `review_check_environment` | `(cwd: String) → Result<GitEnvironmentStatus>` | Inspect whether git is installed and whether cwd is inside a valid git repository |
+| `review_list_branches` | `(cwd: String) → Result<Vec<String>>` | Enumerate local and remote git branches for base branch comparison |
+| `review_list_commits` | `(cwd: String, count: usize) → Result<Vec<CommitSummary>>` | Retrieve recent commits with hash and subject summaries |
+| `review_get_diff` | `(cwd: String, targetKind: String, targetRef: Option<String>) → Result<DiffOutput>` | Query unified git diff (uncommitted, base-branch, or commit) from the repo root, appending untracked files. stdout is read with a hard 8 MiB cap (child killed, output cut on a line boundary, `truncated: true`); output is hardened with `--no-color --no-ext-diff --no-textconv` and fixed `a/` `b/` prefixes. All four `review_*` commands are `async` + `spawn_blocking` |
 | `get_screenshot_background` | `() → Option<String>` | Proactively fetch frozen background Data URL during overlay mounting |
 
 ---

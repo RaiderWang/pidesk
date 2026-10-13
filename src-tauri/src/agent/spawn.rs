@@ -10,6 +10,19 @@ use std::sync::OnceLock;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
+/// Keep short-lived helper processes (e.g. `git`) from flashing a console
+/// window on Windows. No-op on other platforms.
+pub fn hide_console_window(cmd: &mut Command) {
+    #[cfg(windows)]
+    {
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = cmd;
+    }
+}
+
 /// Ensure PATH contains standard user binary directories on Unix (macOS / Linux).
 /// macOS GUI apps launched from Finder/Dock run under launchd with a minimal
 /// PATH (/usr/bin:/bin:/usr/sbin:/sbin), missing tools in ~/.bun/bin, /opt/homebrew/bin, etc.
@@ -194,7 +207,7 @@ pub(super) fn spawn_omp(cwd: Option<&str>, resume: Option<&str>) -> Result<Child
 
 /// Return the fallback working directory for "no project" sessions: the
 /// directory containing the running executable.
-fn default_cwd() -> std::path::PathBuf {
+pub fn default_cwd() -> std::path::PathBuf {
     exe_dir(std::env::current_exe().ok())
 }
 

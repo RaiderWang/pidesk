@@ -30,6 +30,7 @@
       { name: "thinking", hint: "cycle thinking level",               icon: "✶", group: "Agent"   },
       { name: "login",    hint: "authenticate with a model provider",   icon: "⊙", group: "Agent"   },
       { name: "todo",     hint: "open the kanban surface",            icon: "▦", group: "View"    },
+      { name: "review",   hint: "inspect code diff & launch review",  icon: "diff2", group: "Code" },
       { name: "export",   hint: "export this session to HTML",        icon: "⇪", group: "View"    },
     ],
     models: [],
@@ -1975,6 +1976,9 @@
       let name = "PiDesk";
       if (cwd) {
         name = cwd.replace(/\\/g, "/").split("/").pop() || cwd;
+        if (typeof window !== "undefined" && window.RecentProjects?.addRecentProject) {
+          window.RecentProjects.addRecentProject(cwd, name);
+        }
       } else {
         const noProjSessions = [...sessionRegistry.values()].filter(s => !s.path);
         if (noProjSessions.length > 0) {
@@ -2040,6 +2044,20 @@
       } catch (err) {
         console.error("[live] listSavedSessions error:", err);
         return [];
+      }
+    },
+
+    /** Get default cwd for standalone sessions. */
+    async getDefaultCwd() {
+      if (!window.__TAURI__) return null;
+      try {
+        const dir = await window.__TAURI__.core.invoke("get_default_cwd");
+        if (dir && window.RecentProjects?.setDefaultCwd) {
+          window.RecentProjects.setDefaultCwd(dir);
+        }
+        return dir;
+      } catch {
+        return null;
       }
     },
 
@@ -2223,7 +2241,15 @@
       }
 
       const id = `session-${Date.now()}`;
-      const cwd = session.cwd || "";
+      // "No project" sessions were recorded with the exe directory (e.g.
+      // target/debug) as their cwd. Treat them as standalone again: empty
+      // path → no project tab/file tree, and let the backend pin the child
+      // to the current default cwd (the recorded dir may no longer exist).
+      const savedCwd = session.cwd || "";
+      const standalone =
+        session.is_standalone === true ||
+        (window.RecentProjects?.isStandalonePath?.(savedCwd) ?? !savedCwd);
+      const cwd = standalone ? "" : savedCwd;
       const name = session.title || (cwd ? cwd.replace(/\\/g, "/").split("/").pop() || cwd : "resumed");
       sessionRegistry.set(id, {
         id,
@@ -2340,6 +2366,26 @@
 
     getSessions() {
       return [...sessionRegistry.values()];
+    },
+
+    getCwd() {
+      const entry = sessionRegistry.get(activeSessionId);
+      return entry?.path ?? "";
+    },
+
+    /** Send a programmatic user turn (e.g. a review prompt); steers if a turn is running. */
+    sendUserMessage(text) {
+      if (!text) return;
+      if (state.isStreaming) this.steer(text);
+      else this.send(text);
+    },
+
+    /** Open the Code Review drawer; `focus` pre-fills its "review focus" field. */
+    openReviewDrawer(opts) {
+      if (typeof window !== "undefined" && window.dispatchEvent) {
+        const focus = typeof opts?.focus === "string" ? opts.focus : "";
+        window.dispatchEvent(new CustomEvent("open-review-drawer", { detail: { focus } }));
+      }
     },
 
     _handleEvent(ev) {

@@ -75,6 +75,7 @@ const Icon = ({ name, size = 14, color = "currentColor", dotColor = "var(--accen
     </svg>
   );
 };
+Icon.has = (name) => Boolean(typeof name === "string" && Object.prototype.hasOwnProperty.call(_ICON_PATHS, name));
 
 // Tool name → color + icon
 const TOOL_META = {

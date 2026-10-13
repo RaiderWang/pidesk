@@ -15,6 +15,8 @@ pub struct SavedSession {
     pub path: String,
     pub message_count: usize,
     pub preview: Option<String>,
+    #[serde(default)]
+    pub is_standalone: bool,
 }
 
 /// Locate the directory where omp persists sessions (`~/.omp/agent/sessions`).
@@ -155,6 +157,16 @@ fn parse_session_file(path: &Path) -> Option<SavedSession> {
             .to_string()
     };
 
+    let norm_cwd = cwd.replace('\\', "/").to_lowercase();
+    let is_standalone = cwd.is_empty()
+        || cwd == "."
+        || norm_cwd.ends_with("/target/debug")
+        || norm_cwd.ends_with("/target/release")
+        || norm_cwd.contains("/program files/pidesk")
+        || norm_cwd.contains("/program files (x86)/pidesk")
+        || norm_cwd.contains("/program files/omp desktop")
+        || norm_cwd.contains("/program files (x86)/omp desktop");
+
     Some(SavedSession {
         id: session_id,
         title,
@@ -165,6 +177,7 @@ fn parse_session_file(path: &Path) -> Option<SavedSession> {
         path: path.to_string_lossy().into_owned(),
         message_count,
         preview: last_preview,
+        is_standalone,
     })
 }
 
@@ -353,6 +366,15 @@ pub fn scan_saved_sessions(app: &AppHandle, cwd_filter: Option<&str>) -> Vec<Sav
                     sessions.push(session);
                 }
             }
+        }
+    }
+
+    let default_cwd = crate::agent::spawn::default_cwd();
+    let default_norm = default_cwd.to_string_lossy().replace('\\', "/").to_lowercase();
+    for s in &mut sessions {
+        let norm = s.cwd.replace('\\', "/").to_lowercase();
+        if norm == default_norm || norm.is_empty() || norm == "." {
+            s.is_standalone = true;
         }
     }
 

@@ -13,7 +13,7 @@
 
 mod inner;
 mod reader;
-mod spawn;
+pub mod spawn;
 
 use std::collections::HashMap;
 use std::io::Write;

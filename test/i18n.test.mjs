@@ -27,6 +27,8 @@ describe('t — basic key lookup', () => {
 
   it('returns another known key correctly', () => {
     assert.equal(t('chrome.bridge'), 'bridge');
+    assert.equal(t('chrome.tabs.recentProjects'), 'Recent Projects');
+    assert.equal(t('chrome.tabs.noRecentProjects'), 'No recent projects');
   });
 
   it('returns the key itself when the key is not in the dictionary', () => {
@@ -331,6 +333,31 @@ describe('known-key spot-checks', () => {
     assert.equal(t('models.edit.thinkingEfforts'), '思考级别序列 (英文逗号分隔)：');
     assert.equal(t('models.edit.thinkingDefault'), '默认思考级别：');
     assert.equal(t('models.edit.thinkingDefaultNone'), '未设置 (空)');
+    setLocale('en');
+  });
+
+  it('review drawer and environment keys resolve in en and zh-CN', () => {
+    setLocale('en');
+    assert.equal(t('review.title'), 'Code Review');
+    assert.equal(t('review.loading.title'), 'Analyzing code changes');
+    assert.equal(t('review.loading.desc'), 'Inspecting git diff and preparing line annotations…');
+    assert.equal(t('review.env.noProjectTitle'), 'No Project Opened');
+    assert.equal(t('review.env.openProject'), 'Open Project Folder');
+    assert.equal(t('review.env.noGitTitle'), 'Git is not installed');
+    assert.equal(t('review.env.notRepoTitle'), 'Not a Git Repository');
+    assert.equal(t('review.expand'), 'Expand to full width');
+    assert.equal(t('review.collapse'), 'Restore previous width');
+
+    setLocale('zh-CN');
+    assert.equal(t('review.title'), '代码审查');
+    assert.equal(t('review.loading.title'), '正在分析代码改动差异');
+    assert.equal(t('review.loading.desc'), '正在对比工作区改动并准备逐行审查数据…');
+    assert.equal(t('review.env.noProjectTitle'), '未打开项目');
+    assert.equal(t('review.env.openProject'), '打开项目文件夹');
+    assert.equal(t('review.env.noGitTitle'), '未检测到 Git 命令');
+    assert.equal(t('review.env.notRepoTitle'), '非 Git 仓库');
+    assert.equal(t('review.expand'), '向左扩展到最左侧');
+    assert.equal(t('review.collapse'), '还原到之前的宽度');
     setLocale('en');
   });
 });

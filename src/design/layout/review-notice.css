@@ -1,0 +1,19 @@
+/* ── Code Review: inline notices (truncation / insert failure) ───────── */
+.review-notice {
+  margin: 8px 12px 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  border: 1px solid var(--line-soft);
+  color: var(--fg-2);
+  background: var(--bg-hover);
+}
+.review-notice.is-warn {
+  border-color: color-mix(in oklab, var(--warn, #d9a441) 55%, transparent);
+  background: color-mix(in oklab, var(--warn, #d9a441) 12%, transparent);
+}
+.review-notice.is-error {
+  border-color: color-mix(in oklab, var(--diff-rm-fg, #d1495b) 55%, transparent);
+  background: color-mix(in oklab, var(--diff-rm-fg, #d1495b) 10%, transparent);
+}

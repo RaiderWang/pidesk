@@ -20,6 +20,14 @@ function modelSupportsImages(m) {
   );
 }
 
+function renderCommandGlyph(icon, size = 11) {
+  if (!icon) return null;
+  const isNamedIcon = (typeof Icon !== "undefined" && typeof Icon?.has === "function")
+    ? Icon.has(icon)
+    : ["clock", "cog", "bolt", "cpu", "diff2", "diff", "plan"].includes(icon);
+  return isNamedIcon ? <Icon name={icon} size={size} /> : icon;
+}
+
 // ── The composer (input + plan/steer modes + send) ────────────────────
 function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenModel, currentModel, thinking, onCycleThinking, isStreaming, onAbort, onApprove, annotationCount = 0, microcopy, screenshotShortcut: screenshotShortcutProp, agentError, availableThinkingLevels }) {
   const [text, setText]             = React.useState("");
@@ -218,6 +226,20 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
     const canSend = text.trim() || images.length > 0 || (planMode && annotationCount > 0);
     if (!canSend) return;
 
+    // Intercept bare /review command (without PR URL)
+    const trimmed = text.trim();
+    if (/^\/review(\s|$)/.test(trimmed)) {
+      const rest = trimmed.slice(7).trim();
+      const hasUrl = /https?:\/\//i.test(rest);
+      if (!hasUrl) {
+        // Anything after `/review` becomes the drawer's "review focus" text.
+        window.OMP_BRIDGE?.openReviewDrawer?.({ focus: rest });
+        setText("");
+        setImages([]);
+        return;
+      }
+    }
+
     const payloadImages = images.map(img => ({
       type: "image",
       data: img.data,
@@ -315,7 +337,7 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
               className={`slash-row${i === clampedIdx ? " active" : ""}`}
               onMouseEnter={() => setActiveIdx(i)}
               onMouseDown={(e) => { e.preventDefault(); execCmd(c); }}>
-              <span className="slash-glyph">{c.icon}</span>
+              <span className="slash-glyph">{renderCommandGlyph(c.icon, 11)}</span>
               <span className="mono" style={{ color: "var(--accent)" }}>/{c.name}</span>
               <span style={{ color: "var(--fg-3)" }}>{c.hint}</span>
               <span className="chip muted" style={{ marginLeft: "auto" }}>{c.group}</span>
@@ -440,8 +462,13 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
             e.target.value = "";
           }}
         />
-        <button type="button" className="btn icon ghost" title={window.t ? window.t("composer.dictate", null, "dictate") : "dictate"}>
-          <Icon name="voice" size={13} />
+        <button
+          type="button"
+          className="btn icon ghost"
+          title={window.t ? window.t("review.title", null, "Code Review") : "Code Review"}
+          onClick={() => window.OMP_BRIDGE?.openReviewDrawer?.()}
+        >
+          <Icon name="diff2" size={13} />
         </button>
         <div className="composer-input">
           <textarea
@@ -762,9 +789,7 @@ function CommandBridge({
                       else if (c.name === "models") { onManageModels?.(); onClose(); }
                       else { onPick(c); onClose(); }
                     }}>
-                    <span className="bridge-glyph">
-                      {["clock", "cog", "bolt", "cpu"].includes(c.icon) ? <Icon name={c.icon} size={11} /> : c.icon}
-                    </span>
+                    <span className="bridge-glyph">{renderCommandGlyph(c.icon, 11)}</span>
                     <span className="mono" style={{ color: "var(--accent)" }}>/{c.name}</span>
                     <span style={{ color: "var(--fg-3)" }}>{c.hint}</span>
                     {isModel && (

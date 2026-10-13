@@ -1,0 +1,285 @@
+/* ═════════════════════════════════════════════════════════════════════
+   review-loading.css — Loading animations for Code Review drawer
+   Includes diff radar scanner, shimmering typography, bouncing dots,
+   and animated skeleton diff lines.
+   ═════════════════════════════════════════════════════════════════════ */
+
+@keyframes reviewSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes reviewPulseRing {
+  0% { transform: scale(0.88); opacity: 0.6; }
+  50% { transform: scale(1.16); opacity: 0.15; }
+  100% { transform: scale(0.88); opacity: 0.6; }
+}
+
+@keyframes reviewDotBounce {
+  0%, 100% { opacity: 0.35; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-3px); }
+}
+
+@keyframes reviewShimmerText {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes reviewSkeletonSweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+@keyframes reviewScanVertical {
+  0% { top: 12%; opacity: 0.3; }
+  50% { top: 82%; opacity: 0.85; }
+  100% { top: 12%; opacity: 0.3; }
+}
+
+.review-spin {
+  display: inline-block;
+  animation: reviewSpin 0.9s linear infinite;
+}
+
+/* ── Container ─────────────────────────────────────────────────────── */
+.review-loading-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 36px 24px;
+  text-align: center;
+  background: var(--bg-window);
+  user-select: none;
+  animation: fadeUp 0.25s var(--ease-out) both;
+}
+
+.review-loading-view.full-height {
+  min-height: 380px;
+}
+
+/* ── Radar Scanner Badge ───────────────────────────────────────────── */
+.review-loading-scanner {
+  position: relative;
+  width: 68px;
+  height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.review-loading-pulse-ring {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent);
+  opacity: 0.3;
+  animation: reviewPulseRing 2.4s cubic-bezier(0.2, 0.8, 0.4, 1) infinite;
+  pointer-events: none;
+}
+
+.review-loading-spinner-ring {
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: var(--accent);
+  border-right-color: color-mix(in oklab, var(--accent) 45%, transparent);
+  animation: reviewSpin 1.6s cubic-bezier(0.5, 0.1, 0.5, 0.9) infinite;
+  pointer-events: none;
+}
+
+.review-loading-icon-badge {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--bg-surface);
+  border: 1px solid color-mix(in oklab, var(--accent) 30%, var(--line));
+  box-shadow: 0 0 20px var(--accent-glow), 0 4px 12px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  overflow: hidden;
+}
+
+.review-loading-svg {
+  width: 24px;
+  height: 24px;
+  color: var(--accent);
+  display: block;
+}
+
+.review-loading-scan-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  box-shadow: 0 0 6px var(--accent);
+  animation: reviewScanVertical 2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ── Typography & Dynamic Text ─────────────────────────────────────── */
+.review-loading-text-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 380px;
+}
+
+.review-loading-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--fg) 80%, transparent) 0%,
+    var(--accent) 50%,
+    color-mix(in oklab, var(--fg) 80%, transparent) 100%
+  );
+  background-size: 200% 100%;
+  animation: reviewShimmerText 2.4s linear infinite;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.review-loading-desc {
+  font-size: 13px;
+  color: var(--fg-3);
+  line-height: 1.5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.review-loading-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 2px;
+}
+
+.review-loading-dots .dot {
+  display: inline-block;
+  width: 3.5px;
+  height: 3.5px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: reviewDotBounce 1.3s ease-in-out infinite;
+}
+
+.review-loading-dots .dot:nth-child(1) { animation-delay: 0s; }
+.review-loading-dots .dot:nth-child(2) { animation-delay: 0.22s; }
+.review-loading-dots .dot:nth-child(3) { animation-delay: 0.44s; }
+
+/* ── Shimmering Skeleton Preview ───────────────────────────────────── */
+.review-loading-skeleton {
+  width: 100%;
+  max-width: 320px;
+  margin-top: 24px;
+  background: var(--bg-surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.review-skeleton-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid color-mix(in oklab, var(--line) 60%, transparent);
+}
+
+.review-skeleton-tag {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: color-mix(in oklab, var(--accent) 35%, var(--line));
+}
+
+.review-skeleton-filename {
+  height: 8px;
+  width: 110px;
+  border-radius: 4px;
+  background: var(--line);
+}
+
+.review-skeleton-stats {
+  margin-left: auto;
+  height: 8px;
+  width: 36px;
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--line) 70%, transparent);
+}
+
+.review-skeleton-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.review-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 14px;
+}
+
+.review-skeleton-gutter {
+  width: 18px;
+  height: 8px;
+  border-radius: 3px;
+  background: color-mix(in oklab, var(--line) 50%, transparent);
+  flex-shrink: 0;
+}
+
+.review-skeleton-bar {
+  height: 7px;
+  border-radius: 3.5px;
+  background: var(--line);
+}
+
+.review-skeleton-bar.w-long { width: 78%; }
+.review-skeleton-bar.w-mid { width: 56%; }
+.review-skeleton-bar.w-short { width: 38%; }
+
+.review-skeleton-row.diff-add .review-skeleton-bar {
+  background: color-mix(in oklab, var(--teal, #10b981) 35%, var(--line));
+}
+.review-skeleton-row.diff-add .review-skeleton-gutter {
+  background: color-mix(in oklab, var(--teal, #10b981) 40%, transparent);
+}
+
+.review-skeleton-row.diff-del .review-skeleton-bar {
+  background: color-mix(in oklab, var(--rose, #f43f5e) 30%, var(--line));
+}
+.review-skeleton-row.diff-del .review-skeleton-gutter {
+  background: color-mix(in oklab, var(--rose, #f43f5e) 35%, transparent);
+}
+
+.review-skeleton-shimmer {
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in oklab, var(--accent) 12%, rgba(255, 255, 255, 0.08)) 50%,
+    transparent 100%
+  );
+  animation: reviewSkeletonSweep 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}

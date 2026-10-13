@@ -279,6 +279,51 @@ describe('live.js — resumeSession duplicate tab prevention', () => {
   });
 });
 
+describe('live.js — resumeSession standalone (no project) sessions', () => {
+  async function resumeCapturingStart(session) {
+    const invoked = [];
+    const prevTauri = globalThis.window.__TAURI__;
+    globalThis.window.__TAURI__ = {
+      core: { invoke: async (name, args) => { invoked.push({ name, args }); return null; } },
+      event: { listen: async () => () => {} },
+    };
+    try {
+      const tabId = await bridge.resumeSession(session);
+      const tab = bridge.getSessions().find(s => s.id === tabId);
+      return { tab, invoked };
+    } finally {
+      globalThis.window.__TAURI__ = prevTauri;
+    }
+  }
+
+  it('drops the recorded debug-dir cwd when the saved session is standalone', async () => {
+    const { tab, invoked } = await resumeCapturingStart({
+      id: 'standalone-debug-1',
+      title: 'Standalone chat',
+      path: 'C:\\Users\\user\\.omp\\agent\\sessions\\sa1\\session.jsonl',
+      cwd: 'F:\\Project\\omp-desktop\\src-tauri\\target\\debug',
+      is_standalone: true,
+    });
+    assert.equal(tab.path, '', 'tab must not be treated as a project');
+    const start = invoked.find(i => i.name === 'start_session');
+    assert.equal(start.args.cwd, '', 'backend should pin the default cwd');
+    assert.equal(start.args.resume, 'C:\\Users\\user\\.omp\\agent\\sessions\\sa1\\session.jsonl');
+    assert.ok(!invoked.some(i => i.name === 'start_git_watch'), 'no git watch for standalone');
+  });
+
+  it('keeps the recorded cwd for real project sessions', async () => {
+    const { tab, invoked } = await resumeCapturingStart({
+      id: 'project-1',
+      title: 'Project chat',
+      path: 'C:\\Users\\user\\.omp\\agent\\sessions\\p1\\session.jsonl',
+      cwd: 'C:\\Projects\\MyApp',
+      is_standalone: false,
+    });
+    assert.equal(tab.path, 'C:\\Projects\\MyApp');
+    assert.equal(invoked.find(i => i.name === 'start_session').args.cwd, 'C:\\Projects\\MyApp');
+  });
+});
+
 describe('live.js — streaming assistant message and thinking process lifecycle', () => {
   it('message_start initializes streaming assistant bubble with thinking if present', () => {
     bridge._handleEvent({
@@ -464,5 +509,48 @@ describe('live.js — streaming assistant message and thinking process lifecycle
   });
 });
 
+describe('live.js review-drawer bridge helpers', () => {
+  const realSend = bridge.send;
+  const realSteer = bridge.steer;
+  const calls = [];
 
+  before(() => {
+    bridge.send = (text) => calls.push(['send', text]);
+    bridge.steer = (text) => calls.push(['steer', text]);
+  });
 
+  it('sendUserMessage sends a normal prompt when idle', () => {
+    bridge._handleEvent({ type: 'turn_end' });
+    calls.length = 0;
+    bridge.sendUserMessage('review please');
+    assert.deepEqual(calls, [['send', 'review please']]);
+  });
+
+  it('sendUserMessage steers instead of failing while a turn is streaming', () => {
+    bridge._handleEvent({ type: 'turn_start' });
+    calls.length = 0;
+    bridge.sendUserMessage('while busy');
+    assert.deepEqual(calls, [['steer', 'while busy']]);
+    bridge._handleEvent({ type: 'turn_end' });
+  });
+
+  it('sendUserMessage ignores empty text', () => {
+    calls.length = 0;
+    bridge.sendUserMessage('');
+    bridge.sendUserMessage(undefined);
+    assert.deepEqual(calls, []);
+    bridge.send = realSend;
+    bridge.steer = realSteer;
+  });
+
+  it('openReviewDrawer dispatches open-review-drawer with the focus text', () => {
+    const seen = [];
+    const handler = (ev) => seen.push(ev.detail);
+    globalThis.addEventListener('open-review-drawer', handler);
+    bridge.openReviewDrawer();
+    bridge.openReviewDrawer({ focus: '重点看并发' });
+    bridge.openReviewDrawer({ focus: 42 });
+    globalThis.removeEventListener('open-review-drawer', handler);
+    assert.deepEqual(seen, [{ focus: '' }, { focus: '重点看并发' }, { focus: '' }]);
+  });
+});

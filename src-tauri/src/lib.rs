@@ -11,6 +11,7 @@ mod git;
 mod git_watcher;
 mod models_config;
 mod quick_bar;
+mod review;
 mod saved_sessions;
 mod screenshot;
 mod shortcut;
@@ -82,6 +83,12 @@ fn session_status(session_id: String, bridge: State<'_, AgentBridge>) -> Option<
 #[tauri::command]
 fn is_session_running(session_id: String, bridge: State<'_, AgentBridge>) -> bool {
     bridge.is_running(&session_id)
+}
+
+/// Return the fallback working directory for "no project" sessions.
+#[tauri::command]
+fn get_default_cwd() -> String {
+    agent::spawn::default_cwd().to_string_lossy().into_owned()
 }
 
 /// Native folder picker — returns the chosen path or null.
@@ -302,6 +309,7 @@ pub fn run() {
             delete_saved_session,
             save_html_export,
             get_app_version,
+            get_default_cwd,
             quick_bar::toggle_quick_bar,
             quick_bar::hide_quick_bar,
             quick_bar::set_quick_bar_height,
@@ -324,6 +332,10 @@ pub fn run() {
             files::delete_file_or_dir,
             files::open_path_default,
             files::reveal_in_explorer,
+            review::review_check_environment,
+            review::review_list_branches,
+            review::review_list_commits,
+            review::review_get_diff,
         ])
         .setup(|app| {
             // Intercept close on the main window: hide instead of destroy.

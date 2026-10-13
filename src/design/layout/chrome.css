@@ -120,7 +120,10 @@
   top: calc(100% + 4px);
   left: 0;
   z-index: 120;
-  min-width: 250px;
+  min-width: 280px;
+  max-width: 400px;
+  max-height: calc(100vh - 60px);
+  overflow-y: auto;
   background: var(--bg-surface);
   border: 1px solid var(--line);
   border-radius: var(--r-1, 6px);
@@ -179,6 +182,67 @@
 
 .tab-dropdown-item:hover .tab-dropdown-hotkey {
   color: var(--fg-3);
+}
+
+.tab-dropdown-divider {
+  height: 1px;
+  margin: 5px 2px;
+  background: var(--line);
+}
+
+.tab-dropdown-header {
+  padding: 4px 10px 2px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--fg-4);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  user-select: none;
+}
+
+.tab-dropdown-empty {
+  padding: 6px 10px;
+  font-size: var(--d-text-xs);
+  color: var(--fg-4);
+  font-style: italic;
+  user-select: none;
+}
+
+.tab-dropdown-recent-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tab-dropdown-recent-name {
+  font-weight: 500;
+  color: var(--fg-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+
+.tab-dropdown-path {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--fg-4);
+  margin-left: auto;
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  opacity: 0.85;
+}
+
+.tab-dropdown-item:hover .tab-dropdown-recent-name {
+  color: var(--fg);
+}
+
+.tab-dropdown-item:hover .tab-dropdown-path {
+  color: var(--fg-3);
+  opacity: 1;
 }
 
 .tabs-right {

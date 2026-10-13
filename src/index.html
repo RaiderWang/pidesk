@@ -10,6 +10,10 @@
   <!-- Design tokens — copied into src/design/ -->
   <link rel="stylesheet" href="design/styles.css" />
   <link rel="stylesheet" href="design/layout.css" />
+  <link rel="stylesheet" href="design/layout/review.css" />
+  <link rel="stylesheet" href="design/layout/review-split.css" />
+  <link rel="stylesheet" href="design/layout/review-loading.css" />
+  <link rel="stylesheet" href="design/layout/review-notice.css" />
   <link rel="stylesheet" href="platform.css" />
 
   <!-- Syntax highlighting theme (atom-one-dark) -->
@@ -76,6 +80,17 @@
   <!-- Internationalization (i18n) -->
   <script src="i18n.js"></script>
 
+  <!-- Code Review data & prompts (pure logic, must load before design components) -->
+  <script src="review/review-annotation-keys.js"></script>
+  <script src="review/review-diff.js"></script>
+  <script src="review/review-split.js"></script>
+  <script src="review/review-prompt.js"></script>
+  <script src="review/review-store.js"></script>
+  <script src="review/review-drawer-width.js"></script>
+  <script src="review/review-loading-state.js"></script>
+  <script src="app/composer-insert.js"></script>
+  <script src="app/recent-projects.js"></script>
+
   <!-- Design components (unchanged — from src/design/ copy) -->
   <script src="design/tweaks/style.js"></script>
   <script src="design/tweaks/use-tweaks.js"></script>
@@ -107,6 +122,22 @@
   <script type="text/babel" src="design/history-modal.jsx"></script>
   <script type="text/babel" src="design/model-manager-modal.jsx"></script>
   <script type="text/babel" src="design/tool-log-modal.jsx"></script>
+
+  <!-- Code Review drawer components -->
+  <script type="text/babel" src="design/review/annotation-row.jsx"></script>
+  <script type="text/babel" src="design/review/unified-diff-view.jsx"></script>
+  <script type="text/babel" src="design/review/split-diff-view.jsx"></script>
+  <script type="text/babel" src="design/review/diff-viewer.jsx"></script>
+  <script type="text/babel" src="design/review/file-sidebar.jsx"></script>
+  <script type="text/babel" src="design/review/review-target-picker.jsx"></script>
+  <script type="text/babel" src="design/review/review-actions.jsx"></script>
+  <script type="text/babel" src="design/review/review-loading.jsx"></script>
+  <script type="text/babel" src="design/review/review-state-card.jsx"></script>
+  <script type="text/babel" src="design/review/review-drawer-header.jsx"></script>
+  <script type="text/babel" src="design/review/use-drawer-resize.jsx"></script>
+  <script type="text/babel" src="design/review/use-review-diff.jsx"></script>
+  <script type="text/babel" src="design/review/use-review-annotations.jsx"></script>
+  <script type="text/babel" src="design/review/review-drawer.jsx"></script>
 
   <!-- Live data layer (must load before app-live.jsx) -->
   <script src="model-names.js"></script>

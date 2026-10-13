@@ -17,6 +17,7 @@
   --d-text:    0.9063rem; /* ~14.5px standard body (up from 13px) */
   --d-text-sm: 0.8125rem; /* ~13px subtext/labels (up from 11.5px) */
   --d-text-xs: 0.75rem;   /* 12px captions/chips (up from 10.5px) */
+  --d-text-xxs: 0.6875rem; /* ~11px fine print / compact chips */
   --d-text-lg: 1.0rem;    /* 16px section headers (up from 14.5px) */
   --d-text-xl: 1.125rem;  /* 18px modal/page headers */
   --d-leading: 1.55;
@@ -187,6 +188,7 @@
   --d-text:    0.9688rem; /* ~15.5px */
   --d-text-sm: 0.875rem;  /* 14px */
   --d-text-xs: 0.7813rem; /* 12.5px */
+  --d-text-xxs: 0.7188rem; /* ~11.5px */
   --d-text-lg: 1.0625rem; /* 17px */
   --d-text-xl: 1.1875rem; /* 19px */
   --d-leading: 1.6;
@@ -198,6 +200,7 @@
   --d-text:    0.9063rem; /* ~14.5px */
   --d-text-sm: 0.8125rem; /* 13px */
   --d-text-xs: 0.75rem;   /* 12px */
+  --d-text-xxs: 0.6875rem; /* ~11px */
   --d-text-lg: 1.0rem;    /* 16px */
   --d-text-xl: 1.125rem;  /* 18px */
   --d-leading: 1.5;
@@ -209,6 +212,7 @@
   --d-text:    0.8125rem; /* 13px */
   --d-text-sm: 0.75rem;   /* 12px */
   --d-text-xs: 0.6875rem; /* 11px */
+  --d-text-xxs: 0.625rem;  /* 10px */
   --d-text-lg: 0.9063rem; /* 14.5px */
   --d-text-xl: 1.0rem;    /* 16px */
   --d-leading: 1.45;

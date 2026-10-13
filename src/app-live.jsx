@@ -37,7 +37,18 @@ function App() {
   const [bridgeView,  setBridgeView]  = React.useState("commands");
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const [modelManagerOpen, setModelManagerOpen] = React.useState(false);
+  const [reviewOpen,  setReviewOpen]  = React.useState(false);
+  const [reviewFocus, setReviewFocus] = React.useState("");
   const [activeLogTool, setActiveLogTool] = React.useState(null);
+
+  React.useEffect(() => {
+    const onOpenReview = (e) => {
+      setReviewFocus(e?.detail?.focus || "");
+      setReviewOpen(true);
+    };
+    window.addEventListener("open-review-drawer", onOpenReview);
+    return () => window.removeEventListener("open-review-drawer", onOpenReview);
+  }, []);
   const [toolLogs, setToolLogs] = React.useState({});
   const [planOpen,    setPlanOpen]    = React.useState(false);
   const [planMode,    setPlanMode]    = React.useState(false);
@@ -144,6 +155,7 @@ function App() {
         });
       }
     }).catch(() => {});
+    bridge?.getDefaultCwd?.();
 
     let unlisten;
     window.__TAURI__.event.listen("shortcuts://updated", (ev) => {
@@ -297,6 +309,7 @@ function App() {
     else if (c.name === "new")      { bridge?.newSession(); }
     else if (c.name === "history")  { setHistoryOpen(true); }
     else if (c.name === "models")   { setModelManagerOpen(true); }
+    else if (c.name === "review")   { setReviewOpen(true); }
     else if (c.name === "steer") {
       // steer is only meaningful while the agent is streaming.
       // Selecting it from the palette while streaming closes the bridge so
@@ -348,9 +361,25 @@ function App() {
     if (!bridge) return;
     const path = await bridge.pickFolder();
     if (!path) return;
+    window.RecentProjects?.addRecentProject(path);
     setPlanActive(false);
     await bridge.openSession(path);
     // Tab list and activeSessionId are updated via onUpdate from the bridge
+  };
+
+  // Open recent project (switches to tab if already open, else opens new session)
+  const handleOpenRecentProject = async (path) => {
+    if (!bridge || !path) return;
+    window.RecentProjects?.addRecentProject(path);
+    const norm = p => (p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+    const targetNorm = norm(path);
+    const existing = sessions.find(s => s.path && norm(s.path) === targetNorm);
+    if (existing) {
+      handleSelectTab(existing.id);
+    } else {
+      setPlanActive(false);
+      await bridge.openSession(path);
+    }
   };
 
   // Open standalone session (no project folder)
@@ -396,6 +425,7 @@ function App() {
             onNew={handleNewProject}
             onNewProject={handleNewProject}
             onNewStandalone={handleNewStandalone}
+            onOpenRecentProject={handleOpenRecentProject}
             onClose={handleCloseTab}
             onHistory={() => setHistoryOpen(true)}
             onManageModels={() => setModelManagerOpen(true)}
@@ -567,6 +597,16 @@ function App() {
           tool={activeLogTool}
           toolLogs={toolLogs}
           onClose={() => setActiveLogTool(null)}
+        />
+      )}
+
+      {window.ReviewDrawer && (
+        <window.ReviewDrawer
+          isOpen={reviewOpen}
+          onClose={() => setReviewOpen(false)}
+          activeSessionId={activeSessionId}
+          initialFocus={reviewFocus}
+          onInsertComposer={(text) => window.ComposerInsert?.appendToComposer(text) ?? false}
         />
       )}
 
