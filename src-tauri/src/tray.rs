@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 use crate::quick_bar;
 
@@ -113,11 +113,7 @@ impl TrayClickHandler {
 /// Helper to bring the main PiDesk window to foreground and hide Quick Bar.
 fn show_main_window(app: &AppHandle) {
     let _ = quick_bar::hide_quick_bar(app.clone());
-    if let Some(win) = app.get_webview_window("main") {
-        let _ = win.unminimize();
-        let _ = win.show();
-        let _ = win.set_focus();
-    }
+    crate::main_window::show(app);
 }
 
 /// Build and install the system tray. Call once during `setup`.

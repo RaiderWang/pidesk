@@ -74,7 +74,7 @@ function WindowChrome({ project, peer, onCmd, filesOpen, onToggleFiles }) {
 
 // ── Project tabs ─────────────────────────────────────────────────────
 function TabBar({ projects, activeId, onSelect, onClose, peer, onNew, onNewProject, onNewStandalone, onOpenRecentProject, onHistory, onManageModels, onKanban, todoCount = 0, appVersion, theme, kanbanFlashing = false }) {
-  const version = appVersion || window.PIDESK_APP_VERSION || window.OMP_APP_VERSION || "0.3.0";
+  const version = appVersion || window.PIDESK_APP_VERSION || window.OMP_APP_VERSION || "0.4.1";
   const themeName = theme || "daylight";
   const versionLabel = `v${version}-${themeName}`;
 

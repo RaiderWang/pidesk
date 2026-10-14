@@ -9,6 +9,7 @@ mod file_watcher;
 mod files;
 mod git;
 mod git_watcher;
+mod main_window;
 mod models_config;
 mod quick_bar;
 mod review;
@@ -268,11 +269,7 @@ pub fn run() {
     agent::ensure_gui_path();
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(win) = app.get_webview_window("main") {
-                let _ = win.unminimize();
-                let _ = win.show();
-                let _ = win.set_focus();
-            }
+            main_window::show(app);
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(
@@ -343,11 +340,11 @@ pub fn run() {
             // the Quick Bar and tray can still function. Users quit via
             // tray menu → Quit, which calls app.exit(0).
             if let Some(win) = app.get_webview_window("main") {
-                let win_hide = win.clone();
+                let app_handle = app.handle().clone();
                 win.on_window_event(move |event| {
                     if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                         api.prevent_close();
-                        let _ = win_hide.hide();
+                        main_window::hide(&app_handle);
                     }
                 });
 
@@ -392,6 +389,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(main_window::on_run_event);
 }

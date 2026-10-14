@@ -128,7 +128,7 @@ function App() {
           <TabBar projects={data.projects} activeId={activeTabId}
             onSelect={setActiveTabId} peer={data.peer} onNew={() => {}}
             onKanban={() => setPlanOpen(prev => !prev)} todoCount={todoCounts.total}
-            appVersion={window.PIDESK_APP_VERSION || window.OMP_APP_VERSION || "0.3.0"} theme={t.theme} />
+            appVersion={window.PIDESK_APP_VERSION || window.OMP_APP_VERSION || "0.4.1"} theme={t.theme} />
 
           <div className={`stage ${showRail ? "with-rail" : ""}`}>
             <main className="session">

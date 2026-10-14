@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-14
+
+### Fixed
+
+- **macOS Dock icon after closing the main window**: closing the window to the tray now also hides the Dock icon (it was lingering but unresponsive), and the icon is restored when the window is shown again from the tray / single-instance relaunch. Clicking the Dock icon (`RunEvent::Reopen`) now brings the main window back. Logic lives in `src-tauri/src/main_window.rs`.
+
 ## [0.4.0] - 2026-10-13
 
 ### Added
