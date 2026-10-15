@@ -1,0 +1,36 @@
+/* Welcome card — empty-session intro + shortcut list (design/chat/welcome-card.jsx) */
+.welcome-card {
+  max-width: 720px;
+  margin: 32px auto;
+  padding: 24px 28px 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+}
+.welcome-head { display: flex; align-items: center; gap: 14px; }
+.welcome-glyph {
+  width: 36px; height: 36px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklab, var(--accent) 40%, var(--line));
+  background: color-mix(in oklab, var(--accent) 10%, transparent);
+}
+.welcome-title { font-size: 18px; font-weight: 600; color: var(--fg-1); }
+.welcome-sub { margin-top: 2px; font-size: var(--d-text-sm); color: var(--fg-3); }
+.welcome-tips {
+  margin: 18px 0 6px; padding-left: 18px;
+  display: flex; flex-direction: column; gap: 6px;
+  font-size: var(--d-text-sm); line-height: 1.55; color: var(--fg-2);
+}
+.welcome-tips li::marker { color: var(--accent); }
+.welcome-section { margin-top: 18px; padding: 0 4px; }
+.welcome-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  column-gap: 16px;
+}
+.welcome-foot {
+  margin-top: 10px; padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: var(--d-text-sm); color: var(--fg-3);
+}

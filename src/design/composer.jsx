@@ -2,7 +2,7 @@
    composer.jsx — input area + slash palette
    ═════════════════════════════════════════════════════════════════════ */
 
-const { Icon } = window;
+const { Icon, useComposerRestore: _useComposerRestore } = window;
 
 // ── Model vision capability detection ──────────────────────────────────
 function modelSupportsImages(m) {
@@ -46,6 +46,9 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
   // paste blocks: id → raw content; collapsed in textarea as [paste #N +K lines]
   const pasteBlocksRef   = React.useRef(new Map());
   const pasteCounterRef  = React.useRef(0);
+
+  // "Undo message" hands the original text/images back through this event.
+  _useComposerRestore({ setText, setImages, taRef });
 
   const cmds = window.OMP_DATA?.commands || [];
   const supportsImages = React.useMemo(() => modelSupportsImages(currentModel), [currentModel]);

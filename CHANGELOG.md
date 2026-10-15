@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Welcome card on empty tabs**: a tab with no messages now shows a short intro (how to ask, `/` and `@`, project folders, Plan mode) and the full keyboard shortcut list, including the configurable Quick Bar and screenshot shortcuts. It disappears once the first message arrives. Lives in `design/chat/welcome-card.jsx` and reuses the shortcut registry, so new shortcuts show up automatically.
+
+- **Undo a sent message**: every user bubble has an undo button (bottom-right, disabled while the agent runs, compacts, or has background tasks pending — `branch` would cancel them). After a confirmation the conversation is rolled back to just before that message via omp's native `branch` RPC — the message text (and images) return to the composer for editing and resending, and everything after it is cleared. The original conversation stays in History as a backup; file changes the agent already made on disk are **not** rolled back (the dialog says so). Plan-mode framing is stripped from the restored text; an existing composer draft is kept (the message is appended). Logic lives in `app/undo-message.js` (tail-aligned entry lookup with text verification — never guesses), `undo-bridge.js` and `design/composer-restore.jsx`. Known limitation: a message that omp rewrote before saving (expanded slash command / prompt template / `@model` mention) cannot be matched to the saved session, so it — and anything before it — reports "couldn't match" and is left untouched.
+
+### Fixed
+
+- Undo no longer loses the message or shows its error in the wrong tab when you switch tabs mid-undo: the switch now waits for the in-flight undo, so the text lands in the composer of the tab it came from and any failure warning stays in that tab. Previously the switch dropped the response listener, the undo hung for 30 s, and the warning appeared in the tab you had switched to.
+- The undo button's busy guard is now a single check shared by the button and the bridge. It covers a manual `/compact` (pending card) and automatic compaction, and disables undo while background async work is pending, with its own tooltip. Undo also keeps tool logs of earlier turns instead of wiping them all.
+- A tab now re-binds to omp's current session file whenever it changes (undo, `/new`, switch). Previously History's "already open" check and resume de-duplication kept pointing at the old file, so the new one could be opened a second time.
+
 ## [0.4.2] - 2026-10-15
 
 ### Added

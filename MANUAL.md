@@ -169,6 +169,8 @@ The frontend communicates with `omp` exclusively through the Tauri IPC bridge. `
 | `cycle_thinking_level` | User cycles thinking in composer / `/thinking` |
 | `compact` | User runs `/compact` |
 | `export_html` | User runs `/export` |
+| `get_entries` | Undo message — read the session entries (ids, parent chain, `leafId`) |
+| `branch` | Undo message — roll back to before a user entry (`{ entryId }` → `{ text, cancelled }`) |
 | `get_session_stats` | After each `turn_end` |
 | `extension_ui_response` | Auto-cancel for interactive UI requests |
 
@@ -248,6 +250,21 @@ omp 18.x `get_state` does not include `thinkingLevel`; `cycle_thinking_level` re
 
 The omp compact response contains `tokensBefore` (may be 0 in some versions) but **not** `tokensAfter`. PiDesk snapshots pre-compact tokens from `contextUsage` at send time, then back-fills `tokensAfter` from the next `get_state` via `_compactBackfillId` in `live.js`.
 
+### Undo a sent message (omp `branch`)
+
+Flow (`undo-bridge.js`, wired from `live.js`): `get_entries` → `UndoMessage.resolveTarget` → `branch { entryId }` → truncate `state.messages` → reset derived state → `get_state` → composer gets the text/images back (`composer-restore` event).
+
+- **Native RPC, not file surgery.** omp's `branch` writes a *new* `.jsonl` containing everything before the chosen user entry (header `parentSession` → old file) and switches the running process to it; todo/subagents/async jobs/memory are reset by omp. The old file stays on disk as a backup (it shows up in History). No process restart, no Rust involved.
+- **`get_entries`, not `get_branch_messages`.** The latter drops image-only user messages and returns text only. The `branch` response also omits the stored images, so they are taken from the UI message.
+- **Tail alignment.** UI messages have no entry id, and the UI list is head-trimmed (`_trimMessages`, 169 cap) while compaction drops old turns from `get_messages`, so "N-th user bubble from the start" does not line up with the file. The newest user bubbles always do: count from the end, then verify whitespace-insensitive text + image presence of every bubble from the target to the end. Any mismatch (e.g. a steer bubble not yet persisted) → refuse, never guess — `branch` is destructive.
+- **No `get_messages` after undo.** Its merge into `state.messages` is positional and mis-aligns on a trimmed list; the locally truncated list is authoritative.
+- **Tab re-binding.** The registry entry's `sessionFile/sessionPath/savedSessionId` are refreshed in `_applyRpcState` whenever omp reports a different file; otherwise History would treat the backup as "open" and allow the new file to be opened in a second tab (two omp processes on one jsonl).
+- **One busy guard.** `UndoBridge.busyReason()` (exposed as `OMP_BRIDGE.undoBlocked`) returns `null | "running" | "async"` and is the single source of truth for the button (`useUndoMessage`) and the bridge. `"running"` = streaming, `rpcState.isCompacting`, or a pending compact card (manual `/compact` never sets `isCompacting`); `"async"` = `hasPendingAsyncWork` — omp's `branch()` cancels its own background jobs. `AgentSession.branch` does not refuse while busy, so the bridge re-checks before sending `branch`.
+- **Tab switches wait for an in-flight undo.** `_switchToSession` awaits `undoBridge.whenIdle()` first. Switching tears down the old session's `agent://line/{id}` listener, so the `get_entries`/`branch` responses would otherwise never arrive (30 s timeout, error bubble in the *new* tab, undone text lost). `whenIdle` adds one macrotask so the hook's `composer-restore` dispatch runs before the switch. Failure warnings are written only if the originating session is still active.
+- **Known limitation.** If omp rewrites a prompt before persisting it (slash command / template / `@model` expansion), `message_start` echoes the expanded text and the UI shows an extra bubble; the tail check then fails safely (`undo.fail.locate`) for that message and everything before it. Fixing it needs optimistic-echo de-duplication in `live.js`.
+- Finished tool cards are ephemeral (removed from `state.messages` on `tool_execution_end`), so `countAffected().tools` is ~0 in live sessions and `toolLogs` are left untouched by undo.
+- Agent edits to files on disk are **not** reverted — the confirm dialog says so.
+
 ### Single instance lifecycle
 
 PiDesk enforces single-instance execution via `tauri-plugin-single-instance`. When a secondary process is launched, it detects the running primary instance, notifies it, and terminates immediately. The primary instance's callback locates the `"main"` window, unminimizes it if minimized, makes it visible if hidden, and brings it to the foreground (`set_focus()`).
@@ -288,13 +305,13 @@ Script order in `src/index.html` **is** the dependency graph — Babel has no mo
 1. Vendored libs: React, ReactDOM, Babel, `marked.min.js`, `highlight.min.js`
 2. Tweaks: `tweaks/style.js`, `tweaks/use-tweaks.js` → `tweaks/panel.jsx`, `tweaks/controls.jsx`
 3. UI primitives: `ui/icons.jsx` → `ui/sparks.jsx` → `ui/markdown.jsx` → `ui/plan-annotations.jsx`
-4. Chat: `chat/user-bubble.jsx` → `chat/eval-cell.jsx` → `chat/assistant-bubble.jsx` → `chat/tool-card.jsx` → `chat/chat-view.jsx`
-5. `design/composer.jsx` → `design/palette/*` (command palette) → `design/file-tree-panel.jsx` → `design/chrome/*` (window-chrome, tab-bar, status-bar, ambient-rail, agent-error-banner) → `design/plan/*` → `design/dock/*`
-6. Live data: `model-names.js` → `adapter.js` → `live.js`
-7. App helpers: `app/constants.js` → `app/use-bridge-snapshot.jsx` → `app/use-global-shortcuts.jsx` → `app/use-dock-state.jsx`
+4. Chat: `chat/user-bubble.jsx` → `chat/eval-cell.jsx` → `chat/assistant-bubble.jsx` → `chat/tool-card.jsx` → `chat/chat-view.jsx` → `chat/undo-confirm-modal.jsx`
+5. `design/composer-restore.jsx` → `design/composer.jsx` → `design/palette/*` (command palette) → `design/file-tree-panel.jsx` → `design/chrome/*` (window-chrome, tab-bar, status-bar, ambient-rail, agent-error-banner) → `design/plan/*` → `design/dock/*`
+6. Live data: `model-names.js` → `adapter.js` → `peer-session.js` → `undo-bridge.js` → `live.js`
+7. App helpers: `app/constants.js` → `app/use-bridge-snapshot.jsx` → `app/use-global-shortcuts.jsx` → `app/use-dock-state.jsx` → `app/use-undo-message.jsx`
 8. `app-live.jsx` (last)
 
-Pure-logic plain scripts (loaded before the Babel files, unit-tested under `test/`): `app/chat-grouping.js`, `app/modal-stack.js`, `app/shortcuts.js`, `app/fuzzy.js`, `app/palette-query.js`, `app/file-index.js`, `app/plan-stats.js`, `app/dock-layout.js`, `app/dock-state.js`.
+Pure-logic plain scripts (loaded before the Babel files, unit-tested under `test/`): `app/chat-grouping.js`, `app/modal-stack.js`, `app/shortcuts.js`, `app/fuzzy.js`, `app/palette-query.js`, `app/file-index.js`, `app/plan-stats.js`, `app/dock-layout.js`, `app/dock-state.js`, `app/undo-message.js`.
 
 When adding a file, insert it at the correct point — wrong order does not fail at build time; it causes runtime reference errors.
 

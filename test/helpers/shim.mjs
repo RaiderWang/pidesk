@@ -71,6 +71,7 @@ loadScript('adapter.js');
 loadScript('design/yaml-util.js');
 loadScript('i18n.js');
 loadScript('app/chat-grouping.js');
+loadScript('app/welcome-state.js');
 loadScript('app/modal-stack.js');
 loadScript('design/tweaks/shortcut-util.js');
 loadScript('app/shortcuts.js');
@@ -112,6 +113,9 @@ export const { t, getLocale, setLocale } = globalThis.I18N;
 
 // app/chat-grouping.js exports a namespace object (window.ChatGrouping)
 export const ChatGrouping = globalThis.ChatGrouping;
+
+// app/welcome-state.js namespace object (window.WelcomeState)
+export const WelcomeState = globalThis.WelcomeState;
 
 // app/modal-stack.js exports a namespace object (window.ModalStack)
 export const ModalStack = globalThis.ModalStack;

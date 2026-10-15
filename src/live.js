@@ -481,6 +481,10 @@
     // Auto-clear peer if switching to the peer tab (redundant to monitor yourself)
     window.PeerSessionBridge.clearIfMatch(id);
 
+    // An in-flight undo awaits RPC responses on the *current* listener; wait
+    // for it so its responses (and composer restore) land in the right tab.
+    await _undo.whenIdle();
+
     // Snapshot current session so we can restore it when switching back
     _saveCurrentSession();
 
@@ -1474,8 +1478,21 @@
     }
     if (rpcState.sessionFile && activeSessionId && sessionRegistry.has(activeSessionId)) {
       const entry = sessionRegistry.get(activeSessionId);
+      const normFile = p => (p || "").replace(/\\/g, "/").toLowerCase();
       if (!entry.sessionFile) {
         sessionRegistry.set(activeSessionId, { ...entry, sessionFile: rpcState.sessionFile });
+      } else if (normFile(entry.sessionFile) !== normFile(rpcState.sessionFile)) {
+        // omp moved this process to another session file (undo/branch,
+        // new_session, switch_session). Re-bind the tab, otherwise history's
+        // "already open" check and resumeSession de-dup would match the old
+        // file and let the new one be opened a second time (two omp
+        // processes writing one .jsonl).
+        sessionRegistry.set(activeSessionId, {
+          ...entry,
+          sessionFile:    rpcState.sessionFile,
+          sessionPath:    rpcState.sessionFile,
+          savedSessionId: rpcState.sessionId ?? null,
+        });
       }
     }
 
@@ -1644,6 +1661,20 @@
     }
   }
 
+  // Undo-a-sent-message orchestration lives in undo-bridge.js; it only needs
+  // these IIFE-private helpers.
+  const _undo = window.UndoBridge.create({
+    state,
+    notify,
+    sendWithResponse: _sendWithResponse,
+    applyRpcState:    _applyRpcState,
+    getActiveSessionId: () => activeSessionId,
+    sessionSnapshots,
+    clearVolatile: () => { streamingBubble = null; pendingAskBubble = null; },
+    reindexToolCards: () => _reindexActiveToolCards(),
+    defaultPlanMeta: () => ({ ...DEFAULT_DATA.planMeta }),
+  });
+
   // ── OMP_BRIDGE public API ─────────────────────────────────────────────────
   window.OMP_BRIDGE = {
     get isConnected() { return !!window.__TAURI__ && !!activeSessionId && !state.agentError; },
@@ -1738,6 +1769,12 @@
       _send({ type: "compact", id });
     },
     newSession()       { _send({ type: "new_session" }); },
+    /** Undo the user bubble at UI index `uiIdx`: roll the session back to just
+     *  before it (omp `branch`) and resolve `{ ok, text, images, planFramingStripped }`
+     *  so the caller can put the message back in the composer. */
+    undoMessage(uiIdx) { return _undo.undoMessage(uiIdx); },
+    /** `null` when undo is safe, else `"running"` | `"async"` (single source of truth for the UI guard). */
+    get undoBlocked() { return _undo.busyReason(); },
     /** Fork the active session into a new tab by copying the session file.
      *  If `fromMsgIdx` is a number, only the conversation up to (and including)
      *  that UI message index is kept — messages after it are discarded so the

@@ -26,6 +26,8 @@ function loadScript(rel) {
 
 // Load peer-session and live.js
 loadScript('peer-session.js');
+loadScript('app/undo-message.js');
+loadScript('undo-bridge.js');
 loadScript('live.js');
 
 const bridge = globalThis.OMP_BRIDGE;

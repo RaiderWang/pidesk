@@ -3,7 +3,7 @@
    bubble component. The minimap-hover cross-highlight (mm-hot) flows
    through here via the `hoveredMsgIdx` prop. */
 
-const { UserBubble: _CV_UserBubble, ToolCard: _CV_ToolCard, ToolGroup: _CV_ToolGroup, AssistantBubble: _CV_AssistantBubble, AskBubble: _CV_AskBubble, Icon: _CV_Icon } = window;
+const { UserBubble: _CV_UserBubble, ToolCard: _CV_ToolCard, ToolGroup: _CV_ToolGroup, AssistantBubble: _CV_AssistantBubble, AskBubble: _CV_AskBubble, WelcomeCard: _CV_WelcomeCard, Icon: _CV_Icon } = window;
 
 // ── Per-bubble memo wrappers ────────────────────────────────────────────────
 // Primary streaming-perf win: only the live tail (new object ref per
@@ -83,7 +83,7 @@ const CompactRow = React.memo(function CompactRow({ msg }) {
   );
 });
 
-function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, onAskAnswer, onBranch, onOpenKanban, groupTools = true, locale }) {
+function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, onAskAnswer, onBranch, onUndo, canUndo = true, undoBlockReason = null, onOpenKanban, groupTools = true, locale, systemShortcuts }) {
   const scrollRef    = React.useRef(null);
   const atBottomRef  = React.useRef(true);   // assume start at bottom
   const prevCountRef = React.useRef(0);
@@ -170,6 +170,7 @@ function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, 
 
   return (
     <div className="chat-scroll selectable" ref={scrollRef} onScroll={onScroll}>
+      {window.WelcomeState.shouldShowWelcome(messages) && <_CV_WelcomeCard system={systemShortcuts} />}
       <div className="chat-pad">
         {/* Note: after a trim, idx shifts for all surviving messages, causing a full
            re-render of memo'd bubbles in that notify cycle (bounded at MINIMAP_MAX -
@@ -185,7 +186,7 @@ function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, 
           }
           const { msg: m, idx: i } = entry;
           const hl = hoveredMsgIdx === i;
-          if (m.kind === "user")    return <_CV_UserBubble_M    key={m._id ?? i} idx={i} highlighted={hl} msg={m} />;
+          if (m.kind === "user")    return <_CV_UserBubble_M    key={m._id ?? i} idx={i} highlighted={hl} msg={m} onUndo={onUndo} canUndo={canUndo} undoBlockReason={undoBlockReason} />;
           if (m.kind === "compact") return <CompactRow          key={m._id ?? i} msg={m} />;
           if (m.kind === "tool")    return <_CV_ToolCard_M      key={m._id ?? i} idx={i} highlighted={hl} msg={m} />;
           if (m.kind === "ask")     return <_CV_AskBubble_M     key={m._id ?? i} idx={i} highlighted={hl} msg={m} onAnswer={onAskAnswer} />;

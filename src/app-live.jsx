@@ -22,6 +22,7 @@ const {
   TWEAK_DEFAULTS, NULL_MODEL, EMPTY_PROJECT, NULL_PEER,
   INTENT_FRAMING, APPROVAL_PROMPT,
   useBridgeSnapshot, useThemeEffect, useGlobalShortcuts, timeNow,
+  UndoConfirmModal, useUndoMessage,
 } = window;
 
 function App() {
@@ -296,6 +297,15 @@ function App() {
     [bridge],
   );
 
+  // Undo a sent user message: confirm → omp rolls back → text/images return to the composer.
+  const { canUndo, blockReason: undoBlockReason, requestUndo, undoDialog } = useUndoMessage({
+    bridge, messages, streaming, hasPendingAsyncWork,
+    onUndone: (r) => {
+      setPlanAnnotations({}); // annotations were bound to messages that may be gone
+      if (r.planFramingStripped) planStartedRef.current = false; // next plan send re-wraps the intent
+    },
+  });
+
   const handleApprovePlan = () => {
     setPlanAnnotations({});
     bridge?.followUp(APPROVAL_PROMPT());
@@ -485,9 +495,13 @@ function App() {
                 onAskAnswer={handleAskAnswer}
                 hoveredMsgIdx={hoveredMsgIdx}
                 onBranch={handleBranch}
+                onUndo={requestUndo}
+                canUndo={canUndo}
+                undoBlockReason={undoBlockReason}
                 onOpenKanban={() => openDockTab("plan")}
                 groupTools={t.groupTools !== false}
                 locale={t.locale}
+                systemShortcuts={{ quickBar: t.quickBarShortcut, screenshot: t.screenshotShortcut }}
               />
               <Composer
                 onSend={handleSend}
@@ -623,6 +637,8 @@ function App() {
           onAbort={handleAbort}
         />
       )}
+
+      <UndoConfirmModal {...undoDialog} />
 
       {historyOpen && (
         <HistoryModal

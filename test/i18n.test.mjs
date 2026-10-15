@@ -336,6 +336,27 @@ describe('known-key spot-checks', () => {
     setLocale('en');
   });
 
+  it('welcome card keys resolve in en and zh-CN with footer params substituted', () => {
+    const keys = [
+      'welcome.title', 'welcome.subtitle', 'welcome.tip.ask', 'welcome.tip.slashAt',
+      'welcome.tip.project', 'welcome.tip.plan', 'welcome.shortcuts', 'welcome.footer',
+    ];
+    for (const locale of ['en', 'zh-CN']) {
+      setLocale(locale);
+      for (const k of keys) {
+        assert.notEqual(t(k), k, `${k} missing in ${locale}`);
+      }
+      const footer = t('welcome.footer', { help: 'Ctrl+/', palette: 'Ctrl+K' });
+      assert.ok(footer.includes('Ctrl+/') && footer.includes('Ctrl+K'), `params not substituted: ${footer}`);
+      assert.ok(!footer.includes('{'), `unresolved placeholder: ${footer}`);
+    }
+    setLocale('en');
+    assert.equal(t('welcome.title'), 'Welcome to PiDesk');
+    setLocale('zh-CN');
+    assert.equal(t('welcome.title'), '欢迎使用 PiDesk');
+    setLocale('en');
+  });
+
   it('review drawer and environment keys resolve in en and zh-CN', () => {
     setLocale('en');
     assert.equal(t('review.title'), 'Code Review');

@@ -1,6 +1,6 @@
 /* chat/user-bubble.jsx — user-side bubble, right-aligned. */
 
-function UserBubble({ msg, idx, highlighted }) {
+function UserBubble({ msg, idx, highlighted, onUndo, canUndo = true, undoBlockReason = null }) {
   const [lightboxImg, setLightboxImg] = React.useState(null);
   const [copied, setCopied] = React.useState(false);
   const images = msg.images || [];
@@ -45,6 +45,20 @@ function UserBubble({ msg, idx, highlighted }) {
           >
             <window.Icon name={copied ? "check" : "copy"} size={12} />
           </button>
+          {onUndo && (
+            <button
+              className="msg-act-btn"
+              disabled={!canUndo}
+              title={canUndo
+                ? (window.t ? window.t("action.undo") : "undo")
+                : (undoBlockReason === "async"
+                  ? (window.t ? window.t("undo.disabled.async") : "Background tasks are still running")
+                  : (window.t ? window.t("undo.disabled.running") : "Stop the agent first"))}
+              onClick={() => onUndo(idx)}
+            >
+              <window.Icon name="undo" size={12} />
+            </button>
+          )}
         </div>
 
         {lightboxImg && (

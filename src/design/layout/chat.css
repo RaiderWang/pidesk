@@ -176,6 +176,11 @@
 .msg-act-btn:hover {
   background: color-mix(in oklab, var(--accent) 14%, transparent);
 }
+.msg-act-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  background: transparent;
+}
 .user-text {
   font-size: var(--d-text);
   color: var(--fg);
