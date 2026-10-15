@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.4.3] - 2026-10-15
 
 ### Added
 
@@ -13,6 +13,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Undo a sent message**: every user bubble has an undo button (bottom-right, disabled while the agent runs, compacts, or has background tasks pending — `branch` would cancel them). After a confirmation the conversation is rolled back to just before that message via omp's native `branch` RPC — the message text (and images) return to the composer for editing and resending, and everything after it is cleared. The original conversation stays in History as a backup; file changes the agent already made on disk are **not** rolled back (the dialog says so). Plan-mode framing is stripped from the restored text; an existing composer draft is kept (the message is appended). Logic lives in `app/undo-message.js` (tail-aligned entry lookup with text verification — never guesses), `undo-bridge.js` and `design/composer-restore.jsx`. Known limitation: a message that omp rewrote before saving (expanded slash command / prompt template / `@model` mention) cannot be matched to the saved session, so it — and anything before it — reports "couldn't match" and is left untouched.
 
 ### Changed
+
+- **Taller initial main window**: the default window height is now 960 (was 900) logical px, set in `src-tauri/tauri.conf.json`.
 
 - **Quick Bar look**: rounder card with a hairline border, roomier input row (larger text, more padding), a tinted hint bar with keycap-style shortcuts, and softer spacing in the result area and screenshot thumbnail strip.
 
