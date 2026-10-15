@@ -1,0 +1,20 @@
+/* Collapsed tool-run summary (chat/tool-group.jsx) ───────────────── */
+.tool-group-card .tool-card-head { flex-wrap: wrap; row-gap: 4px; }
+.tool-group-title {
+  font-size: var(--d-text-xs);
+  font-weight: 500;
+  color: var(--fg-2);
+  white-space: nowrap;
+}
+.tool-group-counts {
+  display: inline-flex; flex-wrap: wrap; gap: 4px;
+  min-width: 0;
+}
+.tool-group-counts .tool-tag { gap: 3px; }
+.tool-group-card.collapsed { border-style: dashed; }
+.tool-group-card.has-problem {
+  border-color: color-mix(in oklab, var(--rose) 30%, var(--line));
+}
+.row.tool-group.mm-hot .tool-card {
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 70%, transparent);
+}

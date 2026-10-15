@@ -15,13 +15,13 @@
    ═════════════════════════════════════════════════════════════════════ */
 
 const {
-  Icon, ChatView, Composer, CommandBridge, WindowChrome, TabBar,
-  StatusBar, AmbientRail, SplitPeer, PlanKanban, HistoryModal, ModelManagerModal, ToolLogModal, AgentErrorBanner, useTweaks,
-  FileTreePanel,
+  Icon, ChatView, Composer, CommandPalette, ShortcutsHelp, WindowChrome, TabBar,
+  StatusBar, AmbientRail, SplitPeer, PlanKanban, PlanDockView, HistoryModal, ModelManagerModal, ToolLogModal, AgentErrorBanner, useTweaks,
+  FileTreePanel, ActivityBar, DockPanel, useDockState, useViewportWidth,
   TweaksPanel, TweakSection, TweakRadio, TweakToggle, TweakColor, TweakSlider, TweakShortcut,
   TWEAK_DEFAULTS, NULL_MODEL, EMPTY_PROJECT, NULL_PEER,
   INTENT_FRAMING, APPROVAL_PROMPT,
-  useBridgeSnapshot, useThemeEffect, useCommandShortcut, timeNow,
+  useBridgeSnapshot, useThemeEffect, useGlobalShortcuts, timeNow,
 } = window;
 
 function App() {
@@ -35,6 +35,7 @@ function App() {
   // ── UI state ──────────────────────────────────────────────────────────────
   const [bridgeOpen,  setBridgeOpen]  = React.useState(false);
   const [bridgeView,  setBridgeView]  = React.useState("commands");
+  const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const [modelManagerOpen, setModelManagerOpen] = React.useState(false);
   const [reviewOpen,  setReviewOpen]  = React.useState(false);
@@ -52,36 +53,21 @@ function App() {
   const [toolLogs, setToolLogs] = React.useState({});
   const [planOpen,    setPlanOpen]    = React.useState(false);
   const [planMode,    setPlanMode]    = React.useState(false);
-  const [filesOpen,   setFilesOpen]   = React.useState(() => {
-    try {
-      const saved = localStorage.getItem("pidesk:files-panel-open");
-      return saved !== null ? JSON.parse(saved) : true;
-    } catch {
-      return true;
-    }
-  });
-
-  const [filesWidth, setFilesWidth] = React.useState(() => {
-    try {
-      const saved = Number(localStorage.getItem("pidesk:files-panel-width"));
-      return saved >= 160 && saved <= 600 ? saved : 240;
-    } catch {
-      return 240;
-    }
-  });
-
-  const handleFilesWidthChange = React.useCallback((width) => {
-    setFilesWidth(width);
-    try { localStorage.setItem("pidesk:files-panel-width", String(width)); } catch {}
-  }, []);
-
-  const handleToggleFiles = React.useCallback(() => {
-    setFilesOpen(prev => {
-      const next = !prev;
-      try { localStorage.setItem("pidesk:files-panel-open", JSON.stringify(next)); } catch {}
-      return next;
-    });
-  }, []);
+  // Dock / file-tree state is persisted by app/dock-state.js; the stage grid
+  // is derived from it in the render section below.
+  const dock = useDockState();
+  const viewportW = useViewportWidth();
+  const handleToggleFiles = dock.toggleFiles;
+  // "focus" layout hides the dock; any entry that opens it leaves focus mode.
+  const dockWanted = dock.state.dockOpen && t.layout !== "focus";
+  const openDockTab = (tab) => {
+    dock.openDock(tab);
+    if (t.layout === "focus") setTweak("layout", "rail");
+  };
+  const toggleDockTab = (tab) => {
+    if (dockWanted && dock.state.dockTab === tab) dock.setDockOpen(false);
+    else openDockTab(tab);
+  };
   const planStartedRef = React.useRef(false); // true after first send in plan mode
   const [planActive, setPlanActive] = React.useState(false);
   const [planAnnotations, setPlanAnnotations] = React.useState({});
@@ -94,9 +80,10 @@ function App() {
   // Cross-component highlight: hovering a minimap cell lights up the
   // matching chat bubble; clicking scrolls to it.
   const [hoveredMsgIdx, setHoveredMsgIdx] = React.useState(null);
+  // ChatView listens for this so a message folded into a collapsed tool
+  // group is revealed before scrolling.
   const handleMinimapClick = (idx) => {
-    const el = document.querySelector(`[data-msg-idx="${idx}"]`);
-    el?.scrollIntoView({ block: "center", behavior: "smooth" });
+    window.dispatchEvent(new CustomEvent("chat-scroll-to-msg", { detail: { idx } }));
   };
 
   // ── Live data (all per-session — driven by OMP_BRIDGE.onUpdate) ───────────
@@ -184,35 +171,6 @@ function App() {
     setHasPendingAsyncWork, setIsSettled,
   });
   useThemeEffect(t);
-  useCommandShortcut(setBridgeOpen, setBridgeView);
-
-  // Global shortcuts: Ctrl+H for history, Ctrl+M for model management, Ctrl+O for open project, Ctrl+T for standalone session
-  React.useEffect(() => {
-    const onKey = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "h") {
-        e.preventDefault();
-        setHistoryOpen(prev => !prev);
-      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "m") {
-        e.preventDefault();
-        setModelManagerOpen(prev => !prev);
-      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "o") {
-        e.preventDefault();
-        handleNewProject();
-      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "t") {
-        e.preventDefault();
-        handleNewStandalone();
-      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
-        e.preventDefault();
-        handleToggleFiles();
-      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
-        e.preventDefault();
-        setPlanOpen(prev => !prev);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
   // Fetch OAuth providers whenever the login view opens (ensures fresh auth status)
   React.useEffect(() => {
     if (!bridgeOpen || bridgeView !== "login") return;
@@ -227,7 +185,6 @@ function App() {
   // ── Derived values ────────────────────────────────────────────────────────
   const activeProject = sessions.find(s => s.id === activeSessionId) ?? sessions[0] ?? EMPTY_PROJECT;
   const hasProject    = Boolean(activeProject?.path && activeProject.path.trim());
-  const showFiles     = hasProject && filesOpen;
   const todoCounts    = kanban.reduce(
     (acc, col) => {
       acc.total += col.tasks.length;
@@ -300,7 +257,7 @@ function App() {
 
   const handleCommand = c => {
     if      (c.name === "plan")     { setPlanMode(true); setPlanActive(true); planStartedRef.current = false; }
-    else if (c.name === "todo" || c.name === "kanban") { setPlanOpen(true); }
+    else if (c.name === "todo" || c.name === "kanban") { openDockTab("plan"); }
     else if (c.name === "compact")  { bridge?.compact(); }
     else if (c.name === "export")   { bridge?.exportHtml(); }
     else if (c.name === "thinking") { cycleThinking(); }
@@ -400,10 +357,68 @@ function App() {
   const handleClearPeer = ()  => bridge?.clearPeer();
   const handleFocusPeer = ()  => { if (peerSessionId) bridge?.activateSession(peerSessionId); };
 
-  const showRail  = t.layout !== "focus";
+  // ── Global shortcuts + palette actions (shared handlers) ────────────────
+  // Palette / help are the only shortcuts live over a dialog; never stack them
+  // on top of another dialog (its keys would leak through to the one below).
+  const otherModalOpen = historyOpen || modelManagerOpen || planOpen || activeLogTool != null;
+  const togglePalette = () => {
+    if (bridgeOpen) { setBridgeOpen(false); setBridgeView("commands"); }
+    else if (!otherModalOpen && !shortcutsOpen) openBridge("commands");
+  };
+  const openShortcutsHelp = () => {
+    if (shortcutsOpen) { setShortcutsOpen(false); return; }
+    if (otherModalOpen) return;
+    setBridgeOpen(false);
+    setShortcutsOpen(true);
+  };
+  const openTweaks = () => window.postMessage({ type: "__activate_edit_mode" }, "*");
+  useGlobalShortcuts({
+    palette:     togglePalette,
+    help:        openShortcutsHelp,
+    openProject: handleNewProject,
+    newSession:  handleNewStandalone,
+    history:     () => setHistoryOpen(prev => !prev),
+    models:      () => setModelManagerOpen(prev => !prev),
+    toggleFiles: handleToggleFiles,
+    togglePlan:  () => toggleDockTab("plan"),
+  });
+  const paletteActions = [
+    { id: "openProject", icon: "folder",   shortcutId: "openProject", run: handleNewProject,
+      label: window.t("palette.action.openProject", null, "Open project…") },
+    { id: "newSession",  icon: "plus",     shortcutId: "newSession",  run: handleNewStandalone,
+      label: window.t("palette.action.newSession", null, "New standalone session") },
+    { id: "history",     icon: "clock",    shortcutId: "history",     run: () => setHistoryOpen(true),
+      label: window.t("palette.action.history", null, "Session history") },
+    { id: "models",      icon: "cpu",      shortcutId: "models",      run: () => setModelManagerOpen(true),
+      label: window.t("palette.action.models", null, "Manage models") },
+    { id: "togglePlan",  icon: "plan",     shortcutId: "togglePlan",  run: () => toggleDockTab("plan"),
+      label: window.t("palette.action.plan", null, "Toggle plan panel") },
+    { id: "planBoard",   icon: "plan",     run: () => setPlanOpen(true),
+      label: window.t("palette.action.planBoard", null, "Open plan board") },
+    { id: "overview",    icon: "radar",    run: () => toggleDockTab("overview"),
+      label: window.t("palette.action.overview", null, "Toggle overview panel") },
+    { id: "toggleFiles", icon: "sidebar",  shortcutId: "toggleFiles", run: handleToggleFiles,
+      label: window.t("palette.action.files", null, "Toggle file tree") },
+    { id: "tweaks",      icon: "cog",      run: openTweaks,
+      label: window.t("palette.action.tweaks", null, "Open tweaks") },
+    { id: "help",        icon: "info",     shortcutId: "help",        run: () => setShortcutsOpen(true),
+      label: window.t("palette.action.shortcuts", null, "Keyboard shortcuts") },
+  ];
+
   const showSplit = t.layout === "split" && peer !== null;
   const safePeer  = peer ?? NULL_PEER;
   const liveCtx   = ctx ?? data.ctx;
+  const stage = window.DockLayout.resolveStageLayout({
+    activity: true,
+    files: hasProject && dock.state.filesOpen, filesW: dock.state.filesWidth,
+    split: showSplit,
+    dock: dockWanted, dockW: dock.state.dockWidth,
+    width: viewportW,
+  });
+  const dockTabs = [
+    { id: "overview", icon: "radar", label: window.t("activity.overview", null, "Overview") },
+    { id: "plan", icon: "plan", label: window.t("activity.plan", null, "Plan"), badge: todoCounts.total },
+  ];
 
   return (
     <>
@@ -414,8 +429,6 @@ function App() {
             project={activeProject}
             peer={safePeer}
             onCmd={() => openBridge("commands")}
-            filesOpen={showFiles}
-            onToggleFiles={handleToggleFiles}
           />
           <TabBar
             projects={sessions}
@@ -427,27 +440,34 @@ function App() {
             onNewStandalone={handleNewStandalone}
             onOpenRecentProject={handleOpenRecentProject}
             onClose={handleCloseTab}
-            onHistory={() => setHistoryOpen(true)}
-            onManageModels={() => setModelManagerOpen(true)}
-            onKanban={() => setPlanOpen(prev => !prev)}
-            todoCount={todoCounts.total}
             appVersion={appVersion}
             theme={t.theme}
-            kanbanFlashing={kanbanFlashing}
           />
 
-          <div
-            className={`stage ${showFiles ? "with-files " : ""}${showRail ? "with-rail" : ""}`}
-            style={{ "--files-width": `${filesWidth}px` }}
-          >
-            {showFiles && (
+          <div className="stage" style={{ gridTemplateColumns: stage.columns }}>
+            <ActivityBar
+              hasProject={hasProject}
+              filesActive={stage.files}
+              dockOpen={dockWanted}
+              dockTab={dock.state.dockTab}
+              planBadge={todoCounts.total}
+              planFlashing={kanbanFlashing}
+              onFiles={handleToggleFiles}
+              onPlan={() => toggleDockTab("plan")}
+              onReview={() => window.dispatchEvent(new CustomEvent("open-review-drawer"))}
+              onOverview={() => toggleDockTab("overview")}
+              onHistory={() => setHistoryOpen(true)}
+              onModels={() => setModelManagerOpen(true)}
+              onSettings={openTweaks}
+            />
+            {stage.files && (
               <FileTreePanel
                 rootPath={activeProject.path}
                 projectName={activeProject.name}
                 onClose={handleToggleFiles}
                 bridge={bridge}
-                width={filesWidth}
-                onWidthChange={handleFilesWidthChange}
+                width={stage.filesW}
+                onWidthChange={dock.setFilesWidth}
               />
             )}
             <main className="session">
@@ -465,7 +485,9 @@ function App() {
                 onAskAnswer={handleAskAnswer}
                 hoveredMsgIdx={hoveredMsgIdx}
                 onBranch={handleBranch}
-                onOpenKanban={() => setPlanOpen(true)}
+                onOpenKanban={() => openDockTab("plan")}
+                groupTools={t.groupTools !== false}
+                locale={t.locale}
               />
               <Composer
                 onSend={handleSend}
@@ -498,16 +520,13 @@ function App() {
               <StatusBar
                 ctx={liveCtx}
                 model={model}
-                thinking={thinkingLevel}
                 todoDone={todoCounts.done}
                 todoTotal={todoCounts.total}
-                onTodo={() => setPlanOpen(true)}
+                onTodo={() => openDockTab("plan")}
                 onModel={() => openBridge("models")}
-                onTweaks={() => window.postMessage({ type: '__activate_edit_mode' }, '*')}
                 autosave={t.autosave ?? true}
-                onAutosave={v => setTweak("autosave", v)}
+                isStreaming={streaming}
                 agentError={agentError}
-                kanbanFlashing={kanbanFlashing}
               />
             </main>
 
@@ -515,40 +534,58 @@ function App() {
               <SplitPeer peer={safePeer} onFocus={handleFocusPeer} onClear={handleClearPeer} />
             )}
 
-            {showRail && (
-              <AmbientRail
-                ctx={liveCtx}
-                activity={activity}
-                peer={safePeer}
-                peerSessionId={peerSessionId}
-                sessions={sessions}
-                activeSessionId={activeSessionId}
-                onSetPeer={handleSetPeer}
-                onClearPeer={handleClearPeer}
-                onFocusPeer={handleFocusPeer}
-                messages={messages}
-                microcopy={data.microcopy}
-                sparklineValues={sparkline}
-                onClose={() => setTweak("layout", "focus")}
-                hoveredMsgIdx={hoveredMsgIdx}
-                onMinimapHover={setHoveredMsgIdx}
-                onMinimapClick={handleMinimapClick}
-                isStreaming={streaming}
-                turnStartMs={turnStartMs}
-                runningTools={runningTools}
-                recentTools={recentTools}
-                hubMode={hubMode}
-                hubAgents={hubAgents}
-                hubHistory={hubHistory}
-                hasPendingAsyncWork={hasPendingAsyncWork}
-                onOpenToolLog={setActiveLogTool}
-              />
+            {stage.dock && (
+              <DockPanel
+                tabs={dockTabs}
+                activeTab={dock.state.dockTab}
+                onTab={dock.setDockTab}
+                onClose={() => dock.setDockOpen(false)}
+                width={stage.dockW}
+                onWidthChange={dock.setDockWidth}
+              >
+                {dock.state.dockTab === "plan" ? (
+                  <PlanDockView
+                    kanban={kanban}
+                    planMeta={planMeta}
+                    isStreaming={streaming || runningTools.length > 0}
+                    onAbort={handleAbort}
+                    onExpand={() => setPlanOpen(true)}
+                  />
+                ) : (
+                  <AmbientRail
+                    ctx={liveCtx}
+                    activity={activity}
+                    peer={safePeer}
+                    peerSessionId={peerSessionId}
+                    sessions={sessions}
+                    activeSessionId={activeSessionId}
+                    onSetPeer={handleSetPeer}
+                    onClearPeer={handleClearPeer}
+                    onFocusPeer={handleFocusPeer}
+                    messages={messages}
+                    microcopy={data.microcopy}
+                    sparklineValues={sparkline}
+                    hoveredMsgIdx={hoveredMsgIdx}
+                    onMinimapHover={setHoveredMsgIdx}
+                    onMinimapClick={handleMinimapClick}
+                    isStreaming={streaming}
+                    turnStartMs={turnStartMs}
+                    runningTools={runningTools}
+                    recentTools={recentTools}
+                    hubMode={hubMode}
+                    hubAgents={hubAgents}
+                    hubHistory={hubHistory}
+                    hasPendingAsyncWork={hasPendingAsyncWork}
+                    onOpenToolLog={setActiveLogTool}
+                  />
+                )}
+              </DockPanel>
             )}
           </div>
         </div>
       </div>
 
-      <CommandBridge
+      <CommandPalette
         open={bridgeOpen}
         initialView={bridgeView}
         onClose={() => {
@@ -562,6 +599,19 @@ function App() {
         currentModelId={model.id}
         models={models}
         onManageModels={() => setModelManagerOpen(true)}
+        actions={paletteActions}
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        onSelectTab={handleSelectTab}
+        onResumeSaved={handleResumeSession}
+        projectPath={hasProject ? activeProject.path : ""}
+        systemShortcuts={{ quickBar: t.quickBarShortcut, screenshot: t.screenshotShortcut }}
+      />
+
+      <ShortcutsHelp
+        open={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
+        system={{ quickBar: t.quickBarShortcut, screenshot: t.screenshotShortcut }}
       />
 
       {planOpen && (
@@ -619,6 +669,8 @@ function App() {
             ]}
             onChange={v => setTweak("locale", v)}
           />
+          <TweakToggle label={window.t("tweaks.autosave", null, "autosave")} value={t.autosave ?? true}
+            onChange={v => setTweak("autosave", v)} />
         </TweakSection>
         <TweakSection label={window.t("tweaks.section.look", null, "Look")}>
           <TweakRadio label={window.t("tweaks.theme", null, "theme")} value={t.theme}
@@ -646,18 +698,21 @@ function App() {
           />
           <TweakToggle label={window.t("tweaks.monoChat", null, "mono chat font")} value={t.monoChat}
             onChange={v => setTweak("monoChat", v)} />
+          <TweakToggle label={window.t("tweaks.groupTools", null, "group tool calls")} value={t.groupTools !== false}
+            onChange={v => setTweak("groupTools", v)} />
           <TweakSlider label={window.t("tweaks.fontSize", null, "font size")} value={t.fontSize ?? 100}
             min={75} max={150} step={5} unit="%"
             onChange={v => setTweak("fontSize", v)} />
         </TweakSection>
         <TweakSection label={window.t("tweaks.section.layout", null, "Layout")}>
-          <TweakRadio label={window.t("tweaks.layout", null, "layout")} value={t.layout}
+          <TweakRadio label={window.t("tweaks.layout", null, "layout")}
+            value={window.DockState.layoutForDisplay(t.layout, dock.state.dockOpen)}
             options={[
               { label: window.t("tweaks.layout.rail", null, "rail"),  value: "rail"  },
               { label: window.t("tweaks.layout.split", null, "split"), value: "split" },
               { label: window.t("tweaks.layout.focus", null, "focus"), value: "focus" },
             ]}
-            onChange={v => setTweak("layout", v)}
+            onChange={v => { setTweak("layout", v); if (v !== "focus") dock.setDockOpen(true); }}
           />
         </TweakSection>
         <TweakSection label={window.t("tweaks.section.shortcuts", null, "Shortcuts")}>

@@ -1,0 +1,31 @@
+/* Shared modal shell (design/ui/modal.jsx) ─────────────────────────── */
+.modal-scrim {
+  position: fixed; inset: 0;
+  background: color-mix(in oklab, var(--bg-app) 70%, transparent);
+  backdrop-filter: blur(10px);
+  display: flex; justify-content: center; align-items: flex-start;
+  padding: var(--modal-top, 14vh) 16px 16px;
+}
+.modal-scrim.placement-center { align-items: center; padding-top: 16px; }
+.modal-scrim.is-nested { background: rgba(0, 0, 0, 0.65); }
+
+.modal-panel {
+  width: min(var(--modal-w, 640px), 100%);
+  max-height: calc(100vh - 32px);
+  background: var(--bg-elevated);
+  border: 1px solid var(--line-bright);
+  border-radius: 14px;
+  box-shadow: var(--shadow-window);
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  outline: none;
+}
+.modal-panel.size-sm { --modal-w: 420px; }
+.modal-panel.size-md { --modal-w: 640px; }
+.modal-panel.size-lg { --modal-w: 760px; }
+.modal-panel.size-xl { --modal-w: 920px; }
+
+[role="dialog"][tabindex="-1"] { outline: none; }
+
+/* Padded body used by small dialogs (confirm / edit forms). */
+.modal-pad { padding: 20px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }

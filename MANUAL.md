@@ -289,12 +289,24 @@ Script order in `src/index.html` **is** the dependency graph — Babel has no mo
 2. Tweaks: `tweaks/style.js`, `tweaks/use-tweaks.js` → `tweaks/panel.jsx`, `tweaks/controls.jsx`
 3. UI primitives: `ui/icons.jsx` → `ui/sparks.jsx` → `ui/markdown.jsx` → `ui/plan-annotations.jsx`
 4. Chat: `chat/user-bubble.jsx` → `chat/eval-cell.jsx` → `chat/assistant-bubble.jsx` → `chat/tool-card.jsx` → `chat/chat-view.jsx`
-5. `design/composer.jsx`, `design/chrome.jsx`, `design/panels.jsx`
+5. `design/composer.jsx` → `design/palette/*` (command palette) → `design/file-tree-panel.jsx` → `design/chrome/*` (window-chrome, tab-bar, status-bar, ambient-rail, agent-error-banner) → `design/plan/*` → `design/dock/*`
 6. Live data: `model-names.js` → `adapter.js` → `live.js`
-7. App helpers: `app/constants.js` → `app/use-bridge-snapshot.jsx`
+7. App helpers: `app/constants.js` → `app/use-bridge-snapshot.jsx` → `app/use-global-shortcuts.jsx` → `app/use-dock-state.jsx`
 8. `app-live.jsx` (last)
 
+Pure-logic plain scripts (loaded before the Babel files, unit-tested under `test/`): `app/chat-grouping.js`, `app/modal-stack.js`, `app/shortcuts.js`, `app/fuzzy.js`, `app/palette-query.js`, `app/file-index.js`, `app/plan-stats.js`, `app/dock-layout.js`, `app/dock-state.js`.
+
 When adding a file, insert it at the correct point — wrong order does not fail at build time; it causes runtime reference errors.
+
+### UI shell: Activity Bar, Dock, palette, modals
+
+- **Stage grid** — `app/dock-layout.js` (`DockLayout.resolveStageLayout` / `buildStageColumns`) decides which columns exist (`activity · files · session · split · dock`) and sets `grid-template-columns` inline on `.stage`. Below 900 px the file tree and dock auto-hide; below 1100 px the dock/split shrink. There are no `with-files` / `with-rail` CSS combinations any more.
+- **Persistence** — `app/dock-state.js` stores `pidesk:dock-state` (`filesOpen`, `filesWidth`, `dockOpen`, `dockTab`, `dockWidth`) and migrates the legacy `pidesk:files-panel-*` keys. `use-dock-state.jsx` is the React glue. `tweaks.layout = "focus"` still hides the dock; any entry that opens the dock switches `focus` → `rail`.
+- **Activity Bar / Dock** — `design/dock/activity-bar.jsx` is the entry point for files, plan, review, overview, history, models and settings (tooltips show the shortcut from `app/shortcuts.js`). `dock-panel.jsx` hosts the tabs (`overview` = ambient rail, `plan` = `design/plan/plan-dock-view.jsx`). The kanban modal (`plan/plan-kanban.jsx`) opens only from the Plan tab's "board" button. Plan statistics are shared via `app/plan-stats.js`.
+- **Shortcuts** — all global shortcuts are in the `AppShortcuts.REGISTRY`; `use-global-shortcuts.jsx` dispatches them to handlers through a ref (no stale closures). `Ctrl+/` opens the cheat sheet.
+- **Command palette** — `design/palette/command-palette.jsx`. Prefixes: `/` commands, `#` open + saved sessions, `@` project files (bounded BFS index via `app/file-index.js`, inserts `@path` into the composer), `?` shortcut list. Fuzzy matching in `app/fuzzy.js`, grouping/ranking in `app/palette-query.js`.
+- **Modals** — everything uses `design/ui/modal.jsx` (portal, focus trap, `layer` base/nested). `app/modal-stack.js` makes Escape close only the topmost modal.
+- **Tool grouping** — `app/chat-grouping.js` folds runs of ≥ 3 finished tool calls into `chat/tool-group.jsx` (Tweaks → `groupTools`).
 
 ### IIFE rule
 

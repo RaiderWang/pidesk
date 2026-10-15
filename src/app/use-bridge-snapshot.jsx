@@ -4,9 +4,7 @@
                          snapshot fields into a setter map.
    - useThemeEffect:     reflects tweaks state onto <html> classes /
                          CSS custom properties.
-   - useCommandShortcut: ⌘K / ⌃K toggles the command bridge; Escape closes
-                         it. Centralised here so app-live.jsx only owns
-                         render + handlers. */
+   Keyboard shortcuts live in app/shortcuts.js + use-global-shortcuts.jsx. */
 
 const { NULL_MODEL: _UB_NULL_MODEL } = window;
 
@@ -56,21 +54,4 @@ function useThemeEffect(t) {
   }, [t.theme, t.density, t.accent, t.monoChat, t.fontSize]);
 }
 
-function useCommandShortcut(setBridgeOpen, setBridgeView) {
-  React.useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        setBridgeOpen((v) => {
-          if (!v) setBridgeView("commands");
-          return !v;
-        });
-      }
-      if (e.key === "Escape") setBridgeOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [setBridgeOpen, setBridgeView]);
-}
-
-Object.assign(window, { useBridgeSnapshot, useThemeEffect, useCommandShortcut });
+Object.assign(window, { useBridgeSnapshot, useThemeEffect });

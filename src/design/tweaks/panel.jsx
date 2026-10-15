@@ -46,20 +46,36 @@ function TweaksPanel({ title, noDeckControls = false, children }) {
     setRailVisible(on);
     window.postMessage({ type: '__deck_rail_visible', on }, '*');
   };
+  // x = distance from the left edge, y = distance from the bottom edge.
   const offsetRef = React.useRef({ x: 16, y: 16 });
   const PAD = 16;
+
+  // Anchor next to the Activity Bar gear (bottom-left) so the panel opens
+  // where the user clicked. Falls back to the viewport's bottom-left corner.
+  const anchorToGear = () => {
+    const bar = document.querySelector('.activity');
+    if (!bar) {
+      offsetRef.current = { x: PAD, y: PAD };
+      return;
+    }
+    const r = bar.getBoundingClientRect();
+    offsetRef.current = {
+      x: Math.round(r.right) + 8,
+      y: Math.max(8, Math.round(window.innerHeight - r.bottom)) + 8,
+    };
+  };
 
   const clampToViewport = React.useCallback(() => {
     const panel = dragRef.current;
     if (!panel) return;
     const w = panel.offsetWidth, h = panel.offsetHeight;
-    const maxRight = Math.max(PAD, window.innerWidth - w - PAD);
+    const maxLeft = Math.max(PAD, window.innerWidth - w - PAD);
     const maxBottom = Math.max(PAD, window.innerHeight - h - PAD);
     offsetRef.current = {
-      x: Math.min(maxRight, Math.max(PAD, offsetRef.current.x)),
-      y: Math.min(maxBottom, Math.max(PAD, offsetRef.current.y)),
+      x: Math.min(maxLeft, Math.max(PAD / 2, offsetRef.current.x)),
+      y: Math.min(maxBottom, Math.max(PAD / 2, offsetRef.current.y)),
     };
-    panel.style.right = offsetRef.current.x + 'px';
+    panel.style.left = offsetRef.current.x + 'px';
     panel.style.bottom = offsetRef.current.y + 'px';
   }, []);
 
@@ -75,10 +91,32 @@ function TweaksPanel({ title, noDeckControls = false, children }) {
     return () => ro.disconnect();
   }, [open, clampToViewport]);
 
+  // Set when an outside press on the gear closed the panel, so the click that
+  // follows (which re-posts "activate") toggles it shut instead of reopening.
+  const gearClosedAtRef = React.useRef(0);
+
+  // Click / press anywhere outside the panel closes it.
+  React.useEffect(() => {
+    if (!open) return undefined;
+    const onPointerDown = (e) => {
+      const panel = dragRef.current;
+      if (!panel || panel.contains(e.target)) return;
+      if (e.target.closest?.('[data-activity-id="settings"]')) gearClosedAtRef.current = Date.now();
+      setOpen(false);
+      window.parent.postMessage({ type: '__edit_mode_dismissed' }, '*');
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => document.removeEventListener('pointerdown', onPointerDown, true);
+  }, [open]);
+
   React.useEffect(() => {
     const onMsg = (e) => {
       const t = e?.data?.type;
-      if (t === '__activate_edit_mode') setOpen(true);
+      if (t === '__activate_edit_mode') {
+        if (Date.now() - gearClosedAtRef.current < 500) { gearClosedAtRef.current = 0; return; }
+        anchorToGear();
+        setOpen(true);
+      }
       else if (t === '__deactivate_edit_mode') setOpen(false);
     };
     window.addEventListener('message', onMsg);
@@ -96,11 +134,11 @@ function TweaksPanel({ title, noDeckControls = false, children }) {
     if (!panel) return;
     const r = panel.getBoundingClientRect();
     const sx = e.clientX, sy = e.clientY;
-    const startRight = window.innerWidth - r.right;
+    const startLeft = r.left;
     const startBottom = window.innerHeight - r.bottom;
     const move = (ev) => {
       offsetRef.current = {
-        x: startRight - (ev.clientX - sx),
+        x: startLeft + (ev.clientX - sx),
         y: startBottom - (ev.clientY - sy),
       };
       clampToViewport();
@@ -118,7 +156,7 @@ function TweaksPanel({ title, noDeckControls = false, children }) {
     <>
       <style>{window.__TWEAKS_STYLE}</style>
       <div ref={dragRef} className="twk-panel" data-noncommentable=""
-           style={{ right: offsetRef.current.x, bottom: offsetRef.current.y }}>
+           style={{ left: offsetRef.current.x, bottom: offsetRef.current.y }}>
         <div className="twk-hd" onMouseDown={onDragStart}>
           <b>{resolvedTitle}</b>
           <button className="twk-x" aria-label={window.t ? window.t('tweaks.close', null, 'Close tweaks') : 'Close tweaks'}

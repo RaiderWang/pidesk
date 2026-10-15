@@ -3,7 +3,7 @@
    bubble component. The minimap-hover cross-highlight (mm-hot) flows
    through here via the `hoveredMsgIdx` prop. */
 
-const { UserBubble: _CV_UserBubble, ToolCard: _CV_ToolCard, AssistantBubble: _CV_AssistantBubble, AskBubble: _CV_AskBubble, Icon: _CV_Icon } = window;
+const { UserBubble: _CV_UserBubble, ToolCard: _CV_ToolCard, ToolGroup: _CV_ToolGroup, AssistantBubble: _CV_AssistantBubble, AskBubble: _CV_AskBubble, Icon: _CV_Icon } = window;
 
 // ── Per-bubble memo wrappers ────────────────────────────────────────────────
 // Primary streaming-perf win: only the live tail (new object ref per
@@ -83,10 +83,59 @@ const CompactRow = React.memo(function CompactRow({ msg }) {
   );
 });
 
-function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, onAskAnswer, onBranch, onOpenKanban }) {
+function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, onAskAnswer, onBranch, onOpenKanban, groupTools = true, locale }) {
   const scrollRef    = React.useRef(null);
   const atBottomRef  = React.useRef(true);   // assume start at bottom
   const prevCountRef = React.useRef(0);
+
+  // ── Tool-run grouping ────────────────────────────────────────────────────
+  // Expanded groups are keyed by the first tool message's _id (stable while
+  // the run grows). Minimap clicks go through `chat-scroll-to-msg` so a
+  // message hidden inside a collapsed group is revealed before scrolling.
+  const [openGroups, setOpenGroups] = React.useState({});
+  const entries = React.useMemo(
+    () => window.ChatGrouping.groupToolRuns(messages, { enabled: groupTools }),
+    [messages, groupTools],
+  );
+  const entriesRef      = React.useRef(entries);
+  const openGroupsRef   = React.useRef(openGroups);
+  const pendingScrollRef = React.useRef(null);
+  entriesRef.current    = entries;
+  openGroupsRef.current = openGroups;
+
+  const toggleGroup = React.useCallback((key) => {
+    setOpenGroups((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
+
+  const scrollToMsg = React.useCallback((idx) => {
+    const root = scrollRef.current;
+    if (!root) return;
+    const el = root.querySelector(`[data-msg-idx="${idx}"]`);
+    el?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, []);
+
+  React.useEffect(() => {
+    const onScrollTo = (e) => {
+      const idx = e?.detail?.idx;
+      if (idx == null) return;
+      const key = window.ChatGrouping.findGroupKeyForIdx(entriesRef.current, idx);
+      if (key != null && !openGroupsRef.current[key]) {
+        pendingScrollRef.current = idx;
+        setOpenGroups((prev) => ({ ...prev, [key]: true }));
+      } else {
+        scrollToMsg(idx);
+      }
+    };
+    window.addEventListener("chat-scroll-to-msg", onScrollTo);
+    return () => window.removeEventListener("chat-scroll-to-msg", onScrollTo);
+  }, [scrollToMsg]);
+
+  React.useEffect(() => {
+    if (pendingScrollRef.current == null) return;
+    const idx = pendingScrollRef.current;
+    pendingScrollRef.current = null;
+    scrollToMsg(idx);
+  }, [openGroups, scrollToMsg]);
 
   // Track whether user is near the bottom
   const onScroll = (e) => {
@@ -127,7 +176,14 @@ function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, 
            MINIMAP_COLS = 156). Streaming re-renders are unaffected. Driving annotable
            and scroll-targeting off _id instead of idx would make trim zero-cost for
            history, but requires a larger refactor. */}
-        {messages.map((m, i) => {
+        {entries.map((entry) => {
+          if (entry.type === "group") {
+            return <_CV_ToolGroup key={`g-${entry.key}`} group={entry}
+              expanded={Boolean(openGroups[entry.key])} locale={locale}
+              hoveredIdx={hoveredMsgIdx != null && hoveredMsgIdx >= entry.startIdx && hoveredMsgIdx <= entry.endIdx ? hoveredMsgIdx : null}
+              onToggle={toggleGroup} />;
+          }
+          const { msg: m, idx: i } = entry;
           const hl = hoveredMsgIdx === i;
           if (m.kind === "user")    return <_CV_UserBubble_M    key={m._id ?? i} idx={i} highlighted={hl} msg={m} />;
           if (m.kind === "compact") return <CompactRow          key={m._id ?? i} msg={m} />;

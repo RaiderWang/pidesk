@@ -4,7 +4,7 @@
    Supports both visual form view and raw YAML editing.
    ═════════════════════════════════════════════════════════════════════ */
 
-const { Icon, YamlUtil } = window;
+const { Icon, YamlUtil, Modal } = window;
 
 const BUILTIN_OAUTH_PROVIDERS = new Set([
   "openai-codex",
@@ -119,20 +119,8 @@ function ModelManagerModal({ open, onClose, onModelUpdated }) {
     }
   };
 
-  // Keyboard navigation & Esc dismissal
-  React.useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => {
-      if (e.key === "Escape") {
-        if (editingModel) setEditingModel(null);
-        else if (editingProv) setEditingProv(null);
-        else if (confirmDel) setConfirmDel(null);
-        else onClose();
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose, editingModel, editingProv, confirmDel]);
+  // Esc dismissal is handled by <Modal>: only the topmost dialog (sub-dialogs
+  // first, then this manager) reacts.
 
   if (!open) return null;
 
@@ -191,9 +179,8 @@ function ModelManagerModal({ open, onClose, onModelUpdated }) {
 
   return (
     <>
-      <div className="bridge-scrim" onClick={onClose} style={{ paddingTop: "5vh" }}>
-        <div className="bridge slide-in" onClick={e => e.stopPropagation()}
-          style={{ width: "min(880px, calc(100vw - 32px))", maxHeight: "88vh", display: "flex", flexDirection: "column" }}>
+      <Modal onClose={onClose} size="xl" top="5vh" ariaLabel={window.t ? window.t("models.title", null, "Manage Models") : "Manage Models"}
+        panelStyle={{ maxHeight: "88vh" }}>
 
           {/* Modal Header */}
           <div className="bridge-input-row" style={{ padding: "10px 16px", gap: 10, borderBottom: "1px solid var(--line)" }}>
@@ -452,8 +439,7 @@ function ModelManagerModal({ open, onClose, onModelUpdated }) {
               <Icon name="check" size={11} /> {saving ? (window.t ? window.t("models.saving", null, "Saving…") : "Saving…") : (window.t ? window.t("models.save", null, "Save & Apply") : "Save & Apply")}
             </button>
           </div>
-        </div>
-      </div>
+      </Modal>
 
       {/* Edit Model Sub-dialog */}
       {editingModel && (
@@ -476,29 +462,28 @@ function ModelManagerModal({ open, onClose, onModelUpdated }) {
 
       {/* Delete Confirmation Sub-dialog */}
       {confirmDel && (
-        <div className="bridge-scrim" style={{ zIndex: 10002, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", paddingTop: 0, padding: 16 }} onClick={() => setConfirmDel(null)}>
-          <div className="bridge slide-in" onClick={e => e.stopPropagation()}
-            style={{ width: 420, maxHeight: "90vh", overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+        <Modal layer="nested" size="sm" placement="center" onClose={() => setConfirmDel(null)} ariaLabel={window.t("models.confirmDelete.title", null, "Confirm Delete")}>
+          <div className="modal-pad">
             <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--rose)", fontWeight: 600 }}>
-              <Icon name="warn" size={16} /> Confirm Delete
+              <Icon name="warn" size={16} /> {window.t("models.confirmDelete.title", null, "Confirm Delete")}
             </div>
             <div style={{ fontSize: "var(--d-text-sm)", color: "var(--fg-2)" }}>
               {confirmDel.type === "model"
-                ? `Are you sure you want to delete model "${confirmDel.modelId}"?`
-                : `Are you sure you want to delete provider "${confirmDel.providerKey}" and all its models?`}
+                ? window.t("models.confirmDelete.model", { id: confirmDel.modelId })
+                : window.t("models.confirmDelete.provider", { id: confirmDel.providerKey })}
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button className="btn ghost" onClick={() => setConfirmDel(null)}>Cancel</button>
+              <button className="btn ghost" onClick={() => setConfirmDel(null)}>{window.t("models.cancel", null, "Cancel")}</button>
               <button className="btn" style={{ background: "var(--rose)", color: "#fff" }}
                 onClick={() => {
                   if (confirmDel.type === "model") deleteModelItem(confirmDel.providerKey, confirmDel.modelId);
                   else deleteProviderItem(confirmDel.providerKey);
                 }}>
-                Delete
+                {window.t("models.delete", null, "Delete")}
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </>
   );
@@ -559,13 +544,16 @@ function EditModelModal({ item, pKeys, onClose, onSave }) {
     onSave(providerKey, modelData, item.isNew, item.oldId);
   };
 
+  const title = item.isNew
+    ? window.t("models.addModel", null, "Add Model")
+    : window.t("models.editModel", null, "Edit Model");
+
   return (
-    <div className="bridge-scrim" style={{ zIndex: 10002, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", paddingTop: 0, padding: 16 }} onClick={onClose}>
-      <div className="bridge slide-in" onClick={e => e.stopPropagation()}
-        style={{ width: 480, maxHeight: "90vh", overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+    <Modal layer="nested" size="sm" placement="center" onClose={onClose} ariaLabel={title} panelStyle={{ "--modal-w": "480px" }}>
+      <div className="modal-pad">
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 600, fontSize: "var(--d-text-md)" }}>
           <Icon name="bolt" size={14} color="var(--accent)" />
-          {item.isNew ? "Add Model" : "Edit Model"}
+          {title}
         </div>
 
         {err && <div style={{ color: "var(--rose)", fontSize: "var(--d-text-xs)" }}>{err}</div>}
@@ -674,7 +662,7 @@ function EditModelModal({ item, pKeys, onClose, onSave }) {
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -728,13 +716,16 @@ function EditProviderModal({ item, onClose, onSave }) {
     onSave(key.trim(), provData, item.isNew, item.key);
   };
 
+  const title = item.isNew
+    ? window.t("models.addProvider", null, "Add Provider")
+    : window.t("models.editProvider", null, "Edit Provider");
+
   return (
-    <div className="bridge-scrim" style={{ zIndex: 10002, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", paddingTop: 0, padding: 16 }} onClick={onClose}>
-      <div className="bridge slide-in" onClick={e => e.stopPropagation()}
-        style={{ width: 480, maxHeight: "90vh", overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+    <Modal layer="nested" size="sm" placement="center" onClose={onClose} ariaLabel={title} panelStyle={{ "--modal-w": "480px" }}>
+      <div className="modal-pad">
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 600, fontSize: "var(--d-text-md)" }}>
           <Icon name="cpu" size={14} color="var(--accent)" />
-          {item.isNew ? "Add Provider" : "Edit Provider"}
+          {title}
         </div>
 
         {err && <div style={{ color: "var(--rose)", fontSize: "var(--d-text-xs)" }}>{err}</div>}
@@ -812,7 +803,7 @@ function EditProviderModal({ item, onClose, onSave }) {
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 }
 

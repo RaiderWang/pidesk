@@ -3,7 +3,7 @@
    Allows browsing and restoring sessions from ~/.omp/agent/sessions/
    ═════════════════════════════════════════════════════════════════════ */
 
-const { Icon } = window;
+const { Icon, Modal } = window;
 
 function formatRelativeTime(ts) {
   if (!ts) return "—";
@@ -134,10 +134,9 @@ function HistoryModal({ open, onClose, onResume, activeCwd, openSessions = [] })
   React.useEffect(() => {
     if (!open) return;
     const onKey = (e) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-      } else if (e.key === "ArrowDown") {
+      // A modal stacked above (palette, help …) consumed this key already.
+      if (e.defaultPrevented) return;
+      if (e.key === "ArrowDown") {
         e.preventDefault();
         setActiveIdx(i => Math.min(i + 1, filtered.length - 1));
       } else if (e.key === "ArrowUp") {
@@ -160,8 +159,7 @@ function HistoryModal({ open, onClose, onResume, activeCwd, openSessions = [] })
   const currentCount = sessions.filter(s => activeCwd && normPath(s.cwd) === normPath(activeCwd)).length;
 
   return (
-    <div className="bridge-scrim" onClick={onClose} style={{ paddingTop: "8vh" }}>
-      <div className="bridge slide-in" onClick={e => e.stopPropagation()} style={{ width: "min(740px, calc(100vw - 32px))", maxHeight: "80vh" }}>
+    <Modal onClose={onClose} size="lg" top="8vh" ariaLabel={window.t ? window.t("history.title", null, "History") : "History"} panelStyle={{ maxHeight: "80vh" }}>
         
         {/* Header */}
         <div className="bridge-input-row" style={{ padding: "12px 16px", gap: 10 }}>
@@ -380,8 +378,7 @@ function HistoryModal({ open, onClose, onResume, activeCwd, openSessions = [] })
           <div style={{ flex: 1 }} />
           <span style={{ color: "var(--fg-4)" }}>~/.omp/agent/sessions</span>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

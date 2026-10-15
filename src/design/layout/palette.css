@@ -1,0 +1,17 @@
+/* Command palette extras (design/palette/) ─────────────────────────── */
+.bridge-row.is-cursor { background: var(--bg-hover); }
+.bridge-row .palette-trail { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; color: var(--fg-4); }
+.palette-hit { color: var(--accent); font-weight: 600; }
+.palette-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.palette-hint { color: var(--fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.palette-prefixes { margin-left: auto; color: var(--fg-4); }
+
+/* Shortcuts list (palette "?" mode and the help overlay) */
+.shortcut-group { padding: 6px 4px 10px; }
+.shortcut-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 6px 12px;
+  font-size: var(--d-text-sm);
+  color: var(--fg-2);
+}
+.shortcut-row .kbd { margin-left: auto; }

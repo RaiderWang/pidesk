@@ -70,6 +70,16 @@ loadScript('model-names.js');
 loadScript('adapter.js');
 loadScript('design/yaml-util.js');
 loadScript('i18n.js');
+loadScript('app/chat-grouping.js');
+loadScript('app/modal-stack.js');
+loadScript('design/tweaks/shortcut-util.js');
+loadScript('app/shortcuts.js');
+loadScript('app/fuzzy.js');
+loadScript('app/palette-query.js');
+loadScript('app/file-index.js');
+loadScript('app/plan-stats.js');
+loadScript('app/dock-layout.js');
+loadScript('app/dock-state.js');
 
 // ── Re-export everything placed on window by the source scripts ────────────
 
@@ -99,3 +109,22 @@ export const { parseModelsYaml, dumpModelsYaml, validateModelsYaml } = globalThi
 
 // i18n.js exports window.I18N and window.t
 export const { t, getLocale, setLocale } = globalThis.I18N;
+
+// app/chat-grouping.js exports a namespace object (window.ChatGrouping)
+export const ChatGrouping = globalThis.ChatGrouping;
+
+// app/modal-stack.js exports a namespace object (window.ModalStack)
+export const ModalStack = globalThis.ModalStack;
+
+// app/shortcuts.js, fuzzy.js, palette-query.js, file-index.js namespace objects
+export const AppShortcuts = globalThis.AppShortcuts;
+export const Fuzzy = globalThis.Fuzzy;
+export const PaletteQuery = globalThis.PaletteQuery;
+export const FileIndex = globalThis.FileIndex;
+
+// app/plan-stats.js namespace object (window.PlanStats)
+export const PlanStats = globalThis.PlanStats;
+
+// app/dock-layout.js, dock-state.js namespace objects
+export const DockLayout = globalThis.DockLayout;
+export const DockState = globalThis.DockState;

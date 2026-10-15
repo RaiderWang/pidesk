@@ -32,7 +32,7 @@ Three layers:
 
 2. **Bridge (`src/live.js`)** — listens to `agent://line/{id}` for active session only. Holds per-session live state and a `sessionRegistry` (tabs). Tab switch: snapshot → tear down listeners → restore (or reset+`_initFetch`) → re-listen. Exposes `window.OMP_BRIDGE` (commands + `onUpdate`) and legacy `window.OMP_DATA`.
 
-3. **React (`src/app-live.jsx` + `src/app/` + `src/design/*/`)** — sole React root. Uses `useBridgeSnapshot` (in `src/app/use-bridge-snapshot.jsx`) to mirror `OMP_BRIDGE.onUpdate` into hooks. Cross-cutting effects (theme on `<html>`, ⌘K) live there. Constants/framing strings in `src/app/constants.js`. Pure RPC↔UI shape transforms in `src/adapter.js` (no side effects, depends on `model-names.js`).
+3. **React (`src/app-live.jsx` + `src/app/` + `src/design/*/`)** — sole React root. Uses `useBridgeSnapshot` (in `src/app/use-bridge-snapshot.jsx`) to mirror `OMP_BRIDGE.onUpdate` into hooks. Theme-on-`<html>` lives there; global shortcuts are in `app/shortcuts.js` + `app/use-global-shortcuts.jsx`; the stage grid / Activity Bar / Dock in `app/dock-layout.js` + `design/dock/`. Constants/framing strings in `src/app/constants.js`. Pure RPC↔UI shape transforms in `src/adapter.js` (no side effects, depends on `model-names.js`).
 
 ## Session model
 
@@ -46,9 +46,9 @@ Script order **is** the dependency graph:
 2. Tweaks: `tweaks/style.js`, `tweaks/use-tweaks.js` (plain, IIFE) → `tweaks/panel.jsx`, `tweaks/controls.jsx` (Babel; controls depends on panel).
 3. UI primitives: `ui/icons.jsx` (defines `Icon`, `TOOL_META`) → `ui/sparks.jsx` → `ui/markdown.jsx` → `ui/plan-annotations.jsx`.
 4. Chat: `chat/user-bubble.jsx` → `chat/eval-cell.jsx` → `chat/assistant-bubble.jsx` → `chat/tool-card.jsx` → `chat/chat-view.jsx`.
-5. `design/composer.jsx`, `design/chrome.jsx`, `design/panels.jsx`.
+5. `design/composer.jsx` → `design/palette/*` → `design/file-tree-panel.jsx` → `design/chrome/*` (window-chrome, tab-bar, status-bar, ambient-rail, agent-error-banner) → `design/plan/*` → `design/dock/*`.
 6. Live data: `model-names.js` → `adapter.js` → `live.js`.
-7. App helpers: `app/constants.js` (plain, IIFE) → `app/use-bridge-snapshot.jsx`.
+7. App helpers: `app/constants.js` (plain, IIFE) → `app/use-bridge-snapshot.jsx` → `app/use-global-shortcuts.jsx` → `app/use-dock-state.jsx`. Pure-logic plain scripts (`app/chat-grouping.js`, `modal-stack.js`, `shortcuts.js`, `fuzzy.js`, `palette-query.js`, `file-index.js`, `plan-stats.js`, `dock-layout.js`, `dock-state.js`) load earlier and are covered by `test/`.
 8. `app-live.jsx` last.
 
 When adding a file, insert at the correct point — there is no resolver to catch ordering bugs.
@@ -81,7 +81,7 @@ Rules:
 4. CSS splits by visual layer, not component. Don't sub-split `chat.css` unless a layer exceeds ~150 lines.
 5. Rust modules split by concern when there are multiple `pub` surfaces or a long private helper section.
 6. After splitting, update `src/index.html` script order in dependency order — never append.
-7. Don't extract for symmetry. Tightly-related layers (e.g. `chrome.jsx`) stay together.
+7. Don't extract for symmetry. Tightly-related layers (e.g. `chrome/tab-bar.jsx` + its dropdown) stay together.
 
 Trigger: 6th major component in one file, or 4th unrelated concern in one Rust module → split before further growth.
 

@@ -6,9 +6,9 @@
 // document's script-scope lexical environment.
 (function () {
 const __TWEAKS_STYLE = `
-  .twk-panel{position:fixed;right:16px;bottom:16px;z-index:2147483646;width:280px;
+  .twk-panel{position:fixed;left:16px;bottom:16px;z-index:2147483646;width:280px;
     max-height:calc(100vh - 32px);display:flex;flex-direction:column;
-    transform:scale(var(--dc-inv-zoom,1));transform-origin:bottom right;
+    transform:scale(var(--dc-inv-zoom,1));transform-origin:bottom left;
     background:color-mix(in oklab,var(--bg-elevated) 92%,transparent);
     color:var(--fg);
     -webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%);

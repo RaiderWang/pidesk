@@ -1,0 +1,51 @@
+/* Plan view inside the dock ──────────────────────────────────────── */
+
+.pdock { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px 14px; }
+.pdock-head { display: flex; align-items: center; gap: 8px; }
+.pdock-progress-label { color: var(--fg-3); font-size: var(--d-text-xs); }
+.pdock-progress {
+  height: 3px; border-radius: 2px; overflow: hidden;
+  background: var(--line);
+}
+.pdock-progress-fill {
+  height: 100%; background: var(--accent);
+  transition: width 400ms var(--ease-out);
+}
+.pdock-ask {
+  font-size: var(--d-text-xs); line-height: 1.5;
+  padding: 6px 8px; border-radius: 6px;
+  border: 1px dashed var(--line);
+  max-height: 72px; overflow: hidden;
+}
+.pdock-empty {
+  padding: 24px 8px; text-align: center;
+  color: var(--fg-4); font-size: var(--d-text-sm);
+}
+.pdock-groups { display: flex; flex-direction: column; gap: 10px; }
+.pdock-group { display: flex; flex-direction: column; gap: 4px; }
+.pdock-group-head {
+  display: flex; align-items: center; gap: 5px;
+  padding: 0; border: 0; background: transparent;
+  color: var(--fg-4); font-size: var(--d-text-xs);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.pdock-count { margin-left: auto; color: var(--fg-5); }
+
+.pdock-task {
+  display: flex; gap: 8px;
+  padding: 7px 8px;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: color-mix(in oklab, var(--bg-surface, var(--bg-window)) 60%, transparent);
+  cursor: pointer;
+}
+.pdock-task:hover { border-color: color-mix(in oklab, var(--accent) 30%, var(--line)); }
+.pdock-task.in_progress { border-color: color-mix(in oklab, var(--cyan) 45%, var(--line)); }
+.pdock-task.done { opacity: 0.7; }
+.pdock-mark { flex: none; width: 12px; padding-top: 3px; display: inline-flex; justify-content: center; }
+.pdock-mark-idle { color: var(--fg-4); font-size: 10px; line-height: 1; }
+.pdock-task-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.pdock-task-text { font-size: var(--d-text-sm); line-height: 1.45; color: var(--fg); word-break: break-word; }
+.pdock-task.done .pdock-task-text { text-decoration: line-through; color: var(--fg-3); }
+.pdock-task-meta { display: flex; gap: 8px; font-size: 10px; color: var(--fg-4); min-width: 0; }
+.pdock-task-file { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.pdock-task-why { font-size: var(--d-text-xs); color: var(--fg-2); line-height: 1.5; }

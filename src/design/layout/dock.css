@@ -1,0 +1,90 @@
+/* Activity bar + dock panel ──────────────────────────────────────────
+   Stage columns come from app/dock-layout.js; this file only skins the
+   two new columns. */
+
+/* ── Activity bar (44px) ──────────────────────────────────────────── */
+.activity {
+  display: flex; flex-direction: column; justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  min-height: 0;
+  background: color-mix(in oklab, var(--bg-app) 40%, var(--bg-window));
+  border-right: 1px solid var(--line);
+}
+.activity-group { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.activity-btn {
+  position: relative;
+  width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 8px;
+  background: transparent;
+  color: var(--fg-3);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.activity-btn:hover { background: var(--bg-hover); color: var(--fg); }
+.activity-btn.active { background: color-mix(in oklab, var(--accent) 14%, transparent); color: var(--accent); }
+.activity-btn.active::before {
+  content: "";
+  position: absolute; left: -6px; top: 8px; bottom: 8px; width: 2px;
+  border-radius: 2px; background: var(--accent);
+}
+.activity-badge {
+  position: absolute; top: 1px; right: 0;
+  min-width: 14px; height: 14px; padding: 0 3px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 9px; line-height: 1;
+  border-radius: 7px;
+  background: var(--accent); color: var(--bg-app);
+}
+.activity-dot {
+  position: absolute; bottom: 5px; right: 5px;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 6px var(--cyan);
+  animation: activity-pulse 1.4s ease-in-out infinite;
+}
+@keyframes activity-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+/* ── Dock panel ───────────────────────────────────────────────────── */
+.dock {
+  position: relative;
+  display: flex; flex-direction: column;
+  min-width: 0; min-height: 0;
+  background: linear-gradient(180deg, var(--bg-window), color-mix(in oklab, var(--bg-app) 50%, var(--bg-window)));
+  border-left: 1px solid var(--line);
+}
+.dock-resizer {
+  position: absolute; top: 0; left: -3px;
+  width: 6px; height: 100%;
+  cursor: col-resize; z-index: 20;
+  background: transparent;
+  transition: background 150ms ease;
+}
+.dock-resizer:hover,
+.dock-resizer.is-dragging {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow, rgba(45, 212, 191, 0.4));
+}
+.dock-tabs {
+  display: flex; align-items: center; gap: 2px;
+  height: 34px; padding: 0 6px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.dock-tab {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 24px; padding: 0 8px;
+  border: 0; border-radius: 6px;
+  background: transparent;
+  color: var(--fg-3);
+  font-size: var(--d-text-xs); font-weight: 500;
+  cursor: pointer;
+}
+.dock-tab:hover { background: var(--bg-hover); color: var(--fg-2); }
+.dock-tab.active { background: color-mix(in oklab, var(--accent) 12%, transparent); color: var(--fg); }
+.dock-tab-badge {
+  font-size: 9px; padding: 0 4px; border-radius: 6px;
+  background: color-mix(in oklab, var(--accent) 22%, transparent); color: var(--accent);
+}
+.dock-body { flex: 1; min-height: 0; overflow-y: auto; }

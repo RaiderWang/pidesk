@@ -4,8 +4,13 @@
 @import "./chrome.css";
 @import "./stage.css";
 @import "./chat.css";
+@import "./chat-tools.css";
 @import "./composer.css";
 @import "./rail.css";
+@import "./dock.css";
+@import "./plan-dock.css";
 @import "./hub.css";
+@import "./modal.css";
+@import "./palette.css";
 @import "./overlays.css";
 @import "./files.css";

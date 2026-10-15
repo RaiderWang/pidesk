@@ -3,7 +3,7 @@
    Shows live or completed stdout/stderr for runningTools and recentTools
    ═════════════════════════════════════════════════════════════════════ */
 
-const { Icon, TOOL_META } = window;
+const { Icon, TOOL_META, Modal } = window;
 
 const _ANSI_REGEX = /\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g;
 
@@ -45,18 +45,6 @@ function ToolLogModal({ tool, toolLogs, onClose }) {
     const id = setInterval(() => setTick(Date.now()), 1000);
     return () => clearInterval(id);
   }, [isRunning]);
-
-  // Close on Escape
-  React.useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onClose?.();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   const rawLines = logEntry?.lines ?? [];
   const lines = React.useMemo(() => {
@@ -102,22 +90,15 @@ function ToolLogModal({ tool, toolLogs, onClose }) {
   const commandOrTarget = logEntry?.command || tool.command || tool.target || tool.title || tool.tool;
 
   return (
-    <div className="bridge-scrim" onClick={onClose} style={{ zIndex: 120 }}>
-      <div
-        className="bridge slide-in tool-log-modal"
-        onClick={e => e.stopPropagation()}
-        style={{
-          width: "min(920px, calc(100vw - 40px))",
-          height: "min(680px, calc(100vh - 80px))",
-          display: "flex",
-          flexDirection: "column",
-          background: "var(--bg-elevated)",
-          border: "1px solid var(--line-bright)",
-          borderRadius: 14,
-          boxShadow: "var(--shadow-window)",
-          overflow: "hidden",
-        }}
-      >
+    <Modal
+      onClose={onClose}
+      size="xl"
+      placement="center"
+      layer="nested"
+      ariaLabel={meta.label}
+      panelClassName="tool-log-modal"
+      panelStyle={{ height: "min(680px, calc(100vh - 80px))" }}
+    >
         {/* Modal Header */}
         <div style={{
           display: "flex",
@@ -255,8 +236,7 @@ function ToolLogModal({ tool, toolLogs, onClose }) {
             })
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

@@ -89,12 +89,21 @@
   <script src="review/review-drawer-width.js"></script>
   <script src="review/review-loading-state.js"></script>
   <script src="app/composer-insert.js"></script>
+  <script src="app/chat-grouping.js"></script>
+  <script src="app/modal-stack.js"></script>
+  <script src="app/fuzzy.js"></script>
+  <script src="app/palette-query.js"></script>
+  <script src="app/file-index.js"></script>
+  <script src="app/plan-stats.js"></script>
+  <script src="app/dock-layout.js"></script>
+  <script src="app/dock-state.js"></script>
   <script src="app/recent-projects.js"></script>
 
   <!-- Design components (unchanged — from src/design/ copy) -->
   <script src="design/tweaks/style.js"></script>
   <script src="design/tweaks/use-tweaks.js"></script>
   <script src="design/tweaks/shortcut-util.js"></script>
+  <script src="app/shortcuts.js"></script>
   <script type="text/babel" src="design/tweaks/panel.jsx"></script>
   <script type="text/babel" src="design/tweaks/controls.jsx"></script>
   <script type="text/babel" src="design/tweaks/shortcut-control.jsx"></script>
@@ -102,11 +111,13 @@
   <script type="text/babel" src="design/ui/sparks.jsx"></script>
   <script type="text/babel" src="design/ui/markdown.jsx"></script>
   <script type="text/babel" src="design/ui/plan-annotations.jsx"></script>
+  <script type="text/babel" src="design/ui/modal.jsx"></script>
   <script type="text/babel" src="design/chat/user-bubble.jsx"></script>
   <script type="text/babel" src="design/chat/eval-cell.jsx"></script>
   <script type="text/babel" src="design/chat/assistant-bubble.jsx"></script>
   <script type="text/babel" src="design/chat/tool-card.jsx"></script>
   <script type="text/babel" src="design/chat/ask-bubble.jsx"></script>
+  <script type="text/babel" src="design/chat/tool-group.jsx"></script>
   <script type="text/babel" src="design/chat/chat-view.jsx"></script>
   <script type="text/babel" src="design/hub/hub-compact.jsx"></script>
   <script type="text/babel" src="design/hub/hub-tree.jsx"></script>
@@ -114,10 +125,26 @@
   <script type="text/babel" src="design/hub/agent-hub.jsx"></script>
   <script type="text/babel" src="design/composer-image-menu.jsx"></script>
   <script type="text/babel" src="design/composer.jsx"></script>
+  <script type="text/babel" src="design/palette/palette-row.jsx"></script>
+  <script type="text/babel" src="design/palette/shortcuts-help.jsx"></script>
+  <script type="text/babel" src="design/palette/palette-models-view.jsx"></script>
+  <script type="text/babel" src="design/palette/palette-login-view.jsx"></script>
+  <script type="text/babel" src="design/palette/use-palette-items.jsx"></script>
+  <script type="text/babel" src="design/palette/command-palette.jsx"></script>
   <script type="text/babel" src="design/file-tree-panel.jsx"></script>
-  <script type="text/babel" src="design/chrome.jsx"></script>
+  <script type="text/babel" src="design/chrome/window-chrome.jsx"></script>
+  <script type="text/babel" src="design/chrome/tab-bar.jsx"></script>
+  <script type="text/babel" src="design/chrome/status-bar.jsx"></script>
+  <script type="text/babel" src="design/chrome/ambient-rail.jsx"></script>
+  <script type="text/babel" src="design/chrome/agent-error-banner.jsx"></script>
   <script type="text/babel" src="design/split-peer.jsx"></script>
-  <script type="text/babel" src="design/panels.jsx"></script>
+  <script type="text/babel" src="design/plan/plan-common.jsx"></script>
+  <script type="text/babel" src="design/plan/kanban-cards.jsx"></script>
+  <script type="text/babel" src="design/plan/plan-kanban.jsx"></script>
+  <script type="text/babel" src="design/plan/plan-dock-view.jsx"></script>
+  <script type="text/babel" src="design/dock/use-dock-resize.jsx"></script>
+  <script type="text/babel" src="design/dock/dock-panel.jsx"></script>
+  <script type="text/babel" src="design/dock/activity-bar.jsx"></script>
   <script src="design/yaml-util.js"></script>
   <script type="text/babel" src="design/history-modal.jsx"></script>
   <script type="text/babel" src="design/model-manager-modal.jsx"></script>
@@ -157,6 +184,8 @@
   <!-- App constants + cross-cutting hooks (must load before app-live.jsx) -->
   <script src="app/constants.js"></script>
   <script type="text/babel" src="app/use-bridge-snapshot.jsx"></script>
+  <script type="text/babel" src="app/use-global-shortcuts.jsx"></script>
+  <script type="text/babel" src="app/use-dock-state.jsx"></script>
 
   <script type="text/babel" src="app-live.jsx"></script>
 </body>
