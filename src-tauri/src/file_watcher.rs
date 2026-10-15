@@ -1,4 +1,4 @@
-//! Project directory file watcher for PiDesk file tree panel.
+//! Project directory file watcher for `PiDesk` file tree panel.
 //!
 //! [`FileWatcherState`] manages recursive filesystem notifications using
 //! [`notify::RecommendedWatcher`] on project directories, debounced to avoid
@@ -79,12 +79,7 @@ impl FileWatcherState {
 
     /// Start watching `path_str` recursively for `watch_id`.
     /// Debounces events with a 250ms quiet window and emits `"files://changed"` on `app`.
-    pub fn start(
-        &self,
-        watch_id: &str,
-        path_str: &str,
-        app: AppHandle,
-    ) -> Result<(), String> {
+    pub fn start(&self, watch_id: &str, path_str: &str, app: AppHandle) -> Result<(), String> {
         let target_path = Path::new(path_str);
         if !target_path.exists() {
             return Err(format!("Directory does not exist: {path_str}"));
@@ -128,7 +123,7 @@ impl FileWatcherState {
                     // Drain and debounce for 250ms of quiet time
                     loop {
                         match rx.recv_timeout(Duration::from_millis(250)) {
-                            Ok(_) => continue,
+                            Ok(()) => {}
                             Err(RecvTimeoutError::Timeout) => break,
                             Err(RecvTimeoutError::Disconnected) => return,
                         }
@@ -142,18 +137,16 @@ impl FileWatcherState {
             })
             .map_err(|e| format!("Failed to spawn debouncer thread: {e}"))?;
 
-        let mut map = self
-            .watchers
+        self.watchers
             .lock()
-            .map_err(|_| "File watcher state poisoned".to_string())?;
-
-        map.insert(
-            watch_id.to_owned(),
-            WatcherEntry {
-                _watcher: watcher,
-                _tx: tx,
-            },
-        );
+            .map_err(|_| "File watcher state poisoned".to_string())?
+            .insert(
+                watch_id.to_owned(),
+                WatcherEntry {
+                    _watcher: watcher,
+                    _tx: tx,
+                },
+            );
 
         Ok(())
     }

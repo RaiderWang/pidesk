@@ -27,16 +27,17 @@ pub fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
     let mut entries = Vec::new();
 
     for item in read_dir {
-        let entry = match item {
-            Ok(e) => e,
-            Err(_) => continue,
-        };
+        let Ok(entry) = item else { continue };
 
         let file_name = entry.file_name().to_string_lossy().into_owned();
         let file_path = entry.path().to_string_lossy().into_owned();
         let metadata = entry.metadata().ok();
-        let is_dir = metadata.as_ref().map_or(false, |m| m.is_dir());
-        let size = if is_dir { None } else { metadata.as_ref().map(|m| m.len()) };
+        let is_dir = metadata.as_ref().is_some_and(fs::Metadata::is_dir);
+        let size = if is_dir {
+            None
+        } else {
+            metadata.as_ref().map(fs::Metadata::len)
+        };
 
         entries.push(FileEntry {
             name: file_name,
@@ -47,12 +48,10 @@ pub fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
     }
 
     // Sort: directories first (case-insensitive), then files (case-insensitive)
-    entries.sort_by(|a, b| {
-        match (a.is_dir, b.is_dir) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-        }
+    entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
     });
 
     Ok(entries)
@@ -79,7 +78,8 @@ pub fn rename_file(old_path: String, new_path: String) -> Result<(), String> {
         }
     }
 
-    fs::rename(old_p, new_p).map_err(|e| format!("Failed to rename from {old_path} to {new_path}: {e}"))
+    fs::rename(old_p, new_p)
+        .map_err(|e| format!("Failed to rename from {old_path} to {new_path}: {e}"))
 }
 
 /// Delete a file or directory recursively.
@@ -132,7 +132,11 @@ pub fn reveal_in_explorer(path: String) -> Result<(), String> {
 
     #[cfg(target_os = "linux")]
     {
-        let target = if p.is_dir() { p } else { p.parent().unwrap_or(p) };
+        let target = if p.is_dir() {
+            p
+        } else {
+            p.parent().unwrap_or(p)
+        };
         open::that(target).map_err(|e| format!("Failed to reveal in file manager: {e}"))
     }
 }
@@ -144,7 +148,13 @@ mod tests {
 
     #[test]
     fn test_list_directory_and_sorting() {
-        let temp_dir = std::env::temp_dir().join(format!("pidesk_test_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let temp_dir = std::env::temp_dir().join(format!(
+            "pidesk_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         fs::create_dir_all(&temp_dir).unwrap();
 
         let sub_dir = temp_dir.join("b_dir");

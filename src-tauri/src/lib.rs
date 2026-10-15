@@ -15,6 +15,7 @@ mod quick_bar;
 mod review;
 mod saved_sessions;
 mod screenshot;
+mod session_copy;
 mod shortcut;
 mod tray;
 
@@ -189,19 +190,24 @@ fn open_url_external(url: String) -> Result<(), String> {
 /// can start from the same history without sharing a file with the original.
 ///
 /// `source_path` must be the full path to an existing `.jsonl` session file.
+/// If `until_entry_id` is provided, lines are copied up to that entry id.
+/// If `max_messages` is provided without `until_entry_id`, only that many message events are kept.
 /// Returns the full path to the new copy, ready to pass as `resume` to
 /// `start_session`.
 #[tauri::command]
-fn copy_session_file(source_path: String, max_messages: Option<usize>) -> Result<String, String> {
-    saved_sessions::copy_session_file(&source_path, max_messages)
+fn copy_session_file(
+    source_path: String,
+    max_messages: Option<usize>,
+    until_entry_id: Option<String>,
+) -> Result<String, String> {
+    session_copy::copy_session_file(&source_path, max_messages, until_entry_id.as_deref())
 }
 
-/// Permanently delete a saved session from disk.
+/// Permanently delete a saved session file from disk.
 ///
 /// `path` must be the full path to the session's `.jsonl` file (as returned
-/// by `list_saved_sessions`). The entire parent directory (the per-session
-/// sub-folder) is removed. A safety check ensures the directory is inside
-/// the sessions root before deletion proceeds.
+/// by `list_saved_sessions`). Only that single session file is removed.
+/// A safety check ensures the file is inside the sessions root before deletion proceeds.
 #[tauri::command]
 fn delete_saved_session(path: String, app: tauri::AppHandle) -> Result<(), String> {
     saved_sessions::delete_saved_session(&path, &app)
@@ -256,6 +262,34 @@ async fn save_html_export(source_path: String, app: tauri::AppHandle) -> Result<
 #[tauri::command]
 fn get_app_version(app: tauri::AppHandle) -> String {
     app.package_info().version.to_string()
+}
+
+/// Pre-create the hidden overlay windows and start the default omp session.
+fn warm_up_overlays_and_start_default(app: &tauri::AppHandle) {
+    // Pre-create the Quick Bar window (hidden) so its WebView2
+    // controller has the rest of startup to finish attaching —
+    // see `quick_bar::warm_up` doc comment for why this avoids a
+    // no-op first hotkey/tray click.
+    quick_bar::warm_up(app).unwrap_or_else(|e| {
+        eprintln!("[pidesk] quick-bar warm-up failed: {e}");
+    });
+
+    // Pre-create the screenshot overlay window (hidden) for the same reason.
+    screenshot::warm_up(app).unwrap_or_else(|e| {
+        eprintln!("[pidesk] screenshot overlay warm-up failed: {e}");
+    });
+
+    // Start the default session (no cwd = omp's working directory).
+    // The frontend activates this session on load via OMP_BRIDGE.activateSession("default").
+    //
+    // Failure handling: the bridge caches the spawn error keyed
+    // by session_id. The frontend's activateSession queries
+    // session_status on attach and surfaces the cached reason
+    // if any — no event timing race, no delayed emit thread.
+    let bridge = app.state::<AgentBridge>();
+    if let Err(e) = bridge.start_session("default".into(), None, None, app.clone()) {
+        eprintln!("[pidesk] failed to start default session: {e}");
+    }
 }
 
 /// Run the Tauri application. Panics if the runtime fails to initialise.
@@ -362,31 +396,7 @@ pub fn run() {
                 eprintln!("[pidesk] shortcut registration failed: {e}");
             });
 
-            // Pre-create the Quick Bar window (hidden) so its WebView2
-            // controller has the rest of startup to finish attaching —
-            // see `quick_bar::warm_up` doc comment for why this avoids a
-            // no-op first hotkey/tray click.
-            quick_bar::warm_up(app.handle()).unwrap_or_else(|e| {
-                eprintln!("[pidesk] quick-bar warm-up failed: {e}");
-            });
-
-            // Pre-create the screenshot overlay window (hidden) for the same reason.
-            screenshot::warm_up(app.handle()).unwrap_or_else(|e| {
-                eprintln!("[pidesk] screenshot overlay warm-up failed: {e}");
-            });
-
-            // Start the default session (no cwd = omp's working directory).
-            // The frontend activates this session on load via OMP_BRIDGE.activateSession("default").
-            //
-            // Failure handling: the bridge caches the spawn error keyed
-            // by session_id. The frontend's activateSession queries
-            // session_status on attach and surfaces the cached reason
-            // if any — no event timing race, no delayed emit thread.
-            let bridge = app.state::<AgentBridge>();
-            if let Err(e) = bridge.start_session("default".into(), None, None, app.handle().clone())
-            {
-                eprintln!("[pidesk] failed to start default session: {e}");
-            }
+            warm_up_overlays_and_start_default(app.handle());
             Ok(())
         })
         .build(tauri::generate_context!())

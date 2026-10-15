@@ -25,6 +25,7 @@ function QuickBarApp() {
     return t?.screenshotShortcut || "Alt+S";
   });
   const inputRef = useRef(null);
+  const resultRef = useRef(null);
 
   const triggerRegionCapture = useCallback(() => {
     if (window.__TAURI__) {
@@ -48,6 +49,9 @@ function QuickBarApp() {
       setScreenThumb(null);
       setCapturing(false);
       setTimeout(() => inputRef.current?.focus(), 50);
+      // Rust reset the window to idle height; re-measure once React has
+      // re-rendered the reset state so the card is never clipped.
+      requestAnimationFrame(() => window.reportQuickBarHeight?.());
 
       const t = window.loadTweaksFromStorage?.();
       if (t) {
@@ -239,17 +243,8 @@ function QuickBarApp() {
     }
   }, [text, streaming, screenMode, screenshotShortcut, handleSubmit, handleAbort, triggerRegionCapture]);
 
-  useEffect(() => {
-    if (!window.__TAURI__) return;
-    const root = document.querySelector(".qb-root");
-    if (!root) return;
-    const observer = new ResizeObserver(() => {
-      const h = Math.ceil(root.getBoundingClientRect().height) + 2;
-      window.__TAURI__.core.invoke("set_quick_bar_height", { height: h }).catch(() => {});
-    });
-    observer.observe(root);
-    return () => observer.disconnect();
-  }, [submitted, result, screenThumb]);
+  window.useAutoHeight();
+  const onResultScroll = window.useStickToBottom(resultRef, [result.html, streaming], result.html);
 
   const placeholder = submitted
     ? (window.t?.("quickbar.placeholder.followup") ?? "Follow up…")
@@ -332,6 +327,8 @@ function QuickBarApp() {
       ),
       submitted && React.createElement("div", { className: "qb-result-wrap" },
         React.createElement("div", {
+          ref: resultRef,
+          onScroll: onResultScroll,
           className: "qb-result md-content selectable" + (streaming ? " qb-streaming" : ""),
           dangerouslySetInnerHTML: result.html ? { __html: result.html } : undefined,
         }, result.html ? undefined : (streaming ? (window.t?.("quickbar.thinking") ?? "thinking…") : "")),
@@ -373,9 +370,6 @@ function QuickBarApp() {
         React.createElement("span", null,
           React.createElement("kbd", null, "Ctrl+Enter"), " ",
           window.t?.("quickbar.hint.escalate") ?? "open in PiDesk",
-          "  ",
-          React.createElement("kbd", null, "Esc"), " ",
-          window.t?.("quickbar.hint.close") ?? "close",
         )
       )
     )

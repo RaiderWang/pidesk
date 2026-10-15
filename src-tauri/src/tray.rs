@@ -27,7 +27,7 @@ pub enum TrayClickAction {
     ArmSingleClick(u64),
     /// Fire double-click action (show main window) immediately.
     FireDoubleClick,
-    /// Swallow this event (e.g. trailing Click after Windows DoubleClick).
+    /// Swallow this event (e.g. trailing Click after Windows `DoubleClick`).
     Ignore,
 }
 
@@ -79,14 +79,14 @@ impl TrayClickHandler {
 
         // First click: record timestamp and increment generation.
         *last = Some(now);
+        drop(last);
         let gen = self.click_gen.fetch_add(1, Ordering::SeqCst) + 1;
         TrayClickAction::ArmSingleClick(gen)
     }
 
     /// Process a native `DoubleClick` event (e.g. delivered on Windows).
     pub fn handle_double_click(&self) -> TrayClickAction {
-        let mut last = self.last_click.lock().unwrap();
-        *last = None;
+        *self.last_click.lock().unwrap() = None;
         self.click_gen.fetch_add(1, Ordering::SeqCst);
         self.suppress_click.store(true, Ordering::SeqCst);
         TrayClickAction::FireDoubleClick
@@ -110,7 +110,7 @@ impl TrayClickHandler {
     }
 }
 
-/// Helper to bring the main PiDesk window to foreground and hide Quick Bar.
+/// Helper to bring the main `PiDesk` window to foreground and hide Quick Bar.
 fn show_main_window(app: &AppHandle) {
     let _ = quick_bar::hide_quick_bar(app.clone());
     crate::main_window::show(app);
@@ -161,7 +161,7 @@ pub fn build(app: &AppHandle) -> Result<(), String> {
             _ => {}
         })
         .on_tray_icon_event({
-            let handler = click_handler.clone();
+            let handler = click_handler;
             move |tray, event| match event {
                 TrayIconEvent::Click {
                     button: MouseButton::Left,
@@ -187,10 +187,8 @@ pub fn build(app: &AppHandle) -> Result<(), String> {
                 TrayIconEvent::DoubleClick {
                     button: MouseButton::Left,
                     ..
-                } => {
-                    if handler.handle_double_click() == TrayClickAction::FireDoubleClick {
-                        show_main_window(tray.app_handle());
-                    }
+                } if handler.handle_double_click() == TrayClickAction::FireDoubleClick => {
+                    show_main_window(tray.app_handle());
                 }
                 _ => {}
             }

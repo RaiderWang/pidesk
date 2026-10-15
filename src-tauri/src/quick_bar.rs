@@ -7,12 +7,21 @@ use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 /// Quick Bar window label — must match the capability file.
 const LABEL: &str = "quick-bar";
 
-/// Default logical width of the Quick Bar.
+/// Logical width of the visible Quick Bar card (excluding the gutter).
 const DEFAULT_WIDTH: f64 = 680.0;
-/// Minimum logical height (input row + hint bar).
-const MIN_HEIGHT: f64 = 76.0;
-/// Maximum logical height (input + expanded result area).
-const MAX_HEIGHT: f64 = 480.0;
+/// Transparent margin on every side of the card, in logical pixels. The card
+/// shadow is drawn by CSS inside this margin because the native window shadow
+/// renders a grey rectangular edge on transparent macOS windows.
+/// Must match the `body` padding in `quick-bar.html`.
+const GUTTER: f64 = 24.0;
+/// Total gutter along one axis (both sides).
+const GUTTER_PAD: f64 = GUTTER * 2.0;
+/// Minimum logical card height (input row only).
+const MIN_HEIGHT: f64 = 56.0;
+/// Card height in its idle state (input row + hint bar).
+const IDLE_HEIGHT: f64 = 88.0;
+/// Maximum logical card height (input + expanded result area).
+const MAX_HEIGHT: f64 = 520.0;
 /// Vertical offset from top of screen (fraction of monitor height).
 const TOP_FRACTION: f64 = 0.22;
 
@@ -36,6 +45,16 @@ pub const fn clamp_height(h: f64) -> f64 {
     h.clamp(MIN_HEIGHT, MAX_HEIGHT)
 }
 
+/// Full window size `(width, height)` for a card of `content_h` logical
+/// pixels: the height is clamped, then the gutter is added on every side.
+#[must_use]
+pub const fn window_size(content_h: f64) -> (f64, f64) {
+    (
+        DEFAULT_WIDTH + GUTTER_PAD,
+        clamp_height(content_h) + GUTTER_PAD,
+    )
+}
+
 // ── Window management ───────────────────────────────────────────────────
 
 /// Get the existing Quick Bar window, or lazily create one.
@@ -44,16 +63,18 @@ fn get_or_create(app: &AppHandle) -> Result<tauri::WebviewWindow, String> {
         return Ok(win);
     }
 
+    let (width, height) = window_size(IDLE_HEIGHT);
     let win = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("quick-bar.html".into()))
         .title("Quick Bar")
-        .inner_size(DEFAULT_WIDTH, MIN_HEIGHT)
+        .inner_size(width, height)
         .resizable(false)
         .decorations(false)
         .transparent(true)
         .always_on_top(true)
         .skip_taskbar(true)
         .visible(false)
-        .shadow(true)
+        // Native shadow is off: CSS draws it inside the transparent gutter.
+        .shadow(false)
         .focused(true)
         .build()
         .map_err(|e| format!("failed to create quick-bar window: {e}"))?;
@@ -122,7 +143,8 @@ pub fn toggle_quick_bar(app: AppHandle) -> Result<(), String> {
         // must reach `show()`/`set_focus()` below, or the window stays
         // hidden with no visible feedback at all. See `warm_up` for the
         // startup-time fix to the underlying race.
-        if let Err(e) = win.set_size(tauri::LogicalSize::new(DEFAULT_WIDTH, MIN_HEIGHT)) {
+        let (width, height) = window_size(IDLE_HEIGHT);
+        if let Err(e) = win.set_size(tauri::LogicalSize::new(width, height)) {
             eprintln!("[pidesk] quick-bar resize failed: {e}");
         }
         if let Err(e) = reposition(&win) {
@@ -145,14 +167,15 @@ pub fn hide_quick_bar(app: AppHandle) -> Result<(), String> {
 }
 
 /// Resize the Quick Bar's height (e.g. when the result area expands).
-/// The new height is clamped to [`MIN_HEIGHT`, `MAX_HEIGHT`].
+/// `height` is the card's content height (without the gutter), clamped to
+/// [`MIN_HEIGHT`, `MAX_HEIGHT`].
 #[tauri::command]
 pub fn set_quick_bar_height(app: AppHandle, height: f64) -> Result<(), String> {
     let win = app
         .get_webview_window(LABEL)
         .ok_or_else(|| "quick-bar not open".to_string())?;
-    let h = clamp_height(height);
-    win.set_size(tauri::LogicalSize::new(DEFAULT_WIDTH, h))
+    let (width, height) = window_size(height);
+    win.set_size(tauri::LogicalSize::new(width, height))
         .map_err(|e| e.to_string())?;
     reposition(&win)
 }
@@ -198,5 +221,20 @@ mod tests {
     #[test]
     fn clamp_above_max() {
         assert!((clamp_height(9999.0) - MAX_HEIGHT).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn window_size_adds_gutter_on_both_axes() {
+        let (w, h) = window_size(200.0);
+        assert!((w - (DEFAULT_WIDTH + GUTTER_PAD)).abs() < f64::EPSILON);
+        assert!((h - (200.0 + GUTTER_PAD)).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn window_size_clamps_content_before_adding_gutter() {
+        let (_, low) = window_size(1.0);
+        let (_, high) = window_size(9999.0);
+        assert!((low - (MIN_HEIGHT + GUTTER_PAD)).abs() < f64::EPSILON);
+        assert!((high - (MAX_HEIGHT + GUTTER_PAD)).abs() < f64::EPSILON);
     }
 }

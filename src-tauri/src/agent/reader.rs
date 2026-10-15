@@ -67,19 +67,13 @@ pub(super) fn spawn_stdout_reader(
         // Process exited. Only remove our own map entry — if start_session
         // already replaced this session with a fresh incarnation (higher
         // generation), leave it alone.
-        let removed = if let Ok(mut s) = sessions.lock() {
-            if let Some(inner) = s.get(&sid) {
-                if inner.gen == gen {
-                    s.remove(&sid)
-                } else {
-                    None
-                }
+        let removed = sessions.lock().ok().and_then(|mut s| {
+            if s.get(&sid).is_some_and(|inner| inner.gen == gen) {
+                s.remove(&sid)
             } else {
                 None
             }
-        } else {
-            None
-        };
+        });
 
         if exit_reason.is_empty() {
             let stderr_tail = stderr_lines

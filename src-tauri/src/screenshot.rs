@@ -48,6 +48,16 @@ pub struct ScreenshotState {
     pub restore_on_cancel: Mutex<bool>,
 }
 
+impl ScreenshotState {
+    /// Return the current capture target and restore flag, resetting both to
+    /// their defaults (`QuickBar`, `false`).
+    fn take_target_and_restore(&self) -> (CaptureTarget, bool) {
+        let target = std::mem::replace(&mut *self.target.lock().unwrap(), CaptureTarget::QuickBar);
+        let restore = std::mem::take(&mut *self.restore_on_cancel.lock().unwrap());
+        (target, restore)
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RegionResult {
@@ -67,6 +77,9 @@ struct BackgroundPayload {
 
 /// Calculate physical crop bounds from logical selection and device pixel ratio.
 #[must_use]
+// Operands are non-negative (scale > 0) and clamped to image bounds afterwards;
+// `as` saturates rather than wraps, so the casts are safe.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 pub fn compute_crop_rect(
     img_w: u32,
     img_h: u32,
@@ -96,6 +109,8 @@ pub fn compute_crop_rect(
 
 /// Compute new dimensions preserving aspect ratio if wider than `max_w`.
 #[must_use]
+// Result is bounded by `orig_h * max_w / orig_w` with positive operands.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 pub fn compute_resize_dims(orig_w: u32, orig_h: u32, max_w: u32) -> (u32, u32) {
     if orig_w == 0 || orig_h == 0 {
         return (1, 1);
@@ -151,7 +166,7 @@ pub fn capture_primary_screen() -> Result<RgbaImage, String> {
 /// Determine whether the target window should be re-shown when region capture is cancelled.
 /// Only restore if the target window was actually visible before capture started.
 #[must_use]
-pub fn should_restore_target_on_cancel(target_was_visible: bool) -> bool {
+pub const fn should_restore_target_on_cancel(target_was_visible: bool) -> bool {
     target_was_visible
 }
 
@@ -185,7 +200,7 @@ pub async fn capture_screen(app: AppHandle) -> Result<String, String> {
 
 /// Pre-create or retrieve the region-selection overlay window.
 ///
-/// Created initially hidden (`visible: false`) so WebView2 finishes initializing
+/// Created initially hidden (`visible: false`) so `WebView2` finishes initializing
 /// without popping up during startup.
 pub fn get_or_create_overlay(app: &AppHandle) -> Result<WebviewWindow, String> {
     if let Some(w) = app.get_webview_window(OVERLAY_LABEL) {
@@ -223,7 +238,7 @@ pub fn get_or_create_overlay(app: &AppHandle) -> Result<WebviewWindow, String> {
 }
 
 /// Pre-warm the overlay window at startup so the first region capture does
-/// not suffer from a cold WebView2 attach or a missed background event.
+/// not suffer from a cold `WebView2` attach or a missed background event.
 pub fn warm_up(app: &AppHandle) -> Result<(), String> {
     get_or_create_overlay(app).map(|_| ())
 }
@@ -374,23 +389,9 @@ pub fn finish_region_capture(
         let _ = overlay.hide();
     }
 
-    let frozen = {
-        let mut guard = state.frozen_image.lock().unwrap();
-        guard.take()
-    };
-    {
-        let mut bg_guard = state.current_background.lock().unwrap();
-        *bg_guard = None;
-    }
-    let (target, restore) = {
-        let mut target_guard = state.target.lock().unwrap();
-        let mut restore_guard = state.restore_on_cancel.lock().unwrap();
-        let current = *target_guard;
-        let current_restore = *restore_guard;
-        *target_guard = CaptureTarget::QuickBar;
-        *restore_guard = false;
-        (current, current_restore)
-    };
+    let frozen = state.frozen_image.lock().unwrap().take();
+    *state.current_background.lock().unwrap() = None;
+    let (target, restore) = state.take_target_and_restore();
 
     let Some(raw_img) = frozen else {
         if restore {
@@ -455,30 +456,13 @@ pub fn finish_region_capture(
 
 /// Cancel region selection and re-show target window only if it was originally visible.
 #[tauri::command]
-pub fn cancel_region_capture(
-    app: AppHandle,
-    state: State<'_, ScreenshotState>,
-) -> Result<(), String> {
+pub fn cancel_region_capture(app: AppHandle, state: State<'_, ScreenshotState>) {
     if let Some(overlay) = app.get_webview_window(OVERLAY_LABEL) {
         let _ = overlay.hide();
     }
-    {
-        let mut guard = state.frozen_image.lock().unwrap();
-        *guard = None;
-    }
-    {
-        let mut bg_guard = state.current_background.lock().unwrap();
-        *bg_guard = None;
-    }
-    let (target, restore) = {
-        let mut target_guard = state.target.lock().unwrap();
-        let mut restore_guard = state.restore_on_cancel.lock().unwrap();
-        let current = *target_guard;
-        let current_restore = *restore_guard;
-        *target_guard = CaptureTarget::QuickBar;
-        *restore_guard = false;
-        (current, current_restore)
-    };
+    *state.frozen_image.lock().unwrap() = None;
+    *state.current_background.lock().unwrap() = None;
+    let (target, restore) = state.take_target_and_restore();
 
     if restore {
         match target {
@@ -496,13 +480,11 @@ pub fn cancel_region_capture(
             }
         }
     }
-
-    Ok(())
 }
 
 /// Complete region capture with an annotated image synthesized on the frontend.
 ///
-/// Hides the overlay, restores the target window (Main or QuickBar),
+/// Hides the overlay, restores the target window (Main or `QuickBar`),
 /// cleans up frozen buffers, and delivers the payload via events.
 #[tauri::command]
 pub fn finish_annotated_capture(
@@ -511,33 +493,19 @@ pub fn finish_annotated_capture(
     base64_data: String,
     width: u32,
     height: u32,
-) -> Result<(), String> {
+) {
     if let Some(overlay) = app.get_webview_window(OVERLAY_LABEL) {
         let _ = overlay.hide();
     }
 
-    {
-        let mut guard = state.frozen_image.lock().unwrap();
-        *guard = None;
-    }
-    {
-        let mut bg_guard = state.current_background.lock().unwrap();
-        *bg_guard = None;
-    }
-    let target = {
-        let mut target_guard = state.target.lock().unwrap();
-        let mut restore_guard = state.restore_on_cancel.lock().unwrap();
-        let current = *target_guard;
-        *target_guard = CaptureTarget::QuickBar;
-        *restore_guard = false;
-        current
-    };
+    *state.frozen_image.lock().unwrap() = None;
+    *state.current_background.lock().unwrap() = None;
+    let (target, _) = state.take_target_and_restore();
 
-    let raw_base64 = if let Some(idx) = base64_data.find(',') {
-        base64_data[idx + 1..].to_string()
-    } else {
-        base64_data
-    };
+    let raw_base64 = base64_data
+        .find(',')
+        .map_or(base64_data.as_str(), |idx| &base64_data[idx + 1..])
+        .to_string();
 
     let result = RegionResult {
         base64: raw_base64,
@@ -562,8 +530,6 @@ pub fn finish_annotated_capture(
             }
         }
     }
-
-    Ok(())
 }
 
 /// Save an annotated screenshot to disk via native save dialog.
@@ -586,7 +552,8 @@ pub async fn save_screenshot_to_disk(
     }
 
     let (tx, rx) = std::sync::mpsc::channel();
-    let mut builder = app.dialog()
+    let mut builder = app
+        .dialog()
         .file()
         .set_title("Save Screenshot")
         .add_filter("PNG Image", &["png"])
@@ -619,11 +586,9 @@ pub async fn save_screenshot_to_disk(
         .into_path()
         .map_err(|e| format!("invalid path: {e}"))?;
 
-    let raw_base64 = if let Some(idx) = base64_data.find(',') {
-        &base64_data[idx + 1..]
-    } else {
-        &base64_data
-    };
+    let raw_base64 = base64_data
+        .find(',')
+        .map_or(base64_data.as_str(), |idx| &base64_data[idx + 1..]);
 
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(raw_base64)
@@ -633,8 +598,6 @@ pub async fn save_screenshot_to_disk(
 
     Ok(Some(dest.to_string_lossy().into_owned()))
 }
-
-
 
 // ── Tests ───────────────────────────────────────────────────────────────
 
@@ -677,7 +640,7 @@ mod tests {
         let res = encode_jpeg_base64(&img, 75);
         assert!(res.is_ok());
         let b64 = res.unwrap();
-        assert!(!b64.is_empty());
+        assert_ne!(b64, "");
     }
 
     #[test]

@@ -25,6 +25,13 @@
       background: transparent;
       overflow: hidden;
     }
+    /* Transparent gutter that holds the card's CSS shadow (the native
+       window shadow is disabled). Must match GUTTER in quick_bar.rs. */
+    body {
+      --qb-gutter: 24px;
+      box-sizing: border-box;
+      padding: var(--qb-gutter);
+    }
   </style>
 
   <script>
@@ -59,6 +66,8 @@
   <script src="design/tweaks/shortcut-util.js"></script>
 
   <!-- Quick Bar component + boot -->
+  <script type="text/babel" src="quick-bar/use-auto-height.jsx"></script>
+  <script type="text/babel" src="quick-bar/use-stick-bottom.jsx"></script>
   <script type="text/babel" src="quick-bar/quick-bar.jsx"></script>
   <script type="text/babel" src="quick-bar/quick-bar-boot.jsx"></script>
 

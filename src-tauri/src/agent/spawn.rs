@@ -26,6 +26,8 @@ pub fn hide_console_window(cmd: &mut Command) {
 /// Ensure PATH contains standard user binary directories on Unix (macOS / Linux).
 /// macOS GUI apps launched from Finder/Dock run under launchd with a minimal
 /// PATH (/usr/bin:/bin:/usr/sbin:/sbin), missing tools in ~/.bun/bin, /opt/homebrew/bin, etc.
+// Body is empty on Windows; on Unix it mutates PATH and cannot be `const`.
+#[cfg_attr(windows, allow(clippy::missing_const_for_fn))]
 pub fn ensure_gui_path() {
     #[cfg(not(windows))]
     {

@@ -663,25 +663,13 @@
 
     } else if (command === "get_messages") {
       const completed = window.adaptAgentMessages(data.messages ?? []);
-      // Tool/ask/compact cards exist only in live event state — omp never
-      // persists them and get_messages never returns them. Walk the current
-      // snapshot in order: preserve tool/ask/compact entries in-place and
-      // replace each text entry (user/assistant) with the ground-truth copy
-      // from `completed`. Any new turns that arrived while we were on another
-      // tab (missed live events) are appended at the end. activeToolCards
-      // indices are rebuilt so in-flight tool_execution_update events keep
-      // landing on the right array slot.
-      const pending = [...completed];
-      const merged = [];
-      for (const m of state.messages) {
-        if (m.streaming) continue; // streaming bubble handled separately below
-        if (m.kind === "tool" || m.kind === "ask" || m.kind === "compact") {
-          merged.push(m);
-        } else if (pending.length > 0) {
-          merged.push(pending.shift());
-        }
-      }
-      merged.push(...pending); // turns that completed while we were away
+      // Reconcile live messages with completed history using window/tail alignment.
+      // Avoids naive positional replacement that mis-aligns turns when state.messages
+      // has been head-trimmed (_trimMessages). Ephemeral tool/ask/compact cards are
+      // preserved and background turns appended.
+      const merged = window.MessageMerge
+        ? window.MessageMerge.merge(state.messages, completed)
+        : completed;
       // Rebuild activeToolCards — new entries may have been appended from pending
       _reindexActiveToolCards(merged);
       state.messages = streamingBubble ? [...merged, streamingBubble] : merged;
@@ -1785,51 +1773,61 @@
       const activeEntry = sessionRegistry.get(activeSessionId);
       const cwd = activeEntry?.path ?? "";
 
-      // Locate the current session's .jsonl on disk.
-      let sourcePath = null;
-      try {
-        const sessions = await window.__TAURI__.core.invoke("list_saved_sessions", { cwd: cwd || null });
-        const sessionFile = state.rpcState?.sessionFile;
-        if (sessionFile && sessions?.length) {
-          const match = sessions.find(s => s.id === sessionFile);
-          if (match) sourcePath = match.path;
-        }
-        if (!sourcePath && sessions?.length) {
-          sourcePath = sessions[0].path; // scan returns newest-first
-        }
-      } catch (e) {
-        console.warn("[live] branch: listSavedSessions failed:", e);
-      }
-
-      if (!sourcePath) {
+      // The awaits below leave room for a tab switch. `state.messages` and
+      // warnings belong to the tab the user clicked in — never to another one.
+      const originId = activeSessionId;
+      const warn = (key, params) => {
+        if (activeSessionId !== originId) return;
         state.messages = [...state.messages, {
           kind: "assistant", time: timeNow(),
-          blocks: [{ type: "text", text: "⚠️ **Branch failed:** no saved session found for this project yet. Complete at least one turn so omp persists the session, then try again." }],
+          blocks: [{ type: "text", text: window.t ? window.t(key, params) : key }],
           thought: null, lead: null, streaming: false, completed: true,
         }];
         notify();
-        return;
-      }
+      };
 
-      // Map the UI message index to a .jsonl message-event count.
-      // In the session file, only user/assistant turns are "message" events;
-      // tool cards, ask bubbles, and compact rows are NOT separate events.
-      let maxMessages = null;
+      // Locate the current session's .jsonl on disk (the file omp is writing).
+      let sourcePath = null;
+      try {
+        const sessions = await window.__TAURI__.core.invoke("list_saved_sessions", { cwd: cwd || null });
+        sourcePath = window.BranchSession.pickSourcePath(
+          sessions,
+          state.rpcState?.sessionFile || activeEntry?.sessionFile || activeEntry?.sessionPath,
+          state.rpcState?.sessionId || activeEntry?.savedSessionId,
+        );
+      } catch (e) {
+        console.warn("[live] branch: listSavedSessions failed:", e);
+      }
+      if (!sourcePath) return warn("branch.fail.noSession");
+
+      // Cut at a stable entry id, not a message count: the UI list is
+      // head-trimmed (_trimMessages) and the file also stores toolResult rows
+      // as "message" events. If the bubble can't be located with certainty,
+      // refuse — a silent full copy would fork from the wrong point.
+      let untilEntryId = null;
       if (fromMsgIdx !== null && fromMsgIdx >= 0) {
-        maxMessages = 0;
-        for (let i = 0; i <= fromMsgIdx && i < state.messages.length; i++) {
-          const k = state.messages[i].kind;
-          if (k === "user" || k === "assistant") maxMessages++;
+        try {
+          const listing = await _sendWithResponse({ type: "get_entries" }, 30000);
+          if (activeSessionId !== originId) return; // switched tabs: state.messages is another session's
+          untilEntryId = window.BranchSession.resolveTarget(
+            state.messages, fromMsgIdx, listing?.entries, listing?.leafId,
+          );
+        } catch (e) {
+          console.warn("[live] branch: get_entries resolution failed:", e);
         }
-        if (maxMessages === 0) maxMessages = null; // fallback to full copy
+        if (!untilEntryId) return warn("branch.fail.locate");
       }
 
       try {
-        const newPath = await window.__TAURI__.core.invoke("copy_session_file", { sourcePath, maxMessages });
+        const newPath = await window.__TAURI__.core.invoke("copy_session_file", {
+          sourcePath,
+          maxMessages: null,
+          untilEntryId,
+        });
 
         const id = `session-${Date.now()}`;
         const baseName = activeEntry?.name ?? "session";
-        const label = maxMessages !== null ? `${baseName} (fork @${maxMessages})` : `${baseName} (fork)`;
+        const label = `${baseName} (fork)`;
         sessionRegistry.set(id, {
           id, name: label, path: cwd, color: "var(--lilac)", branch: null,
           sessionPath: newPath,
@@ -1858,12 +1856,7 @@
         await _switchToSession(id);
       } catch (err) {
         console.error("[live] branch failed:", err);
-        state.messages = [...state.messages, {
-          kind: "assistant", time: timeNow(),
-          blocks: [{ type: "text", text: `⚠️ **Branch failed:** ${err?.message ?? String(err)}` }],
-          thought: null, lead: null, streaming: false, completed: true,
-        }];
-        notify();
+        warn("branch.fail.generic", { error: err?.message ?? String(err) });
       }
     },
     exportHtml() {

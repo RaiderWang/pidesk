@@ -169,7 +169,7 @@ pub fn get_shortcuts(app: AppHandle) -> ShortcutConfig {
     read_config(&app)
 }
 
-/// Change a shortcut by kind ("quick_bar" or "screenshot").
+/// Change a shortcut by kind ("`quick_bar`" or "screenshot").
 #[tauri::command]
 pub fn set_shortcut(app: AppHandle, kind: String, shortcut: String) -> Result<(), String> {
     let mut cfg = read_config(&app);
