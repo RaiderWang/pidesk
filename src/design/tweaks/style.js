@@ -52,7 +52,7 @@ const __TWEAKS_STYLE = `
     background:var(--bg-input);color:var(--fg);font:inherit;outline:none}
   .twk-field:focus{border-color:var(--accent);background:var(--bg-surface)}
   select.twk-field{padding-right:22px;
-    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='rgba(255,255,255,.4)' d='M0 0h10L5 6z'/></svg>");
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%238A8FA0' d='M0 0h10L5 6z'/></svg>");
     background-repeat:no-repeat;background-position:right 8px center}
 
   .twk-slider{appearance:none;-webkit-appearance:none;width:100%;height:4px;margin:6px 0;

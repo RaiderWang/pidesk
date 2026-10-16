@@ -46,6 +46,37 @@ describe('appearance and clarity theme', () => {
     assert.match(css, /\.theme-clarity\s+\.btn\.primary/, 'styles.css should define clarity button text color');
   });
 
+  it('gives clarity an elevated background distinct from surface', () => {
+    const css = readFileSync(join(SRC, 'design/styles.css'), 'utf-8');
+    const block = css.match(/:root\.theme-clarity[^{]*\{([\s\S]*?)\n\}/);
+    assert.ok(block, 'clarity block should exist');
+    const surface = block[1].match(/--bg-surface:\s*(#[0-9A-Fa-f]{3,8})/)[1].toLowerCase();
+    const elevated = block[1].match(/--bg-elevated:\s*(#[0-9A-Fa-f]{3,8})/)[1].toLowerCase();
+    assert.notEqual(elevated, surface, 'elevated must differ from surface');
+  });
+
+  it('keeps the tweaks <select> arrow visible on light backgrounds', () => {
+    const js = readFileSync(join(SRC, 'design/tweaks/style.js'), 'utf-8');
+    const line = js.split('\n').find(l => l.includes('background-image:url('));
+    assert.ok(line, 'select arrow background-image should exist');
+    assert.doesNotMatch(line, /rgba\(255,\s*255,\s*255/, 'arrow must not be white-on-white');
+  });
+
+  it('labels all four themes with a descriptor in English and Chinese', () => {
+    const keys = ['aurora', 'phosphor', 'daylight', 'clarity'].map(n => `tweaks.theme.${n}`);
+    for (const locale of ['en', 'zh-CN']) {
+      setLocale(locale);
+      for (const k of keys) {
+        const label = t(k);
+        assert.notEqual(label, k, `${k} missing in ${locale}`);
+        assert.match(label, /\(.+\)/, `${k} in ${locale} should have a parenthesised descriptor: ${label}`);
+      }
+    }
+    setLocale('en');
+    assert.equal(t('tweaks.theme.aurora'), 'aurora (dark)');
+    assert.equal(t('tweaks.theme.daylight'), 'daylight (light)');
+  });
+
   it('applies theme-clarity to document root when applyAppearance is executed', () => {
     const classes = new Set(['theme-aurora']);
     const mockRoot = {

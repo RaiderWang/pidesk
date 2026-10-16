@@ -8,7 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- **Clarity light theme**: a modern light theme with a crisp neutral-cool light gray background (`#F0F2F5`), airy off-white canvas (`#F8F9FA`), pure white surfaces, high-contrast slate text hierarchy, and an electric cobalt blue (`#2563EB`) default accent with refined ambient shadows. Selectable via Settings (Tweaks) → Look → "clarity (modern light)" / "澄澈白 (现代灰)".
+- **Clarity light theme**: a modern light theme with a crisp neutral-cool light gray background (`#F0F2F5`), airy off-white canvas (`#F8F9FA`), pure white surfaces with a faint cool-gray elevated layer, high-contrast slate text hierarchy, and an electric cobalt blue (`#2563EB`) default accent with refined ambient shadows. Selectable via Settings (Tweaks) → Look → "clarity (modern light)" / "澄澈白 (现代灰)".
+
+### Fixed
+
+- **Tweaks theme dropdown arrow invisible on light themes**: with four themes the theme picker falls back to a `<select>`, whose arrow was drawn white-on-white under `daylight` / `clarity`; it now uses a neutral gray that is visible on every theme. English theme names now consistently carry a descriptor (`aurora (dark)`, `phosphor (dark)`, `daylight (light)`, `clarity (modern light)`).
 
 ## [0.4.4] - 2026-10-16
 

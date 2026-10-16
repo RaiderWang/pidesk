@@ -89,7 +89,7 @@
   --bg-app: #F0F2F5;            /* clean neutral-cool light gray background */
   --bg-window: #F8F9FA;         /* airy off-white window surface */
   --bg-surface: #FFFFFF;        /* pure white cards, bubbles, active tabs */
-  --bg-elevated: #FFFFFF;       /* pure white popovers & floating panels */
+  --bg-elevated: #F5F7FA;       /* faint cool gray — keeps elevated chips/thumbs visible on white surfaces */
   --bg-input: #FFFFFF;          /* pure white inputs for focused clarity */
   --bg-hover: #E9ECEF;          /* subtle neutral-cool hover */
   --bg-active: #DFE3E8;         /* tactile active pressed state */
