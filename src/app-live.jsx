@@ -553,7 +553,6 @@ function App() {
                 todoTotal={todoCounts.total}
                 onTodo={() => openDockTab("plan")}
                 onModel={() => openBridge("models")}
-                autosave={t.autosave ?? true}
                 isStreaming={streaming}
                 agentError={agentError}
               />
@@ -700,8 +699,6 @@ function App() {
             ]}
             onChange={v => setTweak("locale", v)}
           />
-          <TweakToggle label={window.t("tweaks.autosave", null, "autosave")} value={t.autosave ?? true}
-            onChange={v => setTweak("autosave", v)} />
           <TweakToggle label={window.t("tweaks.update.auto", null, "check for updates automatically")} value={t.autoUpdate !== false}
             onChange={v => setTweak("autoUpdate", v)} />
           <TweakUpdate updater={updater} version={appVersion} />

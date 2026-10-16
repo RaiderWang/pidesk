@@ -14,6 +14,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Tweaks theme dropdown arrow invisible on light themes**: with four themes the theme picker falls back to a `<select>`, whose arrow was drawn white-on-white under `daylight` / `clarity`; it now uses a neutral gray that is visible on every theme. English theme names now consistently carry a descriptor (`aurora (dark)`, `phosphor (dark)`, `daylight (light)`, `clarity (modern light)`).
 
+### Removed
+
+- **Dummy autosave toggle**: removed the vestigial "autosave" toggle from Settings (Tweaks) and its unused warning indicator in the status bar. omp sessions are always saved incrementally to disk by the background agent process, so the front-end setting had no real effect.
+
 ## [0.4.4] - 2026-10-16
 
 ### Added
