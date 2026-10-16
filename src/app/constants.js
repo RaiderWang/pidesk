@@ -20,7 +20,6 @@
     "scanlines": true,
     "showRadar": true,
     "fontSize":  100,
-    "autosave":  true,
     "groupTools": true,
     "autoUpdate": true,
     "quickBarShortcut":   "CmdOrCtrl+Shift+Space",
