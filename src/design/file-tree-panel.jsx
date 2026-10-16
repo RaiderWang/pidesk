@@ -569,6 +569,20 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge, width, onWidthC
     }
   };
 
+  // Attach the file to the composer as an @reference chip
+  const handleReferenceFile = (item) => {
+    setContextMenu(null);
+    const rel = getRelativePath(rootPath, item.path);
+    const ok = window.ComposerFiles?.add(rel);
+    if (ok) {
+      showToast(
+        window.t
+          ? window.t("files.toast.referenced", { name: item.name }, `Referenced ${item.name}`)
+          : `Referenced ${item.name}`
+      );
+    }
+  };
+
   // Open with system default application
   const handleOpenDefault = React.useCallback(
     async (item) => {
@@ -774,6 +788,21 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge, width, onWidthC
           style={{ top: contextMenu.y, left: contextMenu.x }}
           onClick={(e) => e.stopPropagation()}
         >
+          {!contextMenu.item.is_dir && (
+            <>
+              <button
+                className="files-context-item"
+                onClick={() => handleReferenceFile(contextMenu.item)}
+              >
+                <Icon name="at" size={11} color="var(--accent)" />
+                <span className="files-context-label">
+                  {window.t ? window.t("files.menu.reference", null, "Reference File") : "Reference File"}
+                </span>
+              </button>
+              <div className="files-context-sep" />
+            </>
+          )}
+
           <button
             className="files-context-item"
             onClick={() => startRename(contextMenu.item)}

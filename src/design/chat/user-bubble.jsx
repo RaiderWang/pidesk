@@ -1,5 +1,14 @@
 /* chat/user-bubble.jsx — user-side bubble, right-aligned. */
 
+// Render "@path" file references (same rules omp uses to auto-read them) as chips.
+function renderUserText(text) {
+  const segs = window.FileMention?.splitMentions(text) ?? [];
+  if (!segs.some((s) => s.type === "mention")) return text;
+  return segs.map((s, i) => (s.type === "mention"
+    ? <window.FileChip key={i} path={s.path} />
+    : <React.Fragment key={i}>{s.value}</React.Fragment>));
+}
+
 function UserBubble({ msg, idx, highlighted, onUndo, canUndo = true, undoBlockReason = null }) {
   const [lightboxImg, setLightboxImg] = React.useState(null);
   const [copied, setCopied] = React.useState(false);
@@ -35,7 +44,7 @@ function UserBubble({ msg, idx, highlighted, onUndo, canUndo = true, undoBlockRe
           </div>
         )}
 
-        {msg.text && <div className="user-text">{msg.text}</div>}
+        {msg.text && <div className="user-text">{renderUserText(msg.text)}</div>}
 
         <div className="msg-actions">
           <button

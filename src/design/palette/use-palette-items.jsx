@@ -4,7 +4,6 @@
 
 const { Icon: _UP_Icon, renderCommandGlyph: _UP_glyph } = window;
 
-const _UP_FILE_TTL_MS = 30000;
 const _UP_HISTORY_CAP = 300;
 const _UP_EMPTY = [];
 // Slash commands that mirror a registered keyboard shortcut.
@@ -13,8 +12,7 @@ const _UP_COMMAND_SHORTCUT = { history: "history", models: "models", todo: "togg
 function usePaletteItems({ open, mode, actions, sessions, activeSessionId, projectPath, currentModelName }) {
   const t = window.t;
   const [history, setHistory] = React.useState([]);
-  const [files, setFiles] = React.useState({ root: null, list: [], loading: false, at: 0 });
-  const buildingRef = React.useRef(null);
+  const files = window.useFileIndex({ enabled: open && mode === "files", projectPath });
 
   // Saved sessions: refresh each time the palette opens.
   React.useEffect(() => {
@@ -25,26 +23,6 @@ function usePaletteItems({ open, mode, actions, sessions, activeSessionId, proje
       .catch(() => {});
     return () => { cancelled = true; };
   }, [open]);
-
-  // Project files: index lazily when "@" mode is used; re-index when stale.
-  React.useEffect(() => {
-    if (!open || mode !== "files" || !projectPath) return;
-    const fresh = files.root === projectPath && Date.now() - files.at < _UP_FILE_TTL_MS;
-    if (fresh || buildingRef.current === projectPath) return;
-    buildingRef.current = projectPath;
-    setFiles((f) => ({ ...f, loading: true }));
-    const lister = window.OMP_BRIDGE?.listDirectory?.bind(window.OMP_BRIDGE) ?? (async () => []);
-    // Results for a project that is no longer being indexed (user switched
-    // projects mid-scan) are dropped so they cannot overwrite the new state.
-    const settle = (list) => {
-      if (buildingRef.current !== projectPath) return;
-      buildingRef.current = null;
-      setFiles({ root: projectPath, list, loading: false, at: Date.now() });
-    };
-    window.FileIndex.buildFileIndex(projectPath, lister)
-      .then(settle)
-      .catch(() => settle([]));
-  }, [open, mode, projectPath, files.root, files.at]);
 
   const items = React.useMemo(() => {
     if (!open) return _UP_EMPTY; // App re-renders often while streaming

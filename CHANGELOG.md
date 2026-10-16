@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Reference a file from the Files panel**: right-click a file → "Reference File" attaches it to the composer as an `@path` chip (folders don't show the item). The chip row sits above the input; on send the references are prefixed to the prompt as `@relative/path`, which omp auto-reads, and they render as chips in the sent message bubble. Picking a file in the command palette's `@` mode now attaches a chip too.
+- **`@` file autocomplete in the composer**: typing `@` (after whitespace or at line start) opens a fuzzy-filtered list of project files; ↑/↓ select, Enter/Tab attach it as a chip, Esc dismisses. Only available when a project is open.
 - **Clarity light theme**: a modern light theme with a crisp neutral-cool light gray background (`#F0F2F5`), airy off-white canvas (`#F8F9FA`), pure white surfaces with a faint cool-gray elevated layer, high-contrast slate text hierarchy, and an electric cobalt blue (`#2563EB`) default accent with refined ambient shadows. Selectable via Settings (Tweaks) → Look → "clarity (modern light)" / "澄澈白 (现代灰)".
 
 ### Fixed
