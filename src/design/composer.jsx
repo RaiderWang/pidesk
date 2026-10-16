@@ -29,7 +29,7 @@ function renderCommandGlyph(icon, size = 11) {
 }
 
 // ── The composer (input + plan/steer modes + send) ────────────────────
-function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenModel, currentModel, thinking, onCycleThinking, isStreaming, onAbort, onApprove, annotationCount = 0, microcopy, screenshotShortcut: screenshotShortcutProp, agentError, availableThinkingLevels }) {
+function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenModel, currentModel, thinking, onCycleThinking, isStreaming, onAbort, onApprove, annotationCount = 0, microcopy, screenshotShortcut: screenshotShortcutProp, agentError, availableThinkingLevels, projectPath }) {
   const [text, setText]             = React.useState("");
   const [activeIdx, setActiveIdx]   = React.useState(0);
   const [images, setImages]         = React.useState([]);
@@ -153,6 +153,9 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
     : [];
   const showSlash = filtered.length > 0;
 
+  // @file references: attached chips + the @-autocomplete (see use-composer-files.jsx)
+  const cf = window.useComposerFiles({ text, setText, taRef, projectPath, suppressAt: showSlash });
+
   // Keep activeIdx in bounds; auto-select when single result
   const clampedIdx = showSlash ? Math.min(activeIdx, filtered.length - 1) : 0;
 
@@ -226,7 +229,7 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
   const send = () => {
     // If the slash popup is open, Enter executes the highlighted command
     if (showSlash) { execCmd(filtered[clampedIdx]); return; }
-    const canSend = text.trim() || images.length > 0 || (planMode && annotationCount > 0);
+    const canSend = text.trim() || images.length > 0 || cf.files.length > 0 || (planMode && annotationCount > 0);
     if (!canSend) return;
 
     // Intercept bare /review command (without PR URL)
@@ -236,9 +239,11 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
       const hasUrl = /https?:\/\//i.test(rest);
       if (!hasUrl) {
         // Anything after `/review` becomes the drawer's "review focus" text.
-        window.OMP_BRIDGE?.openReviewDrawer?.({ focus: rest });
+        // Attached @file chips ride along in the focus text (omp auto-reads them).
+        window.OMP_BRIDGE?.openReviewDrawer?.({ focus: window.FileMention.buildMessage(cf.files, rest) });
         setText("");
         setImages([]);
+        cf.clearFiles();
         return;
       }
     }
@@ -249,9 +254,10 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
       mimeType: img.mimeType,
     }));
 
-    onSend(expandPastes(text.trim()), payloadImages);
+    onSend(window.FileMention.buildMessage(cf.files, expandPastes(text.trim())), payloadImages);
     setText("");
     setImages([]);
+    cf.clearFiles();
     setModelWarning(null);
     pasteBlocksRef.current.clear();
     pasteCounterRef.current = 0;
@@ -292,6 +298,7 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
   };
 
   const onKey = (e) => {
+    if (cf.onKey(e)) return;
     if (showSlash) {
       if (e.key === "ArrowDown")  { e.preventDefault(); setActiveIdx(i => Math.min(i + 1, filtered.length - 1)); return; }
       if (e.key === "ArrowUp")    { e.preventDefault(); setActiveIdx(i => Math.max(i - 1, 0)); return; }
@@ -304,6 +311,7 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
   };
 
   const hasAttachments = images.length > 0;
+  const hasDraft = Boolean(text.trim()) || cf.files.length > 0; // steerable while streaming
   const showWarningBanner = !!(modelWarning || (!supportsImages && hasAttachments));
 
   return (
@@ -332,6 +340,8 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
           <button className="btn ghost" onClick={onTogglePlan} style={{ marginLeft: "auto", height: 22 }}>exit</button>
         </div>
       )}
+
+      <window.ComposerAtPopup at={cf.at} />
 
       {showSlash && (
         <div className="slash-pop" ref={listRef}>
@@ -370,6 +380,8 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
           </button>
         </div>
       )}
+
+      <window.ComposerFileChips files={cf.files} onRemove={cf.removeFile} />
 
       {/* Attached images preview strip */}
       {hasAttachments && (
@@ -487,7 +499,8 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
                     : (window.t ? window.t("composer.placeholder.default", null, microcopy?.paletteTip) : (microcopy?.paletteTip ?? "what should we ship?  ·  / for commands  ·  ⌘K for the bridge"))
             }
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => { setText(e.target.value); cf.onTextChange(e); }}
+            onSelect={cf.syncCaret}
             onKeyDown={onKey}
             onPaste={onPaste}
             className="selectable"
@@ -499,7 +512,7 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
         </button>
         {isStreaming ? (
           <>
-            {text.trim() && (
+            {hasDraft && (
               <button className="btn outlined" onClick={send}
                 style={{ color: "var(--amber)", borderColor: "color-mix(in oklab, var(--amber) 40%, var(--line))" }}>
                 <Icon name="arrow" size={10} color="var(--amber)" /> {window.t ? window.t("composer.steer", null, "steer") : "steer"}
@@ -518,7 +531,7 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
               </button>
             )}
             <button className="btn primary" onClick={send}
-              disabled={!(text.trim() || images.length > 0 || (planMode && annotationCount > 0))}>
+              disabled={!(text.trim() || images.length > 0 || cf.files.length > 0 || (planMode && annotationCount > 0))}>
               {planMode
                 ? `${window.t ? window.t("composer.sendFeedback", null, "send feedback") : "send feedback"}${annotationCount > 0 ? ` · ${window.t ? window.t(annotationCount === 1 ? "composer.comment" : "composer.comments", { count: annotationCount }, `${annotationCount} comment${annotationCount !== 1 ? "s" : ""}`) : `${annotationCount} comments`}` : ""}`
                 : (window.t ? window.t("composer.send", null, "send") : "send")}
@@ -557,7 +570,7 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
         </button>
         <div style={{ flex: 1 }} />
         <span className="mono" style={{ color: "var(--fg-4)", fontSize: "var(--d-text-xs)" }}>
-          {isStreaming && text.trim()
+          {isStreaming && hasDraft
             ? (window.t ? window.t("composer.hints.steer", null, "↵ steer · ⎋ abort") : "↵ steer · ⎋ abort")
             : (window.t ? window.t("composer.hints.normal", null, "↵ send · ⇧↵ newline · ⎋ abort") : "↵ send · ⇧↵ newline · ⎋ abort")}
         </span>

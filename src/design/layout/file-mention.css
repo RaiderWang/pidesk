@@ -1,0 +1,60 @@
+/* @file reference chips — composer strip, @-autocomplete popup, user bubble */
+
+.file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  vertical-align: baseline;
+  padding: 1px 7px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in oklab, var(--accent) 30%, var(--line));
+  background: color-mix(in oklab, var(--accent) 12%, transparent);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--d-text-xs);
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.file-chip svg { flex-shrink: 0; }
+.file-chip-dir {
+  min-width: 0;
+  max-width: 16em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg-3);
+}
+.file-chip-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.file-chip-x {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--fg-3);
+  cursor: pointer;
+}
+.file-chip-x:hover { background: color-mix(in oklab, var(--accent) 22%, transparent); color: var(--fg); }
+
+.composer-file-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 4px 4px;
+}
+
+.at-pop { max-height: 260px; overflow-y: auto; }
+.at-pop-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-2);
+}
+.at-pop-notice { padding: 8px 12px; font-size: var(--d-text-sm); color: var(--fg-3); }

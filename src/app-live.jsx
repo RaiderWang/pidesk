@@ -545,6 +545,7 @@ function App() {
                 onPick={handleCommand}
                 screenshotShortcut={t.screenshotShortcut}
                 agentError={agentError}
+                projectPath={hasProject ? activeProject.path : ""}
               />
               <StatusBar
                 ctx={liveCtx}

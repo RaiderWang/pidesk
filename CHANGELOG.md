@@ -8,10 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Reference a file from the Files panel**: right-click a file → "Reference File" attaches it to the composer as an `@path` chip (folders don't show the item). The chip row sits above the input; on send the references are prefixed to the prompt as `@relative/path`, which omp auto-reads, and they render as chips in the sent message bubble. Picking a file in the command palette's `@` mode now attaches a chip too.
+- **`@` file autocomplete in the composer**: typing `@` (after whitespace or at line start) opens a fuzzy-filtered list of project files; ↑/↓ select, Enter/Tab attach it as a chip, Esc dismisses. Only available when a project is open.
 - **Clarity light theme**: a modern light theme with a crisp neutral-cool light gray background (`#F0F2F5`), airy off-white canvas (`#F8F9FA`), pure white surfaces with a faint cool-gray elevated layer, high-contrast slate text hierarchy, and an electric cobalt blue (`#2563EB`) default accent with refined ambient shadows. Selectable via Settings (Tweaks) → Look → "clarity (modern light)" / "澄澈白 (现代灰)".
 
 ### Fixed
 
+- **`@` file reference polish**: Esc now closes the `@` popup even while it only shows the "indexing" notice, and no longer aborts a streaming reply; the notice no longer reappears during background re-indexing when the cached list simply has no match; Esc followed by more typing re-opens the popup, while undo-restoring a message ending in `@path` no longer pops it open. Files without a recognisable extension (`Dockerfile`, `LICENSE`) are sent as `@"name"` so they render as chips, dotfiles such as `.editorconfig` / `.clang-format` and backslash paths render correctly, completing inside brackets (`(@src)`) keeps the closing `)`, and completing at the start of the text leaves no leading space. While streaming, a chip-only draft now shows the steer button, and `/review` carries attached chips into the review focus instead of dropping them.
 - **Tweaks theme dropdown arrow invisible on light themes**: with four themes the theme picker falls back to a `<select>`, whose arrow was drawn white-on-white under `daylight` / `clarity`; it now uses a neutral gray that is visible on every theme. English theme names now consistently carry a descriptor (`aurora (dark)`, `phosphor (dark)`, `daylight (light)`, `clarity (modern light)`).
 
 ### Removed

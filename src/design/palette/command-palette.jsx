@@ -71,8 +71,8 @@ function CommandPalette({
       onResumeSaved?.(item.session);
     } else if (item.kind === "file") {
       onClose();
-      // After the modal restores focus, drop an @reference into the composer.
-      setTimeout(() => window.ComposerInsert?.appendToComposer(`@${item.rel}`), 60);
+      // After the modal restores focus, attach the file to the composer as a chip.
+      setTimeout(() => window.ComposerFiles?.add(item.rel), 60);
     }
   };
 
