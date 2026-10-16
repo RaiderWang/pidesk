@@ -153,6 +153,24 @@ jobs:
           prerelease: ${{ contains(inputs.tag || github.ref_name, '-') }}
           args: ${{ matrix.args }}
 
+  # ── Compute SHA-256 & append to GitHub Release ──────────────────────────────
+  checksums:
+    name: checksums · sha256
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Generate and upload checksums
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: node scripts/generate-release-checksums.mjs "$TAG"
+
   # ── Sync Cask to raiderwang/homebrew-tap ─────────────────────────────────────
   update-cask:
     name: update · homebrew-cask
