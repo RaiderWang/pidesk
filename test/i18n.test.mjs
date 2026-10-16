@@ -243,6 +243,21 @@ describe('known-key spot-checks', () => {
     setLocale('en');
   });
 
+  it('file reference strings resolve in en and zh-CN', () => {
+    setLocale('en');
+    assert.equal(t('files.menu.reference'), 'Reference File');
+    assert.equal(t('files.toast.referenced', { name: 'a.js' }), 'Referenced a.js');
+    assert.equal(t('composer.fileChip.remove'), 'remove file');
+    assert.equal(t('composer.at.loading'), 'Indexing project files…');
+
+    setLocale('zh-CN');
+    assert.equal(t('files.menu.reference'), '引用该文件');
+    assert.equal(t('files.toast.referenced', { name: 'a.js' }), '已引用 a.js');
+    assert.equal(t('composer.fileChip.remove'), '移除文件');
+    assert.equal(t('composer.at.loading'), '正在索引项目文件…');
+    setLocale('en');
+  });
+
   it('plan phase and idle/executing status strings resolve in en and zh-CN', () => {
     setLocale('en');
     assert.equal(t('plan.phase.running'), 'running');

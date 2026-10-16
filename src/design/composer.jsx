@@ -239,9 +239,11 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
       const hasUrl = /https?:\/\//i.test(rest);
       if (!hasUrl) {
         // Anything after `/review` becomes the drawer's "review focus" text.
-        window.OMP_BRIDGE?.openReviewDrawer?.({ focus: rest });
+        // Attached @file chips ride along in the focus text (omp auto-reads them).
+        window.OMP_BRIDGE?.openReviewDrawer?.({ focus: window.FileMention.buildMessage(cf.files, rest) });
         setText("");
         setImages([]);
+        cf.clearFiles();
         return;
       }
     }
@@ -309,6 +311,7 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
   };
 
   const hasAttachments = images.length > 0;
+  const hasDraft = Boolean(text.trim()) || cf.files.length > 0; // steerable while streaming
   const showWarningBanner = !!(modelWarning || (!supportsImages && hasAttachments));
 
   return (
@@ -509,7 +512,7 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
         </button>
         {isStreaming ? (
           <>
-            {text.trim() && (
+            {hasDraft && (
               <button className="btn outlined" onClick={send}
                 style={{ color: "var(--amber)", borderColor: "color-mix(in oklab, var(--amber) 40%, var(--line))" }}>
                 <Icon name="arrow" size={10} color="var(--amber)" /> {window.t ? window.t("composer.steer", null, "steer") : "steer"}
@@ -567,7 +570,7 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
         </button>
         <div style={{ flex: 1 }} />
         <span className="mono" style={{ color: "var(--fg-4)", fontSize: "var(--d-text-xs)" }}>
-          {isStreaming && text.trim()
+          {isStreaming && hasDraft
             ? (window.t ? window.t("composer.hints.steer", null, "↵ steer · ⎋ abort") : "↵ steer · ⎋ abort")
             : (window.t ? window.t("composer.hints.normal", null, "↵ send · ⇧↵ newline · ⎋ abort") : "↵ send · ⇧↵ newline · ⎋ abort")}
         </span>

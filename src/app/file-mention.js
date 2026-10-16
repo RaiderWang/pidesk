@@ -24,6 +24,7 @@
   const BOUNDARY_RE = /[\s([{<"'`]/;
   const LEADING_RE = /^[`"'([{<]+/;
   const TRAILING_RE = /[)\]}>.,;:!?"'`]+$/;
+  const TRAILING_CHAR_RE = /[)\]}>.,;:!?"'`]/;
   const WHITESPACE_RE = /\s/;
 
   function normalizePath(p) {
@@ -33,7 +34,9 @@
   function formatMention(rel) {
     const p = normalizePath(rel);
     if (!p) return "";
-    if (!WHITESPACE_RE.test(p)) return `@${p}`;
+    // Quote paths with whitespace, and paths the bubble could not otherwise
+    // recognise as a file ("Dockerfile", "LICENSE") so they still render as chips.
+    if (!WHITESPACE_RE.test(p) && looksLikePath(p)) return `@${p}`;
     if (!p.includes('"')) return `@"${p}"`;
     if (!p.includes("'")) return `@'${p}'`;
     return `@${p}`;
@@ -54,7 +57,7 @@
   // Unquoted tokens count as file references only when they look like paths
   // ("@alice" stays prose); quoted tokens are always explicit references.
   function looksLikePath(p) {
-    return /[\\/]/.test(p) || /\.\w{1,10}$/.test(p);
+    return /[\\/]/.test(p) || /\.[\w-]+$/.test(p);
   }
 
   function splitMentions(text) {
@@ -85,7 +88,11 @@
       if (!path) continue;
 
       pushText(index);
-      out.push({ type: "mention", value: src.slice(index, index + consumed), path });
+      out.push({
+        type: "mention",
+        value: src.slice(index, index + consumed),
+        path: normalizePath(path),
+      });
       cursor = index + consumed;
     }
     pushText(src.length);
@@ -108,6 +115,8 @@
     if (query.includes('"') || query.includes("'")) return null;
     let end = pos;
     while (end < src.length && !WHITESPACE_RE.test(src[end])) end++;
+    // Leave closing brackets / sentence punctuation after the token alone: "(@src)".
+    while (end > pos && TRAILING_CHAR_RE.test(src[end - 1])) end--;
     return { start: i, end, query };
   }
 
@@ -116,8 +125,8 @@
     const src = String(text || "");
     const before = src.slice(0, start);
     const after = src.slice(end);
-    // Collapse the double space left behind when a mention is removed mid-text.
-    if (!replacement && before.endsWith(" ") && after.startsWith(" ")) {
+    // Collapse the space left behind when a mention is removed mid-text or at the start.
+    if (!replacement && (before === "" || /\s$/.test(before)) && after.startsWith(" ")) {
       return before + after.slice(1);
     }
     return before + (replacement || "") + after;

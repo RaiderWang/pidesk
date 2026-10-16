@@ -93,6 +93,56 @@ describe('findAtQuery', () => {
   });
 });
 
+describe('review fixes: edge cases', () => {
+  it('findAtQuery leaves closing brackets and trailing punctuation outside the range', () => {
+    assert.deepEqual(FM.findAtQuery('(@src)', 5), { start: 1, end: 5, query: 'src' });
+    assert.deepEqual(FM.findAtQuery('@src/app.js,', 4), { start: 0, end: 11, query: 'src' });
+    assert.deepEqual(FM.findAtQuery('see @a.', 7), { start: 4, end: 7, query: 'a.' });
+  });
+
+  it('replaceRange drops the leading space when the mention starts the text', () => {
+    assert.equal(FM.replaceRange('@a hello', 0, 2, ''), 'hello');
+    assert.equal(FM.replaceRange('x\n@a hello', 2, 4, ''), 'x\nhello');
+  });
+
+  it('replaceRange keeps a closing bracket that follows the mention', () => {
+    const r = FM.findAtQuery('(see @src)', 9);
+    assert.equal(FM.replaceRange('(see @src)', r.start, r.end, ''), '(see )');
+  });
+
+  it('splitMentions normalises backslash paths', () => {
+    const m = FM.splitMentions('open @src\\a.js now').find((s) => s.type === 'mention');
+    assert.equal(m.path, 'src/a.js');
+    assert.equal(m.value, '@src\\a.js');
+  });
+
+  it('splitMentions recognises dotfiles with long or hyphenated names', () => {
+    for (const name of ['.editorconfig', '.clang-format', '.node-version', '.gitattributes']) {
+      const segs = FM.splitMentions(`see @${name} ok`);
+      assert.equal(segs.filter((s) => s.type === 'mention').map((s) => s.path)[0], name, name);
+    }
+  });
+
+  it('splitMentions keeps bare handles as prose but quoted names as chips', () => {
+    assert.equal(FM.splitMentions('ping @alice').some((s) => s.type === 'mention'), false);
+    const m = FM.splitMentions('read @"Dockerfile"').find((s) => s.type === 'mention');
+    assert.equal(m.path, 'Dockerfile');
+  });
+
+  it('formatMention quotes names the bubble could not recognise as files', () => {
+    assert.equal(FM.formatMention('Dockerfile'), '@"Dockerfile"');
+    assert.equal(FM.formatMention('LICENSE'), '@"LICENSE"');
+    assert.equal(FM.formatMention('src/a.js'), '@src/a.js');
+    assert.equal(FM.formatMention('.editorconfig'), '@.editorconfig');
+  });
+
+  it('buildMessage output round-trips through splitMentions', () => {
+    const files = ['Dockerfile', '.editorconfig', 'a/b.ts', 'my docs/x y.md'];
+    const segs = FM.splitMentions(FM.buildMessage(files, 'check these'));
+    assert.deepEqual(segs.filter((s) => s.type === 'mention').map((s) => s.path), files);
+  });
+});
+
 describe('replaceRange', () => {
   it('splices a replacement in', () => {
     assert.equal(FM.replaceRange('a @x b', 2, 4, 'Z'), 'a Z b');

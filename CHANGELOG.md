@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **`@` file reference polish**: Esc now closes the `@` popup even while it only shows the "indexing" notice, and no longer aborts a streaming reply; the notice no longer reappears during background re-indexing when the cached list simply has no match; Esc followed by more typing re-opens the popup, while undo-restoring a message ending in `@path` no longer pops it open. Files without a recognisable extension (`Dockerfile`, `LICENSE`) are sent as `@"name"` so they render as chips, dotfiles such as `.editorconfig` / `.clang-format` and backslash paths render correctly, completing inside brackets (`(@src)`) keeps the closing `)`, and completing at the start of the text leaves no leading space. While streaming, a chip-only draft now shows the steer button, and `/review` carries attached chips into the review focus instead of dropping them.
 - **Tweaks theme dropdown arrow invisible on light themes**: with four themes the theme picker falls back to a `<select>`, whose arrow was drawn white-on-white under `daylight` / `clarity`; it now uses a neutral gray that is visible on every theme. English theme names now consistently carry a descriptor (`aurora (dark)`, `phosphor (dark)`, `daylight (light)`, `clarity (modern light)`).
 
 ### Removed
