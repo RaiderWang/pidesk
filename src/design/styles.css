@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════
    PiDesk — design tokens
-   Three themes: daylight (default light), aurora (dark), phosphor (terminal).
+   Four themes: daylight (warm light), clarity (modern light gray), aurora (dark), phosphor (terminal).
    Density: cozy / compact / dense (rem scale + line-height).
    ═══════════════════════════════════════════════════════════════════════ */
 
@@ -79,6 +79,59 @@
   --diff-add-fg: #145C3D;
   --diff-rm-bg: rgba(192, 74, 86, 0.08);
   --diff-rm-fg: #B23A45;
+
+  --grain-opacity: 0;
+  color-scheme: light;
+}
+
+/* ── Clarity (modern light gray & crisp white) ─────────────────────────── */
+:root.theme-clarity, .theme-clarity {
+  --bg-app: #F0F2F5;            /* clean neutral-cool light gray background */
+  --bg-window: #F8F9FA;         /* airy off-white window surface */
+  --bg-surface: #FFFFFF;        /* pure white cards, bubbles, active tabs */
+  --bg-elevated: #F5F7FA;       /* faint cool gray — keeps elevated chips/thumbs visible on white surfaces */
+  --bg-input: #FFFFFF;          /* pure white inputs for focused clarity */
+  --bg-hover: #E9ECEF;          /* subtle neutral-cool hover */
+  --bg-active: #DFE3E8;         /* tactile active pressed state */
+
+  --line: #E2E6EA;              /* delicate modern gray border */
+  --line-soft: #EEF1F4;         /* soft hairline internal separator */
+  --line-bright: #CED4DA;       /* high-definition boundary & scrollbar thumb */
+
+  --fg: #111827;                /* deep obsidian slate text (95% black, ultra-crisp) */
+  --fg-2: #374151;              /* secondary cool slate */
+  --fg-3: #6B7280;              /* tertiary muted gray */
+  --fg-4: #9CA3AF;              /* subtle caption & placeholder gray */
+  --fg-5: #CBD5E1;              /* faint border points & disabled */
+
+  --accent: #2563EB;            /* modern high-tech cobalt electric blue */
+  --accent-deep: #1D4ED8;       /* cobalt hover / pressed */
+  --accent-soft: rgba(37, 99, 235, 0.08); /* transparent tint for chips / selections */
+  --accent-glow: rgba(37, 99, 235, 0.28); /* focus & glow */
+
+  --magenta: #D946EF;
+  --cyan: #0284C7;
+  --amber: #D97706;
+  --lilac: #7C3AED;
+  --rose: #E11D48;
+  --lime: #16A34A;
+
+  --syntax-comment: #94A3B8;
+  --syntax-key: #7C3AED;
+  --syntax-str: #16A34A;
+  --syntax-num: #D97706;
+  --syntax-fn: #0284C7;
+  --syntax-tag: #E11D48;
+
+  --diff-add-bg: rgba(22, 163, 74, 0.10);
+  --diff-add-fg: #15803D;
+  --diff-rm-bg: rgba(225, 29, 72, 0.08);
+  --diff-rm-fg: #BE123C;
+
+  /* Ambient light shadows tuned for crisp, clean surfaces */
+  --shadow-pop: 0 12px 32px -8px rgba(15, 23, 42, 0.12), 0 4px 12px -2px rgba(15, 23, 42, 0.06);
+  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-window: 0 24px 64px -16px rgba(15, 23, 42, 0.14), 0 8px 24px -8px rgba(15, 23, 42, 0.08);
 
   --grain-opacity: 0;
   color-scheme: light;
@@ -402,6 +455,8 @@ input, textarea { font: inherit; color: inherit; background: transparent; border
 .theme-aurora .btn.primary { color: #081a14; }
 .theme-daylight .btn.primary,
 .theme-daylight .btn.primary:hover { color: #FAF7EF; }
+.theme-clarity .btn.primary,
+.theme-clarity .btn.primary:hover { color: #FFFFFF; }
 .btn.primary:hover { background: var(--accent-deep); border-color: var(--accent-deep); color: #06241B; }
 .btn.outlined { border-color: var(--line); }
 .btn.outlined:hover { border-color: var(--line-bright); }

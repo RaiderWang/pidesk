@@ -195,9 +195,9 @@ npm run build
 | 设置 | 选项 |
 |------|------|
 | 语言 | English · 简体中文（即时切换，本地持久化） |
-| 主题 | aurora · phosphor · daylight |
+| 主题 | aurora · phosphor · daylight · clarity |
 | 密度 | cozy · compact · dense |
-| 强调色 | 7 种预设 + 自定义 |
+| 强调色 | 8 种预设 + 自定义 |
 | 等宽聊天字体 | 开关 |
 | 字号 | 75% – 150% 滑块 |
 | 布局 | rail · split · focus |

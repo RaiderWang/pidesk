@@ -7,7 +7,7 @@
 (function () {
   "use strict";
 
-  var VALID_THEMES    = ["aurora", "phosphor", "daylight"];
+  var VALID_THEMES    = ["aurora", "phosphor", "daylight", "clarity"];
   var VALID_DENSITIES = ["cozy", "compact", "dense"];
   var STORAGE_KEYS    = ["pidesk:tweaks", "omp-desktop:tweaks"];
 
@@ -24,7 +24,7 @@
 
     // Theme
     var theme = VALID_THEMES.indexOf(opts.theme) >= 0 ? opts.theme : "daylight";
-    root.classList.remove("theme-aurora", "theme-phosphor", "theme-daylight");
+    root.classList.remove("theme-aurora", "theme-phosphor", "theme-daylight", "theme-clarity");
     root.classList.add("theme-" + theme);
 
     // Density

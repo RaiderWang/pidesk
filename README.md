@@ -196,9 +196,9 @@ Open the Tweaks panel (cog icon in the bottom-right status bar) to adjust:
 | Setting | Options |
 |---------|---------|
 | Language | English · 简体中文 (instant live switch, persisted locally) |
-| Theme | aurora · phosphor · daylight |
+| Theme | aurora · phosphor · daylight · clarity |
 | Density | cozy · compact · dense |
-| Accent colour | 7 presets + custom |
+| Accent colour | 8 presets + custom |
 | Mono chat font | toggle |
 | Font size | 75% – 150% slider |
 | Layout | rail · split · focus |
