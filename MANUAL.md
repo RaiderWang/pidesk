@@ -148,6 +148,9 @@ The frontend calls these Rust commands via `invoke()`:
 | `review_list_commits` | `(cwd: String, count: usize) → Result<Vec<CommitSummary>>` | Retrieve recent commits with hash and subject summaries |
 | `review_get_diff` | `(cwd: String, targetKind: String, targetRef: Option<String>) → Result<DiffOutput>` | Query unified git diff (uncommitted, base-branch, or commit) from the repo root, appending untracked files. stdout is read with a hard 8 MiB cap (child killed, output cut on a line boundary, `truncated: true`); output is hardened with `--no-color --no-ext-diff --no-textconv` and fixed `a/` `b/` prefixes. All four `review_*` commands are `async` + `spawn_blocking` |
 | `get_screenshot_background` | `() → Option<String>` | Proactively fetch frozen background Data URL during overlay mounting |
+| `check_update` | `() → Result<Option<UpdateInfo>>` | Query the updater endpoint; stores the pending `Update` in `UpdateState`. `UpdateInfo` = `{ version, currentVersion, notes, date }` |
+| `install_update` | `() → Result<()>` | Download + verify (minisign) + install the pending update, emitting `update://progress` `{ downloaded, total, percent }` |
+| `restart_app` | `() → ()` | `AgentBridge::stop_all()` then `app.restart()` — applies an installed update without orphaning omp children |
 
 ---
 
@@ -265,6 +268,15 @@ Flow (`undo-bridge.js`, wired from `live.js`): `get_entries` → `UndoMessage.re
 - Finished tool cards are ephemeral (removed from `state.messages` on `tool_execution_end`), so `countAffected().tools` is ~0 in live sessions and `toolLogs` are left untouched by undo.
 - Agent edits to files on disk are **not** reverted — the confirm dialog says so.
 
+### In-app updates
+
+Built on `tauri-plugin-updater`; the JS side never imports the plugin (no bundler) — `src-tauri/src/update.rs` wraps it in three commands (`check_update`, `install_update`, `restart_app`, see the IPC table) and the plugin's own IPC is deliberately **not** exposed to the webview (no `updater:default` capability): the Rust side calls the plugin through `UpdaterExt`, which needs no capability, so a compromised page cannot pass its own `proxy` / `headers` / `allowDowngrades` to `plugin:updater|check`.
+
+- **Endpoint / artifacts.** `tauri.conf.json` → `plugins.updater.endpoints` points at `releases/latest/download/latest.json`; `bundle.createUpdaterArtifacts: true` makes `tauri-action` upload that file plus a `.sig` per installer. Pre-releases never become `latest`, so they are not offered.
+- **Signing (one-time setup).** `npx tauri signer generate -w ~/.tauri/pidesk.key` → put the private key + password in the repo secrets `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` and the public key into `plugins.updater.pubkey` (already configured in `tauri.conf.json`; the repo secrets must still be set before a release is cut). `tauri build` now **requires** the private key env var. Back the key up — losing it strands installed copies. Builds older than the first updater-enabled release must be upgraded manually once.
+- **Frontend.** `app/updater.js` is the pure state machine (`idle → checking → available → downloading → ready`, plus `uptodate`/`error` with `source: "check" | "install"`; tested in `test/updater.test.mjs`). `app/use-updater.jsx` binds it to the commands and the `update://progress` event, runs a silent check 5 s after boot and every 24 h (Tweaks → "check for updates automatically", `autoUpdate`, default on). UI: `design/chrome/update-banner.jsx` and the version row `design/tweaks/update-control.jsx`. "Later" only sets `dismissed` (hides the banner; `phase`/`info` stay, so Settings still offers install / restart and a finished install is never re-downloaded); silent checks never disturb an `available` update or a retryable install error, and `Updater.canCheck` / `canInstall` (used by the hook together with in-flight refs, and by Rust's `installing` flag) stop duplicate requests. "Skip this version" (`ignore`) is stored in `localStorage` (`pidesk.update.ignored`); a manual check still shows an ignored version. The banner's release notes come from `latest.json` `notes` (= the generated release body), so `summarizeNotes` cuts at the first `---` and drops the `##` title / "What's Changed" heading and inline Markdown.
+- **Platform notes.** On Windows the installer (`installMode: passive`) ends the process itself via `std::process::exit(0)`, so the `ready` state is mostly seen on macOS/Linux and `restart_app` / `Drop` never run there; `check_update` therefore builds the updater with `on_before_exit` (which **replaces** the plugin's default hook, so it calls `AgentBridge::stop_all()` *and* `cleanup_before_exit()`) to avoid orphaned omp children. `restart_app` is `async` + `spawn_blocking` so killing children never blocks the main thread. Linux can only self-update an AppImage; for `.deb` installs `install_update` fails and the banner offers "Download manually" (opens the Releases page via `open_url_external`). Homebrew-cask installs update in place, so the cask's recorded version may lag until the next `brew upgrade`.
+
 ### Single instance lifecycle
 
 PiDesk enforces single-instance execution via `tauri-plugin-single-instance`. When a secondary process is launched, it detects the running primary instance, notifies it, and terminates immediately. The primary instance's callback locates the `"main"` window, unminimizes it if minimized, makes it visible if hidden, and brings it to the foreground (`set_focus()`).
@@ -306,12 +318,12 @@ Script order in `src/index.html` **is** the dependency graph — Babel has no mo
 2. Tweaks: `tweaks/style.js`, `tweaks/use-tweaks.js` → `tweaks/panel.jsx`, `tweaks/controls.jsx`
 3. UI primitives: `ui/icons.jsx` → `ui/sparks.jsx` → `ui/markdown.jsx` → `ui/plan-annotations.jsx`
 4. Chat: `chat/user-bubble.jsx` → `chat/eval-cell.jsx` → `chat/assistant-bubble.jsx` → `chat/tool-card.jsx` → `chat/chat-view.jsx` → `chat/undo-confirm-modal.jsx`
-5. `design/composer-restore.jsx` → `design/composer.jsx` → `design/palette/*` (command palette) → `design/file-tree-panel.jsx` → `design/chrome/*` (window-chrome, tab-bar, status-bar, ambient-rail, agent-error-banner) → `design/plan/*` → `design/dock/*`
+5. `design/composer-restore.jsx` → `design/composer.jsx` → `design/palette/*` (command palette) → `design/file-tree-panel.jsx` → `design/chrome/*` (window-chrome, tab-bar, status-bar, ambient-rail, agent-error-banner, update-banner) → `design/plan/*` → `design/dock/*`
 6. Live data: `model-names.js` → `adapter.js` → `peer-session.js` → `undo-bridge.js` → `live.js`
-7. App helpers: `app/constants.js` → `app/use-bridge-snapshot.jsx` → `app/use-global-shortcuts.jsx` → `app/use-dock-state.jsx` → `app/use-undo-message.jsx`
+7. App helpers: `app/constants.js` → `app/use-bridge-snapshot.jsx` → `app/use-global-shortcuts.jsx` → `app/use-dock-state.jsx` → `app/use-undo-message.jsx` → `app/use-updater.jsx`
 8. `app-live.jsx` (last)
 
-Pure-logic plain scripts (loaded before the Babel files, unit-tested under `test/`): `app/chat-grouping.js`, `app/modal-stack.js`, `app/shortcuts.js`, `app/fuzzy.js`, `app/palette-query.js`, `app/file-index.js`, `app/plan-stats.js`, `app/dock-layout.js`, `app/dock-state.js`, `app/undo-message.js`.
+Pure-logic plain scripts (loaded before the Babel files, unit-tested under `test/`): `app/chat-grouping.js`, `app/modal-stack.js`, `app/shortcuts.js`, `app/fuzzy.js`, `app/palette-query.js`, `app/file-index.js`, `app/plan-stats.js`, `app/dock-layout.js`, `app/dock-state.js`, `app/undo-message.js`, `app/updater.js`.
 
 When adding a file, insert it at the correct point — wrong order does not fail at build time; it causes runtime reference errors.
 

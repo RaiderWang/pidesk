@@ -22,6 +22,7 @@
     "fontSize":  100,
     "autosave":  true,
     "groupTools": true,
+    "autoUpdate": true,
     "quickBarShortcut":   "CmdOrCtrl+Shift+Space",
     "screenshotShortcut": "Alt+S"
   }/*EDITMODE-END*/;

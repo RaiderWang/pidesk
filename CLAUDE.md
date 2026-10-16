@@ -28,7 +28,7 @@ Three layers:
    - `spawn.rs` — `spawn_omp` candidate resolution + Win `CREATE_NO_WINDOW`.
    - `reader.rs` — stdout/stderr threads + bounded `read_until_capped` (16 MiB).
 
-   `AgentBridge` = `HashMap<session_id, BridgeInner>`. Per-session stdin lock so writes don't serialise through the map. Reader emits `agent://line/{id}` per stdout line, `agent://exit/{id}` (empty payload = clean, non-empty = reason). Tauri commands in `lib.rs`: `start_session`, `stop_session`, `send_command`, `session_status`, `open_project`. `Drop` + `stop_session` kill children — no orphans on hot-reload.
+   `AgentBridge` = `HashMap<session_id, BridgeInner>`. Per-session stdin lock so writes don't serialise through the map. Reader emits `agent://line/{id}` per stdout line, `agent://exit/{id}` (empty payload = clean, non-empty = reason). Tauri commands in `lib.rs`: `start_session`, `stop_session`, `send_command`, `session_status`, `open_project`; updater commands (`check_update`, `install_update`, `restart_app`) live in `update.rs` (see MANUAL.md → "In-app updates"; `tauri build` needs `TAURI_SIGNING_PRIVATE_KEY`). `Drop` + `stop_session` + `stop_all` kill children — no orphans on hot-reload or restart.
 
 2. **Bridge (`src/live.js`)** — listens to `agent://line/{id}` for active session only. Holds per-session live state and a `sessionRegistry` (tabs). Tab switch: snapshot → tear down listeners → restore (or reset+`_initFetch`) → re-listen. Exposes `window.OMP_BRIDGE` (commands + `onUpdate`) and legacy `window.OMP_DATA`.
 
@@ -46,9 +46,9 @@ Script order **is** the dependency graph:
 2. Tweaks: `tweaks/style.js`, `tweaks/use-tweaks.js` (plain, IIFE) → `tweaks/panel.jsx`, `tweaks/controls.jsx` (Babel; controls depends on panel).
 3. UI primitives: `ui/icons.jsx` (defines `Icon`, `TOOL_META`) → `ui/sparks.jsx` → `ui/markdown.jsx` → `ui/plan-annotations.jsx`.
 4. Chat: `chat/user-bubble.jsx` → `chat/eval-cell.jsx` → `chat/assistant-bubble.jsx` → `chat/tool-card.jsx` → `chat/chat-view.jsx`.
-5. `design/composer.jsx` → `design/palette/*` → `design/file-tree-panel.jsx` → `design/chrome/*` (window-chrome, tab-bar, status-bar, ambient-rail, agent-error-banner) → `design/plan/*` → `design/dock/*`.
+5. `design/composer.jsx` → `design/palette/*` → `design/file-tree-panel.jsx` → `design/chrome/*` (window-chrome, tab-bar, status-bar, ambient-rail, agent-error-banner, update-banner) → `design/plan/*` → `design/dock/*`.
 6. Live data: `model-names.js` → `adapter.js` → `live.js`.
-7. App helpers: `app/constants.js` (plain, IIFE) → `app/use-bridge-snapshot.jsx` → `app/use-global-shortcuts.jsx` → `app/use-dock-state.jsx`. Pure-logic plain scripts (`app/chat-grouping.js`, `modal-stack.js`, `shortcuts.js`, `fuzzy.js`, `palette-query.js`, `file-index.js`, `plan-stats.js`, `dock-layout.js`, `dock-state.js`) load earlier and are covered by `test/`.
+7. App helpers: `app/constants.js` (plain, IIFE) → `app/use-bridge-snapshot.jsx` → `app/use-global-shortcuts.jsx` → `app/use-dock-state.jsx` → `app/use-updater.jsx`. Pure-logic plain scripts (`app/chat-grouping.js`, `modal-stack.js`, `shortcuts.js`, `fuzzy.js`, `palette-query.js`, `file-index.js`, `plan-stats.js`, `dock-layout.js`, `dock-state.js`, `updater.js`) load earlier and are covered by `test/`.
 8. `app-live.jsx` last.
 
 When adding a file, insert at the correct point — there is no resolver to catch ordering bugs.

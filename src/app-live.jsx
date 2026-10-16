@@ -23,6 +23,7 @@ const {
   INTENT_FRAMING, APPROVAL_PROMPT,
   useBridgeSnapshot, useThemeEffect, useGlobalShortcuts, timeNow,
   UndoConfirmModal, useUndoMessage,
+  UpdateBanner, TweakUpdate, useUpdater,
 } = window;
 
 function App() {
@@ -132,6 +133,9 @@ function App() {
       }
     });
   }, [bridge]);
+
+  // ── In-app updates (silent check on boot + every 24h unless disabled) ─────
+  const updater = useUpdater({ autoUpdate: t.autoUpdate !== false });
 
   React.useEffect(() => {
     if (!window.__TAURI__) return;
@@ -481,6 +485,17 @@ function App() {
               />
             )}
             <main className="session">
+              {updater.bannerVisible && (
+                <UpdateBanner
+                  state={updater.state}
+                  currentVersion={appVersion}
+                  onInstall={updater.install}
+                  onLater={updater.dismiss}
+                  onIgnore={updater.ignore}
+                  onRestart={updater.restart}
+                  onManual={updater.openReleases}
+                />
+              )}
               {agentError && (
                 <AgentErrorBanner
                   error={agentError}
@@ -687,6 +702,9 @@ function App() {
           />
           <TweakToggle label={window.t("tweaks.autosave", null, "autosave")} value={t.autosave ?? true}
             onChange={v => setTweak("autosave", v)} />
+          <TweakToggle label={window.t("tweaks.update.auto", null, "check for updates automatically")} value={t.autoUpdate !== false}
+            onChange={v => setTweak("autoUpdate", v)} />
+          <TweakUpdate updater={updater} version={appVersion} />
         </TweakSection>
         <TweakSection label={window.t("tweaks.section.look", null, "Look")}>
           <TweakRadio label={window.t("tweaks.theme", null, "theme")} value={t.theme}

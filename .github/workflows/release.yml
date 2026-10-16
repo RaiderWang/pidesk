@@ -20,10 +20,15 @@
 # 3. Icons: replace src-tauri/icons/icon.png (512×512) and icon.ico before
 #    cutting a real release — the current placeholders are tiny stubs.
 #
-# 4. Code signing (optional but recommended):
-#    Windows  →  add TAURI_SIGNING_PRIVATE_KEY + TAURI_SIGNING_PRIVATE_KEY_PASSWORD
-#                to repo secrets, then configure windows.certificateThumbprint in
-#                tauri.conf.json for Authenticode signing.
+# 4. In-app updater signing (REQUIRED):
+#    add TAURI_SIGNING_PRIVATE_KEY + TAURI_SIGNING_PRIVATE_KEY_PASSWORD to repo
+#    secrets (from `npx tauri signer generate`) and put the matching public key
+#    in tauri.conf.json -> plugins.updater.pubkey. Back the private key up:
+#    losing it strands every installed copy on its current version.
+#
+# 5. OS code signing (optional but recommended):
+#    Windows  →  configure windows.certificateThumbprint in tauri.conf.json
+#                for Authenticode signing.
 #    macOS    →  add APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD,
 #                APPLE_SIGNING_IDENTITY, APPLE_ID, APPLE_PASSWORD,
 #                APPLE_TEAM_ID for notarisation.
@@ -127,9 +132,13 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Uncomment and add secrets for code signing:
-          # TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          # TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # In-app updater signing (required: `createUpdaterArtifacts` is on, so
+          # the build fails without the key). tauri-action uploads latest.json
+          # plus the per-platform .sig files next to the installers.
+          # Generate once with: npx tauri signer generate -w ~/.tauri/pidesk.key
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Uncomment and add secrets for OS code signing:
           # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}

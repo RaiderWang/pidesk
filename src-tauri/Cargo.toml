@@ -1,6 +1,6 @@
 [package]
 name = "pidesk"
-version = "0.4.3"
+version = "0.4.4"
 edition = "2021"
 
 [lib]
@@ -23,6 +23,7 @@ xcap = "0.9"
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
 base64 = "0.22"
 tauri-plugin-single-instance = "2"
+tauri-plugin-updater = "2"
 
 [profile.release]
 opt-level = 3

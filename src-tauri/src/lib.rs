@@ -18,6 +18,7 @@ mod screenshot;
 mod session_copy;
 mod shortcut;
 mod tray;
+mod update;
 
 use agent::AgentBridge;
 use file_watcher::FileWatcherState;
@@ -299,6 +300,10 @@ fn warm_up_overlays_and_start_default(app: &tauri::AppHandle) {
 /// Panics if `tauri::Builder::run` returns an error (e.g. the webview
 /// runtime cannot be initialised). This is a fatal startup condition;
 /// there is no meaningful recovery from inside `main`.
+// `generate_context!()` embeds the whole config + frontend assets in one
+// closure; its stack frame grew past clippy's limit once plugin config
+// (updater) was added. It runs exactly once at startup, so this is benign.
+#[allow(clippy::large_stack_frames)]
 pub fn run() {
     agent::ensure_gui_path();
     tauri::Builder::default()
@@ -315,7 +320,9 @@ pub fn run() {
                 })
                 .build(),
         )
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AgentBridge::new())
+        .manage(update::UpdateState::default())
         .manage(GitWatcherState::new())
         .manage(FileWatcherState::new())
         .manage(screenshot::ScreenshotState::default())
@@ -340,6 +347,9 @@ pub fn run() {
             delete_saved_session,
             save_html_export,
             get_app_version,
+            update::check_update,
+            update::install_update,
+            update::restart_app,
             get_default_cwd,
             quick_bar::toggle_quick_bar,
             quick_bar::hide_quick_bar,

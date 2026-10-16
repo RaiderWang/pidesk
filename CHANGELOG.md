@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+## [0.4.4] - 2026-10-16
+
+### Added
+
+- **In-app updates**: PiDesk checks GitHub Releases 5 s after launch and every 24 h (toggle: Settings → "check for updates automatically"), and shows a banner with the release notes. "Update now" downloads, verifies the signature and installs in the app, then offers "Restart to finish"; "Later" and "Skip this version" dismiss it. Settings also has a version row with a manual "Check for updates" button. Built on `tauri-plugin-updater` (`src-tauri/src/update.rs`: `check_update` / `install_update` / `restart_app`); on installs that cannot self-update (e.g. `.deb`) the banner offers "Download manually". **Maintainers:** releases now require the `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` repo secrets (the matching public key is already in `plugins.updater.pubkey`); on Windows the omp child processes are stopped just before the installer launches, and the plugin's IPC is not exposed to the webview — see `MANUAL.md` → "In-app updates". Versions before the first updater-enabled release must be upgraded manually once.
+
 ## [0.4.3] - 2026-10-15
 
 ### Added

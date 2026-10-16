@@ -81,6 +81,7 @@ loadScript('app/file-index.js');
 loadScript('app/plan-stats.js');
 loadScript('app/dock-layout.js');
 loadScript('app/dock-state.js');
+loadScript('app/updater.js');
 
 // ── Re-export everything placed on window by the source scripts ────────────
 
@@ -132,3 +133,6 @@ export const PlanStats = globalThis.PlanStats;
 // app/dock-layout.js, dock-state.js namespace objects
 export const DockLayout = globalThis.DockLayout;
 export const DockState = globalThis.DockState;
+
+// app/updater.js namespace object (window.Updater)
+export const Updater = globalThis.Updater;

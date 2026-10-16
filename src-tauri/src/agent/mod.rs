@@ -228,8 +228,11 @@ impl Default for AgentBridge {
     }
 }
 
-impl Drop for AgentBridge {
-    fn drop(&mut self) {
+impl AgentBridge {
+    /// Kill and reap every session's child synchronously. Used on drop and
+    /// before an in-process restart (which skips managed-state destructors),
+    /// so no omp process is orphaned.
+    pub fn stop_all(&self) {
         if let Ok(mut sessions) = self.sessions.lock() {
             for (_, mut inner) in sessions.drain() {
                 inner.stdin = None;
@@ -239,5 +242,11 @@ impl Drop for AgentBridge {
                 }
             }
         }
+    }
+}
+
+impl Drop for AgentBridge {
+    fn drop(&mut self) {
+        self.stop_all();
     }
 }
