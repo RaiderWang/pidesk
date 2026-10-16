@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Clarity light theme**: a modern light theme with a crisp neutral-cool light gray background (`#F0F2F5`), airy off-white canvas (`#F8F9FA`), pure white surfaces, high-contrast slate text hierarchy, and an electric cobalt blue (`#2563EB`) default accent with refined ambient shadows. Selectable via Settings (Tweaks) → Look → "clarity (modern light)" / "澄澈白 (现代灰)".
+
 ## [0.4.4] - 2026-10-16
 
 ### Added

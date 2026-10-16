@@ -712,10 +712,12 @@ function App() {
               { label: window.t("tweaks.theme.aurora", null, "aurora"),   value: "aurora"   },
               { label: window.t("tweaks.theme.phosphor", null, "phosphor"), value: "phosphor" },
               { label: window.t("tweaks.theme.daylight", null, "daylight"), value: "daylight" },
+              { label: window.t("tweaks.theme.clarity", null, "clarity"),   value: "clarity"  },
             ]}
             onChange={v => setTweak({ theme: v, accent:
               v === "aurora"   ? "#78E8BE" :
-              v === "phosphor" ? "#39E557" : "#1F8A5B"
+              v === "phosphor" ? "#39E557" :
+              v === "clarity"  ? "#2563EB" : "#1F8A5B"
             })}
           />
           <TweakRadio label={window.t("tweaks.density", null, "density")} value={t.density}
@@ -727,7 +729,7 @@ function App() {
             onChange={v => setTweak("density", v)}
           />
           <TweakColor label={window.t("tweaks.accent", null, "accent")} value={t.accent}
-            options={["#78E8BE", "#39E557", "#1F8A5B", "#6EE7FF", "#FF7AC6", "#FFC56E", "#B59BFF"]}
+            options={["#78E8BE", "#39E557", "#1F8A5B", "#2563EB", "#6EE7FF", "#FF7AC6", "#FFC56E", "#B59BFF"]}
             onChange={v => setTweak("accent", v)}
           />
           <TweakToggle label={window.t("tweaks.monoChat", null, "mono chat font")} value={t.monoChat}
