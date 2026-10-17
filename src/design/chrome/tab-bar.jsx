@@ -4,7 +4,7 @@ const { Icon } = window;
 
 // ── Project tabs ─────────────────────────────────────────────────────
 function TabBar({ projects, activeId, onSelect, onClose, peer, onNew, onNewProject, onNewStandalone, onOpenRecentProject, appVersion, theme }) {
-  const version = appVersion || window.PIDESK_APP_VERSION || window.OMP_APP_VERSION || "0.4.4";
+  const version = appVersion || window.PIDESK_APP_VERSION || window.OMP_APP_VERSION || "0.4.5";
   const themeName = theme || "daylight";
   const versionLabel = `v${version}-${themeName}`;
 

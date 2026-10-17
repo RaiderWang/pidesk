@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-10-17
+
 ### Added
 
 - **Reference a file from the Files panel**: right-click a file → "Reference File" attaches it to the composer as an `@path` chip (folders don't show the item). The chip row sits above the input; on send the references are prefixed to the prompt as `@relative/path`, which omp auto-reads, and they render as chips in the sent message bubble. Picking a file in the command palette's `@` mode now attaches a chip too.
