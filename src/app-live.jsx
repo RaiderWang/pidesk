@@ -727,7 +727,7 @@ function App() {
             onChange={v => setTweak("density", v)}
           />
           <TweakColor label={window.t("tweaks.accent", null, "accent")} value={t.accent}
-            options={["#78E8BE", "#39E557", "#1F8A5B", "#2563EB", "#6EE7FF", "#FF7AC6", "#FFC56E", "#B59BFF"]}
+            options={window.getThemeAccents ? window.getThemeAccents(t.theme) : ["#2563EB", "#0E7490", "#047857", "#7C3AED", "#A21CAF", "#BE123C", "#B45309", "#475569"]}
             onChange={v => setTweak("accent", v)}
           />
           <TweakToggle label={window.t("tweaks.monoChat", null, "mono chat font")} value={t.monoChat}

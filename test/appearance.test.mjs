@@ -113,4 +113,37 @@ describe('appearance and clarity theme', () => {
       globalThis.document = prevDoc;
     }
   });
+
+  it('provides dark, high-contrast accent options for clarity light theme', () => {
+    const code = readFileSync(join(SRC, 'app/appearance.js'), 'utf-8');
+    new Function(code)();
+
+    assert.ok(globalThis.THEME_ACCENTS, 'THEME_ACCENTS should exist');
+    assert.ok(globalThis.THEME_ACCENTS.clarity, 'THEME_ACCENTS.clarity should exist');
+    assert.equal(globalThis.THEME_ACCENTS.clarity.length, 8, 'should provide 8 options');
+
+    function lum(hex) {
+      const rgb = [1, 3, 5]
+        .map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+        .map(c => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)));
+      return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+    }
+    function contrastRatio(c1, c2) {
+      const l1 = lum(c1), l2 = lum(c2);
+      return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+    }
+
+    // Every accent color in clarity must meet WCAG AA (>= 4.5:1) against white
+    for (const accent of globalThis.THEME_ACCENTS.clarity) {
+      const cr = contrastRatio(accent, '#FFFFFF');
+      assert.ok(
+        cr >= 4.5,
+        `accent ${accent} in clarity must have contrast >= 4.5:1 vs white, got ${cr.toFixed(2)}:1`
+      );
+    }
+
+    assert.equal(globalThis.getThemeAccents('clarity'), globalThis.THEME_ACCENTS.clarity);
+    assert.equal(globalThis.normalizeThemeAccent('clarity', '#78E8BE'), '#047857');
+    assert.equal(globalThis.normalizeThemeAccent('clarity', '#2563EB'), '#2563EB');
+  });
 });

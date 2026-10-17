@@ -11,6 +11,57 @@
   var VALID_DENSITIES = ["cozy", "compact", "dense"];
   var STORAGE_KEYS    = ["pidesk:tweaks", "omp-desktop:tweaks"];
 
+  var THEME_ACCENTS = {
+    clarity: [
+      "#2563EB", // cobalt blue (signature default)
+      "#0E7490", // deep ocean cyan
+      "#047857", // deep emerald green
+      "#7C3AED", // royal violet
+      "#A21CAF", // berry fuchsia
+      "#BE123C", // crimson rose
+      "#B45309", // amber bronze
+      "#475569", // slate steel
+    ],
+    daylight: [
+      "#1F8A5B", // daylight forest green (signature default)
+      "#1F7A8C", // warm deep cyan / teal
+      "#2563EB", // cobalt blue
+      "#6A4FE0", // deep lilac
+      "#C04A56", // warm rose
+      "#B45309", // warm amber bronze
+      "#C2438C", // warm magenta
+      "#475569", // slate
+    ],
+    aurora: [
+      "#78E8BE", "#39E557", "#1F8A5B", "#2563EB", "#6EE7FF", "#FF7AC6", "#FFC56E", "#B59BFF"
+    ],
+    phosphor: [
+      "#39E557", "#78E8BE", "#58F0E0", "#FFD24A", "#A98EFF", "#FF6EAA", "#FF8A6E", "#8EF060"
+    ],
+  };
+
+  var BRIGHT_TO_DARK_CLARITY = {
+    "#78e8be": "#047857",
+    "#39e557": "#047857",
+    "#6ee7ff": "#0e7490",
+    "#ff7ac6": "#a21caf",
+    "#ffc56e": "#b45309",
+    "#b59bff": "#7c3aed",
+  };
+
+  function getThemeAccents(theme) {
+    return (THEME_ACCENTS && THEME_ACCENTS[theme]) || (THEME_ACCENTS && THEME_ACCENTS.clarity) || [];
+  }
+
+  function normalizeThemeAccent(theme, accent) {
+    if (!accent) return accent;
+    if (theme === "clarity") {
+      var lower = String(accent).toLowerCase();
+      if (BRIGHT_TO_DARK_CLARITY[lower]) return BRIGHT_TO_DARK_CLARITY[lower];
+    }
+    return accent;
+  }
+
   /**
    * Apply theme, density, accent, fontSize and monoChat to <html>.
    * Validates theme/density against known values; silently falls back to
@@ -37,7 +88,13 @@
     else               root.classList.remove("mono-chat");
 
     // Accent colour (CSS custom property)
-    if (opts.accent) root.style.setProperty("--accent", opts.accent);
+    if (opts.accent) {
+      var accent = normalizeThemeAccent(theme, opts.accent);
+      root.style.setProperty("--accent", accent);
+      root.style.setProperty("--accent-deep", "color-mix(in oklab, var(--accent) 80%, black)");
+      root.style.setProperty("--accent-soft", "color-mix(in oklab, var(--accent) 12%, transparent)");
+      root.style.setProperty("--accent-glow", "color-mix(in oklab, var(--accent) 35%, transparent)");
+    }
 
     // Font size
     if (opts.fontSize) root.style.fontSize = opts.fontSize + "%";
@@ -51,12 +108,21 @@
     try {
       for (var i = 0; i < STORAGE_KEYS.length; i++) {
         var raw = localStorage.getItem(STORAGE_KEYS[i]);
-        if (raw) return JSON.parse(raw);
+        if (raw) {
+          var data = JSON.parse(raw);
+          if (data && data.theme && data.accent) {
+            data.accent = normalizeThemeAccent(data.theme, data.accent);
+          }
+          return data;
+        }
       }
     } catch (_) {}
     return null;
   }
 
+  window.THEME_ACCENTS         = THEME_ACCENTS;
+  window.getThemeAccents       = getThemeAccents;
+  window.normalizeThemeAccent  = normalizeThemeAccent;
   window.applyAppearance       = applyAppearance;
   window.loadTweaksFromStorage = loadTweaksFromStorage;
 })();
