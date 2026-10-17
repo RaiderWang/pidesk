@@ -82,6 +82,7 @@ loadScript('app/plan-stats.js');
 loadScript('app/dock-layout.js');
 loadScript('app/dock-state.js');
 loadScript('app/updater.js');
+loadScript('app/appearance.js');
 
 // ── Re-export everything placed on window by the source scripts ────────────
 
@@ -136,3 +137,12 @@ export const DockState = globalThis.DockState;
 
 // app/updater.js namespace object (window.Updater)
 export const Updater = globalThis.Updater;
+
+// app/appearance.js exports
+export const {
+  THEME_ACCENTS,
+  getThemeAccents,
+  normalizeThemeAccent,
+  applyAppearance,
+  loadTweaksFromStorage,
+} = globalThis;

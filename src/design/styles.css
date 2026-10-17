@@ -57,9 +57,9 @@
   --fg-5: #B6BAC7;
 
   --accent: #1F8A5B;
-  --accent-deep: #145C3D;
-  --accent-soft: rgba(31, 138, 91, 0.12);
-  --accent-glow: rgba(31, 138, 91, 0.4);
+  --accent-deep: color-mix(in oklab, var(--accent) 75%, black);
+  --accent-soft: color-mix(in oklab, var(--accent) 12%, transparent);
+  --accent-glow: color-mix(in oklab, var(--accent) 40%, transparent);
 
   --magenta: #C2438C;
   --cyan: #1F7A8C;
@@ -105,9 +105,9 @@
   --fg-5: #CBD5E1;              /* faint border points & disabled */
 
   --accent: #2563EB;            /* modern high-tech cobalt electric blue */
-  --accent-deep: #1D4ED8;       /* cobalt hover / pressed */
-  --accent-soft: rgba(37, 99, 235, 0.08); /* transparent tint for chips / selections */
-  --accent-glow: rgba(37, 99, 235, 0.28); /* focus & glow */
+  --accent-deep: color-mix(in oklab, var(--accent) 75%, black);       /* cobalt hover / pressed */
+  --accent-soft: color-mix(in oklab, var(--accent) 8%, transparent);  /* transparent tint for chips / selections */
+  --accent-glow: color-mix(in oklab, var(--accent) 28%, transparent); /* focus & glow */
 
   --magenta: #D946EF;
   --cyan: #0284C7;
@@ -158,9 +158,9 @@
   --fg-5: #3E4452;
 
   --accent: #78E8BE;            /* liquid aurora mint */
-  --accent-deep: #25CF93;
-  --accent-soft: rgba(120, 232, 190, 0.14);
-  --accent-glow: rgba(120, 232, 190, 0.45);
+  --accent-deep: color-mix(in oklab, var(--accent) 75%, black);
+  --accent-soft: color-mix(in oklab, var(--accent) 14%, transparent);
+  --accent-glow: color-mix(in oklab, var(--accent) 45%, transparent);
 
   --magenta: #FF7AC6;
   --cyan: #6EE7FF;
@@ -206,9 +206,9 @@
   --fg-5: #425A3F;
 
   --accent: #39E557;            /* crisp phosphor green */
-  --accent-deep: #22C55E;
-  --accent-soft: rgba(57, 229, 87, 0.14);
-  --accent-glow: rgba(57, 229, 87, 0.45);
+  --accent-deep: color-mix(in oklab, var(--accent) 75%, black);
+  --accent-soft: color-mix(in oklab, var(--accent) 14%, transparent);
+  --accent-glow: color-mix(in oklab, var(--accent) 45%, transparent);
 
   --magenta: #FF6EAA;
   --cyan: #58F0E0;

@@ -43,10 +43,20 @@
   var BRIGHT_TO_DARK_CLARITY = {
     "#78e8be": "#047857",
     "#39e557": "#047857",
+    "#1f8a5b": "#047857",
     "#6ee7ff": "#0e7490",
     "#ff7ac6": "#a21caf",
     "#ffc56e": "#b45309",
     "#b59bff": "#7c3aed",
+  };
+
+  var BRIGHT_TO_DARK_DAYLIGHT = {
+    "#78e8be": "#1f8a5b",
+    "#39e557": "#1f8a5b",
+    "#6ee7ff": "#1f7a8c",
+    "#ff7ac6": "#c2438c",
+    "#ffc56e": "#b45309",
+    "#b59bff": "#6a4fe0",
   };
 
   function getThemeAccents(theme) {
@@ -54,12 +64,27 @@
   }
 
   function normalizeThemeAccent(theme, accent) {
-    if (!accent) return accent;
-    if (theme === "clarity") {
-      var lower = String(accent).toLowerCase();
-      if (BRIGHT_TO_DARK_CLARITY[lower]) return BRIGHT_TO_DARK_CLARITY[lower];
+    var accents = getThemeAccents(theme);
+    var defaultAccent = accents[0];
+    if (!accent) return defaultAccent;
+
+    var lower = String(accent).toLowerCase();
+    var mapped = lower;
+    if (theme === "clarity" && BRIGHT_TO_DARK_CLARITY[lower]) {
+      mapped = BRIGHT_TO_DARK_CLARITY[lower].toLowerCase();
+    } else if (theme === "daylight" && BRIGHT_TO_DARK_DAYLIGHT[lower]) {
+      mapped = BRIGHT_TO_DARK_DAYLIGHT[lower].toLowerCase();
     }
-    return accent;
+
+    // Ensure the resulting accent is in the theme's curated palette.
+    // If not found, fall back to the theme's signature default accent
+    // so the Tweaks color picker always has an active, checked chip.
+    for (var i = 0; i < accents.length; i++) {
+      if (accents[i].toLowerCase() === mapped) {
+        return accents[i];
+      }
+    }
+    return defaultAccent;
   }
 
   /**
@@ -91,9 +116,6 @@
     if (opts.accent) {
       var accent = normalizeThemeAccent(theme, opts.accent);
       root.style.setProperty("--accent", accent);
-      root.style.setProperty("--accent-deep", "color-mix(in oklab, var(--accent) 80%, black)");
-      root.style.setProperty("--accent-soft", "color-mix(in oklab, var(--accent) 12%, transparent)");
-      root.style.setProperty("--accent-glow", "color-mix(in oklab, var(--accent) 35%, transparent)");
     }
 
     // Font size

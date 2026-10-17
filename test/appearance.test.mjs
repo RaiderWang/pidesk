@@ -77,8 +77,9 @@ describe('appearance and clarity theme', () => {
     assert.equal(t('tweaks.theme.daylight'), 'daylight (light)');
   });
 
-  it('applies theme-clarity to document root when applyAppearance is executed', () => {
+  it('applies theme-clarity to document root and normalizes --accent property', () => {
     const classes = new Set(['theme-aurora']);
+    const styleProps = new Map();
     const mockRoot = {
       classList: {
         add: (c) => classes.add(c),
@@ -86,7 +87,8 @@ describe('appearance and clarity theme', () => {
         contains: (c) => classes.has(c),
       },
       style: {
-        setProperty: () => {},
+        setProperty: (k, v) => { styleProps.set(k, v); },
+        getPropertyValue: (k) => styleProps.get(k),
       },
     };
 
@@ -100,21 +102,39 @@ describe('appearance and clarity theme', () => {
 
       assert.equal(typeof globalThis.applyAppearance, 'function');
 
-      // Apply clarity theme
-      globalThis.applyAppearance({ theme: 'clarity' });
+      // Apply clarity theme with legacy bright mint accent
+      globalThis.applyAppearance({ theme: 'clarity', accent: '#78E8BE' });
       assert.equal(mockRoot.classList.contains('theme-clarity'), true);
       assert.equal(mockRoot.classList.contains('theme-aurora'), false);
+      assert.equal(styleProps.get('--accent'), '#047857', 'bright mint should normalize to emerald in clarity');
+
+      // Apply clarity theme with old default green #1F8A5B
+      globalThis.applyAppearance({ theme: 'clarity', accent: '#1F8A5B' });
+      assert.equal(styleProps.get('--accent'), '#047857', 'old forest green should normalize to emerald in clarity');
+
+      // Apply clarity with unknown bogus accent -> falls back to clarity signature cobalt blue
+      globalThis.applyAppearance({ theme: 'clarity', accent: '#123456' });
+      assert.equal(styleProps.get('--accent'), '#2563EB', 'unmatched accent should fall back to theme default');
 
       // Invalid theme falls back to daylight
-      globalThis.applyAppearance({ theme: 'unknown-bogus-theme' });
+      globalThis.applyAppearance({ theme: 'unknown-bogus-theme', accent: '#78E8BE' });
       assert.equal(mockRoot.classList.contains('theme-daylight'), true);
       assert.equal(mockRoot.classList.contains('theme-clarity'), false);
+      assert.equal(styleProps.get('--accent'), '#1F8A5B', 'bright mint should normalize to daylight green in daylight');
     } finally {
       globalThis.document = prevDoc;
     }
   });
 
-  it('provides dark, high-contrast accent options for clarity light theme', () => {
+  it('declares dynamic color-mix derivatives for all themes in styles.css', () => {
+    const css = readFileSync(join(SRC, 'design/styles.css'), 'utf-8');
+    assert.match(css, /--accent-soft:\s*color-mix\(in oklab, var\(--accent\) 8%, transparent\)/, 'clarity soft tint 8%');
+    assert.match(css, /--accent-glow:\s*color-mix\(in oklab, var\(--accent\) 28%, transparent\)/, 'clarity glow tint 28%');
+    assert.match(css, /--accent-soft:\s*color-mix\(in oklab, var\(--accent\) 12%, transparent\)/, 'daylight soft tint 12%');
+    assert.match(css, /--accent-soft:\s*color-mix\(in oklab, var\(--accent\) 14%, transparent\)/, 'aurora/phosphor soft tint 14%');
+  });
+
+  it('provides dark, high-contrast accent options for clarity light theme with normalization', () => {
     const code = readFileSync(join(SRC, 'app/appearance.js'), 'utf-8');
     new Function(code)();
 
@@ -144,6 +164,27 @@ describe('appearance and clarity theme', () => {
 
     assert.equal(globalThis.getThemeAccents('clarity'), globalThis.THEME_ACCENTS.clarity);
     assert.equal(globalThis.normalizeThemeAccent('clarity', '#78E8BE'), '#047857');
+    assert.equal(globalThis.normalizeThemeAccent('clarity', '#1F8A5B'), '#047857');
     assert.equal(globalThis.normalizeThemeAccent('clarity', '#2563EB'), '#2563EB');
+    assert.equal(globalThis.normalizeThemeAccent('clarity', '#unknown'), '#2563EB');
+
+    // Daylight normalization
+    assert.equal(globalThis.normalizeThemeAccent('daylight', '#78E8BE'), '#1F8A5B');
+    assert.equal(globalThis.normalizeThemeAccent('daylight', '#6EE7FF'), '#1F7A8C');
+    assert.equal(globalThis.normalizeThemeAccent('daylight', '#unknown'), '#1F8A5B');
+  });
+
+  it('normalizes saved legacy accents when loaded from storage', () => {
+    const code = readFileSync(join(SRC, 'app/appearance.js'), 'utf-8');
+    new Function(code)();
+
+    globalThis.localStorage.setItem('pidesk:tweaks', JSON.stringify({
+      theme: 'clarity',
+      accent: '#78E8BE',
+    }));
+
+    const loaded = globalThis.loadTweaksFromStorage();
+    assert.equal(loaded.accent, '#047857', 'should normalize legacy bright accent from storage');
+    globalThis.localStorage.clear();
   });
 });
