@@ -12,7 +12,11 @@ function _load(defaults) {
   try {
     const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
     if (!raw) return defaults;
-    return { ...defaults, ...JSON.parse(raw) };
+    const loaded = { ...defaults, ...JSON.parse(raw) };
+    if (loaded.theme && loaded.accent && window.normalizeThemeAccent) {
+      loaded.accent = window.normalizeThemeAccent(loaded.theme, loaded.accent);
+    }
+    return loaded;
   } catch {
     return defaults;
   }
