@@ -502,38 +502,14 @@
       _sessionFresh = false;
     }
 
-    function _surfaceAgentExit(reason, isStartup = false) {
+    function _surfaceAgentExit(reason) {
       if (!reason || typeof reason !== "string") return;
       const trimmed = reason.trim();
       if (!trimmed) return;
       state.isStreaming = false;
+      // The AgentErrorBanner already shows the full reason with Retry/Copy;
+      // a chat bubble would duplicate it and go stale once Retry succeeds.
       state.agentError = trimmed;
-
-      const isNoModels = trimmed.includes("No models available");
-      const label = isStartup
-        ? (window.t ? window.t("agent.startFailed", { error: trimmed }) : `Agent failed to start: ${trimmed}`)
-        : (window.t ? window.t("agent.processExited", { reason: trimmed }) : `Agent process exited: ${trimmed}`);
-
-      let text = `⚠️ **${label.replace(/[:：]\s*[\s\S]*$/, "").trim()}**\n\n\`\`\`\n${trimmed}\n\`\`\``;
-      if (isNoModels) {
-        const advice = window.t
-          ? window.t("agent.noModelsAdvice")
-          : "No models available. Please open Settings -> Models to configure a model (such as auto/best-free), then save to restart the session.";
-        text += `\n\n💡 *${advice}*`;
-      }
-
-      // Deduplicate if already present at the end of messages
-      const last = state.messages[state.messages.length - 1];
-      if (last?.kind === "assistant" && (last?.text === text || last?.text?.includes(trimmed))) {
-        return;
-      }
-
-      state.messages = [...state.messages, {
-        kind: "assistant",
-        time: timeNow(),
-        text,
-        completed: true,
-      }];
       notify();
     }
 
@@ -545,7 +521,7 @@
       state.isStreaming = false;
       state.agentError = reason || (window.t ? window.t("agent.processNotRunning") : "Agent process (omp) is not running");
       if (reason) {
-        _surfaceAgentExit(reason, false);
+        _surfaceAgentExit(reason);
       }
       notify();
     });
@@ -562,7 +538,7 @@
       if (startupError) {
         console.warn(`[live] session '${id}' startup error: ${startupError}`);
         state.agentError = startupError;
-        _surfaceAgentExit(startupError, true);
+        _surfaceAgentExit(startupError);
       } else if (!isRunning) {
         state.agentError = window.t ? window.t("agent.processNotRunning") : "Agent process (omp) is not running";
       } else {
@@ -646,12 +622,10 @@
       if (resp.command === "set_model") {
         console.warn("[live] set_model failed:", resp.error);
         const errMsg = resp.error || "Failed to switch model";
-        state.messages = [...state.messages, {
-          kind: "assistant",
-          time: timeNow(),
-          text: `⚠️ **Model Switch Failed:** ${errMsg}\n\n*Note: If this is a newly added custom model in \`models.yml\`, please open a new tab or restart the session to allow the backend agent to reload the configuration.*`,
-          completed: true,
-        }];
+        const failText = window.t
+          ? window.t("agent.modelSwitchFailed", { error: errMsg })
+          : `⚠️ **Model Switch Failed:** ${errMsg}`;
+        state.messages = [...state.messages, window.NoticeBubble.make(failText, timeNow())];
         notify();
       }
       return;
@@ -1716,7 +1690,6 @@
         console.warn(`[live] retrySession '${id}' failed:`, err);
         const errMsg = (err && typeof err === "string") ? err : (err?.message || String(err));
         state.agentError = errMsg;
-        _surfaceAgentExit(errMsg, true);
         notify();
         return;
       }
@@ -1927,12 +1900,7 @@
             const notice = window.t
               ? window.t("agent.restartedAfterModelConfig")
               : "Restarted session with new model configuration.";
-            state.messages.push({
-              kind: "assistant",
-              time: timeNow(),
-              text: `✨ **${notice}**`,
-              completed: true,
-            });
+            state.messages = [...state.messages, window.NoticeBubble.make(`✨ **${notice}**`, timeNow())];
           } catch (e) {
             console.warn("[live] failed to restart session:", e);
           }
