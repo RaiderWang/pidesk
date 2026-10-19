@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.7] - 2026-10-19
+
 ### Fixed
 
 - **"omp not found" after an in-app update, and Retry never recovering (Windows)**: the real cause was not timing. The MSI updater relaunches the app from a Windows Installer custom action, so the new process can start with an environment that is not the logged-in user's: no user `PATH` entries (e.g. `~\.bun\bin` where omp lives) and possibly another profile's `USERPROFILE` / `LOCALAPPDATA`. It could never find `omp.exe` — retrying or waiting in that process was pointless, while closing and reopening the app from Explorer worked. On startup PiDesk now asks Windows for the user's own environment block (`CreateEnvironmentBlock`: machine + user + volatile variables, already expanded, no code-page issues) and applies it: missing variables (including user-defined ones such as API keys) are added, the user `PATH` entries are appended (existing entries keep priority), and if the process carries a different profile, the profile variables (`USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `TEMP`, …) are corrected so omp doesn't use the wrong `~/.omp`. A clean environment is left untouched. The usual install locations (`~\.bun\bin`, `%BUN_INSTALL%\bin`, `%LOCALAPPDATA%\omp`, `~\.cargo\bin`, `~\.local\bin`) are also probed as absolute paths when the bare `omp.exe` lookup fails. When a repair happens, the before/after values are logged to stderr.
