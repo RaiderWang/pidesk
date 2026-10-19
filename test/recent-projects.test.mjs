@@ -131,6 +131,24 @@ test('RecentProjects unit tests', async (t) => {
     assert.equal(result[0].name, 'my-real-project');
   });
 
+  await t.test('recognises the dedicated no-project workspace on every platform', () => {
+    const standalone = [
+      'C:\\Users\\me\\AppData\\Local\\com.raiderwang.pidesk\\workspace',
+      '/Users/me/Library/Application Support/com.raiderwang.pidesk/workspace',
+      '/home/me/.local/share/com.raiderwang.pidesk/workspace/',
+      '/home/me/.local/share/com.raiderwang.pidesk/workspace/sub',
+    ];
+    for (const p of standalone) {
+      assert.equal(RecentProjects.isStandalonePath(p, 'workspace'), true, p);
+    }
+    // Unrelated "workspace" folders and look-alikes stay real projects.
+    assert.equal(RecentProjects.isStandalonePath('F:\\Project\\workspace', 'workspace'), false);
+    assert.equal(
+      RecentProjects.isStandalonePath('/home/me/com.raiderwang.pidesk/workspace-old', 'workspace-old'),
+      false
+    );
+  });
+
   await t.test('purges pre-existing standalone entries from storage', () => {
     // Simulate pre-existing localStorage containing debug and PiDesk
     localStorage.setItem('pidesk:recent_projects', JSON.stringify([

@@ -79,6 +79,28 @@ fn project_meta(cwd: &str) -> (String, bool) {
     (project_name, is_standalone)
 }
 
+/// Normalise a path string for case-insensitive, separator-agnostic comparison.
+fn norm_path(p: &str) -> String {
+    p.replace('\\', "/").trim_end_matches('/').to_lowercase()
+}
+
+/// Flag sessions whose cwd is empty, `.`, or equal to one of `dirs` as
+/// "no project", and label them `Default` instead of the internal folder
+/// name (`workspace`, `debug`, ...).
+fn mark_standalone(sessions: &mut [SavedSession], dirs: &[PathBuf]) {
+    let norm_dirs: Vec<String> = dirs
+        .iter()
+        .map(|d| norm_path(&d.to_string_lossy()))
+        .collect();
+    for s in sessions {
+        let norm = norm_path(&s.cwd);
+        if norm.is_empty() || norm == "." || norm_dirs.contains(&norm) {
+            s.is_standalone = true;
+            s.project_name = "Default".to_string();
+        }
+    }
+}
+
 /// Parse a single `.jsonl` session file and extract metadata.
 fn parse_session_file(path: &Path) -> Option<SavedSession> {
     let file = File::open(path).ok()?;
@@ -294,19 +316,8 @@ pub fn scan_saved_sessions(app: &AppHandle, cwd_filter: Option<&str>) -> Vec<Sav
             {
                 if let Some(session) = parse_session_file(&path) {
                     if let Some(filter) = cwd_filter {
-                        if !filter.is_empty() {
-                            let norm_filter = filter
-                                .replace('\\', "/")
-                                .trim_end_matches('/')
-                                .to_lowercase();
-                            let norm_cwd = session
-                                .cwd
-                                .replace('\\', "/")
-                                .trim_end_matches('/')
-                                .to_lowercase();
-                            if norm_cwd != norm_filter {
-                                continue;
-                            }
+                        if !filter.is_empty() && norm_path(&session.cwd) != norm_path(filter) {
+                            continue;
                         }
                     }
                     sessions.push(session);
@@ -315,17 +326,13 @@ pub fn scan_saved_sessions(app: &AppHandle, cwd_filter: Option<&str>) -> Vec<Sav
         }
     }
 
-    let default_cwd = crate::agent::spawn::default_cwd();
-    let default_norm = default_cwd
-        .to_string_lossy()
-        .replace('\\', "/")
-        .to_lowercase();
-    for s in &mut sessions {
-        let norm = s.cwd.replace('\\', "/").to_lowercase();
-        if norm == default_norm || norm.is_empty() || norm == "." {
-            s.is_standalone = true;
-        }
-    }
+    // New dedicated workspace plus the exe dir used by older builds. Path
+    // comparison only — must not create the workspace directory.
+    let standalone_dirs: Vec<PathBuf> = crate::agent::workspace::workspace_dir(app)
+        .into_iter()
+        .chain(std::iter::once(crate::agent::workspace::legacy_exe_dir()))
+        .collect();
+    mark_standalone(&mut sessions, &standalone_dirs);
 
     // Sort descending by timestamp / updated_at (newest first)
     sessions.sort_by(|a, b| {
@@ -471,5 +478,43 @@ mod tests {
 
         let _ = fs::remove_dir_all(&root);
         let _ = fs::remove_dir_all(&other);
+    }
+
+    // ── mark_standalone tests ─────────────────────────────────────────────────
+
+    fn session_with_cwd(cwd: &str) -> SavedSession {
+        SavedSession {
+            id: "id".into(),
+            title: String::new(),
+            timestamp: String::new(),
+            updated_at: None,
+            cwd: cwd.into(),
+            project_name: String::new(),
+            path: String::new(),
+            message_count: 0,
+            preview: None,
+            is_standalone: false,
+        }
+    }
+
+    #[test]
+    fn mark_standalone_matches_workspace_and_legacy_dirs() {
+        let dirs = [
+            PathBuf::from("C:/Users/me/AppData/Local/app/workspace"),
+            PathBuf::from("D:/Tools/PiDesk"),
+        ];
+        let mut sessions = vec![
+            session_with_cwd(r"c:\users\ME\appdata\local\app\workspace"),
+            session_with_cwd("D:/Tools/PiDesk/"),
+            session_with_cwd(""),
+            session_with_cwd("."),
+            session_with_cwd("C:/Projects/real"),
+        ];
+        mark_standalone(&mut sessions, &dirs);
+        let flags: Vec<bool> = sessions.iter().map(|s| s.is_standalone).collect();
+        assert_eq!(flags, [true, true, true, true, false]);
+        assert!(sessions[..4].iter().all(|s| s.project_name == "Default"));
+        // Real projects keep whatever name they already had.
+        assert_eq!(sessions[4].project_name, "");
     }
 }
