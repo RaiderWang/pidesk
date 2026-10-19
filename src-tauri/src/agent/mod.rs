@@ -12,19 +12,21 @@
 //! - [`reader`] — stdout/stderr reader threads + bounded `read_until_capped`.
 //! - [`workspace`] — default (app-private) cwd for "no project" sessions.
 
+pub mod grace;
 mod inner;
 mod reader;
 pub mod spawn;
 pub mod workspace;
 
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use tauri::AppHandle;
+use std::time::Instant;
+use tauri::{AppHandle, Manager};
 
 use inner::BridgeInner;
 use reader::{spawn_stderr_reader, spawn_stdout_reader};
@@ -50,6 +52,8 @@ pub struct AgentBridge {
     /// found". Also exposed via the `session_status` Tauri command for
     /// proactive frontend queries.
     last_errors: Arc<Mutex<HashMap<String, String>>>,
+    /// Sessions whose post-update grace-period start is still retrying.
+    starting: Mutex<HashSet<String>>,
     next_gen: AtomicU64,
 }
 
@@ -58,6 +62,7 @@ impl AgentBridge {
         Self {
             sessions: Arc::new(Mutex::new(HashMap::new())),
             last_errors: Arc::new(Mutex::new(HashMap::new())),
+            starting: Mutex::new(HashSet::new()),
             next_gen: AtomicU64::new(1),
         }
     }
@@ -84,13 +89,64 @@ impl AgentBridge {
             || Cow::Owned(workspace::default_cwd(&app)),
             |dir| Cow::Borrowed(Path::new(dir)),
         );
-        let mut child = match spawn_omp(&cwd_path, resume) {
-            Ok(c) => c,
-            Err(e) => {
-                self.cache_error(&session_id, e.clone());
-                return Err(e);
+        // An explicit start supersedes any grace-period retry loop.
+        self.set_starting(&session_id, false);
+        self.spawn_and_install(&session_id, &cwd_path, resume, &app)
+            .inspect_err(|e| self.cache_error(&session_id, e.clone()))
+    }
+
+    /// Start a session on a background thread, retrying spawn failures for
+    /// the post-update grace period (see [`grace`]). Returns immediately;
+    /// the session counts as *starting* ([`Self::is_starting`]) until it
+    /// is running or the grace period ends, and only then is a failure
+    /// cached for `session_status`.
+    pub fn start_session_with_grace(
+        app: &AppHandle,
+        session_id: String,
+        cwd: Option<String>,
+        resume: Option<String>,
+    ) {
+        let bridge = app.state::<Self>();
+        bridge.clear_error(&session_id);
+        bridge.set_starting(&session_id, true);
+        let app = app.clone();
+        thread::spawn(move || {
+            let bridge = app.state::<Self>();
+            let cwd_path = cwd.as_deref().filter(|d| !d.is_empty()).map_or_else(
+                || workspace::default_cwd(&app),
+                |dir| Path::new(dir).to_path_buf(),
+            );
+            let began = Instant::now();
+            let result = grace::retry_with_grace(
+                || bridge.spawn_and_install(&session_id, &cwd_path, resume.as_deref(), &app),
+                || began.elapsed(),
+                |delay| {
+                    thread::sleep(delay);
+                    bridge.is_starting(&session_id)
+                },
+            );
+            // `false` here means an explicit start/stop took over: leave
+            // its state alone instead of reporting our stale outcome.
+            if bridge.set_starting(&session_id, false) {
+                if let Err(e) = result {
+                    eprintln!("[pidesk] session '{session_id}' did not start within grace: {e}");
+                    bridge.cache_error(&session_id, e);
+                }
             }
-        };
+        });
+    }
+
+    /// Spawn omp and register it as `session_id`, replacing any previous
+    /// incarnation. Does not touch the cached-error state on failure; callers
+    /// decide whether a failure is final.
+    fn spawn_and_install(
+        &self,
+        session_id: &str,
+        cwd_path: &Path,
+        resume: Option<&str>,
+        app: &AppHandle,
+    ) -> Result<(), String> {
+        let mut child = spawn_omp(cwd_path, resume)?;
         let stdin = child.stdin.take().expect("stdin piped");
         let stdout = child.stdout.take().expect("stdout piped");
         let stderr = child.stderr.take().expect("stderr piped");
@@ -105,7 +161,7 @@ impl AgentBridge {
                 .lock()
                 .map_err(|_| "lock poisoned".to_string())?;
             s.insert(
-                session_id.clone(),
+                session_id.to_owned(),
                 BridgeInner {
                     gen,
                     stdin: Some(stdin_arc),
@@ -127,20 +183,40 @@ impl AgentBridge {
 
         // Successful spawn — clear any cached error from a previous
         // failed attempt for this id.
-        self.clear_error(&session_id);
+        self.clear_error(session_id);
 
         let stderr_lines = Arc::new(Mutex::new(Vec::new()));
         spawn_stdout_reader(
             self.sessions.clone(),
             self.last_errors.clone(),
             stderr_lines.clone(),
-            session_id.clone(),
+            session_id.to_owned(),
             gen,
-            app,
+            app.clone(),
             stdout,
         );
-        spawn_stderr_reader(session_id, stderr, stderr_lines);
+        spawn_stderr_reader(session_id.to_owned(), stderr, stderr_lines);
         Ok(())
+    }
+
+    /// True while a grace-period start for `session_id` is still retrying.
+    pub fn is_starting(&self, session_id: &str) -> bool {
+        self.starting
+            .lock()
+            .is_ok_and(|set| set.contains(session_id))
+    }
+
+    /// Add/remove `session_id` from the starting set. Returns whether the
+    /// set changed (i.e. for `false`: it *was* starting).
+    fn set_starting(&self, session_id: &str, starting: bool) -> bool {
+        let Ok(mut set) = self.starting.lock() else {
+            return false;
+        };
+        if starting {
+            set.insert(session_id.to_owned())
+        } else {
+            set.remove(session_id)
+        }
     }
 
     /// Check if a session process is currently registered and active.
@@ -152,6 +228,7 @@ impl AgentBridge {
     }
 
     pub fn stop_session(&self, session_id: &str) {
+        self.set_starting(session_id, false);
         let removed = {
             // Best-effort cleanup: silently bail on a poisoned lock
             // rather than panicking. The map is only readable in error
@@ -188,6 +265,9 @@ impl AgentBridge {
             if let Some(inner) = s.get(session_id) {
                 inner.stdin.clone()
             } else {
+                if self.is_starting(session_id) {
+                    return Err("agent is starting".to_string());
+                }
                 if let Some(err) = self.last_error(session_id) {
                     return Err(err);
                 }
@@ -262,5 +342,46 @@ impl AgentBridge {
 impl Drop for AgentBridge {
     fn drop(&mut self) {
         self.stop_all();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn starting_flag_tracks_set_and_clear() {
+        let bridge = AgentBridge::new();
+        assert!(!bridge.is_starting("a"));
+        assert!(bridge.set_starting("a", true));
+        assert!(bridge.is_starting("a"));
+        assert!(!bridge.is_starting("b"));
+        assert!(bridge.set_starting("a", false));
+        assert!(!bridge.is_starting("a"));
+        // Clearing something that was never starting reports no change,
+        // which is how a grace thread detects it was superseded.
+        assert!(!bridge.set_starting("a", false));
+    }
+
+    #[test]
+    fn send_reports_starting_before_generic_not_found() {
+        let bridge = AgentBridge::new();
+        assert_eq!(
+            bridge.send("a", "{}"),
+            Err("session 'a' not found".to_string())
+        );
+        bridge.set_starting("a", true);
+        assert_eq!(bridge.send("a", "{}"), Err("agent is starting".to_string()));
+        bridge.set_starting("a", false);
+        bridge.cache_error("a", "boom".to_string());
+        assert_eq!(bridge.send("a", "{}"), Err("boom".to_string()));
+    }
+
+    #[test]
+    fn stop_session_cancels_a_pending_start() {
+        let bridge = AgentBridge::new();
+        bridge.set_starting("a", true);
+        bridge.stop_session("a");
+        assert!(!bridge.is_starting("a"));
     }
 }

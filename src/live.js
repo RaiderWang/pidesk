@@ -156,6 +156,8 @@
 
   let activeSessionId  = null;
   let activeListeners  = [];          // unlisten functions for current session
+  let agentStarting    = false;       // omp still starting (post-update grace period); not an error
+  let _startWaitSeq    = 0;           // bumps per tab switch so a stale startup wait stops
 
   // ── ID-keyed response correlation ─────────────────────────────────────────
   // Used by _sendWithResponse to correlate commands that need a typed reply.
@@ -246,6 +248,7 @@
       hubTaskId:       state.hubTaskId,
       hubHistory:      state.hubHistory,
       agentError:      state.agentError,
+      agentStarting,
       toolLogs:        state.toolLogs,
       hasPendingAsyncWork: state.hasPendingAsyncWork,
       isSettled:           state.isSettled,
@@ -493,6 +496,8 @@
     activeListeners = [];
 
     activeSessionId = id;
+    agentStarting = false;
+    const waitSeq = ++_startWaitSeq;
 
     // Restore cached snapshot (preserves streaming messages) or start fresh
     if (!_restoreSession(id)) {
@@ -527,20 +532,56 @@
     // listeners, so a spawn failure (e.g. omp not on PATH) would
     // otherwise be invisible. session_status returns the cached error
     // synchronously — no event timing race.
+    let waitForStartup = false;
+    const invoke = (cmd) => window.__TAURI__.core.invoke(cmd, { sessionId: id });
     try {
-      const startupError = await window.__TAURI__.core.invoke("session_status", { sessionId: id });
-      const isRunning = await window.__TAURI__.core.invoke("is_session_running", { sessionId: id }).catch(() => false);
+      const startupError = await invoke("session_status");
+      const isRunning = await invoke("is_session_running").catch(() => false);
       const startupMsg = typeof startupError === "string" ? startupError.trim() : "";
       if (startupMsg) {
         console.warn(`[live] session '${id}' startup error: ${startupMsg}`);
         _setAgentFailure(startupMsg);
       } else if (!isRunning) {
-        state.agentError = notRunningText();
+        // Right after an in-app update omp may still be coming up: wait for
+        // it instead of flashing a "not running" error that clears itself.
+        const starting = !!window.AgentStartupWait
+          && await invoke("is_session_starting").catch(() => false);
+        if (starting) {
+          state.agentError = null;
+          agentStarting = true;
+          waitForStartup = true;
+        } else {
+          state.agentError = notRunningText();
+        }
       } else {
         state.agentError = null;
       }
     } catch (e) {
       console.warn(`[live] session_status query failed:`, e);
+    }
+
+    if (waitForStartup) {
+      window.AgentStartupWait.waitUntilStarted({
+        query: async () => ({
+          error: await invoke("session_status").catch(() => null),
+          running: await invoke("is_session_running").catch(() => false),
+          starting: await invoke("is_session_starting").catch(() => false),
+        }),
+        isCurrent: () => activeSessionId === id && waitSeq === _startWaitSeq,
+        onRunning: () => {
+          agentStarting = false;
+          state.agentError = null;
+          _initFetch();
+          notify();
+        },
+        onFailed: (reason) => {
+          agentStarting = false;
+          _setAgentFailure(reason);
+          notify();
+        },
+      });
+      notify();
+      return;
     }
 
     // Re-fetch to pick up events missed while not listening.
@@ -1574,6 +1615,8 @@
       .catch(e => {
         console.error("[live] send error:", e);
         const errMsg = (e && typeof e === "string") ? e : (e?.message || String(e));
+        // Grace-period start in progress: not a failure (the wait owns the outcome).
+        if (errMsg === "agent is starting") return;
         if (errMsg && !state.agentError) {
           state.agentError = errMsg;
           notify();
@@ -2334,6 +2377,7 @@
         hubTaskId:       state.hubTaskId,
         hubHistory:      state.hubHistory,
         agentError:      state.agentError,
+        agentStarting,
         toolLogs:        state.toolLogs,
         hasPendingAsyncWork: state.hasPendingAsyncWork,
         isSettled:           state.isSettled,

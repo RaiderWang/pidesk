@@ -7,10 +7,11 @@ const { Icon } = window;
 
 const _SB_BTN_STYLE = { height: 22, padding: "0 6px", fontSize: "var(--d-text-xs)" };
 
-function StatusBar({ ctx, model, todoDone, todoTotal, onTodo, onModel, agentError, isStreaming = false }) {
+function StatusBar({ ctx, model, todoDone, todoTotal, onTodo, onModel, agentError, agentStarting = false, isStreaming = false }) {
   const t = window.t;
   const [usageOpen, setUsageOpen] = React.useState(false);
   const isConnected = !agentError;
+  const startingLabel = t ? t("agent.starting", null, "Starting agent…") : "Starting agent…";
   const showTps = isStreaming || usageOpen;
 
   const connectedLabel = t ? t("chrome.status.connected", null, "connected") : "connected";
@@ -24,9 +25,10 @@ function StatusBar({ ctx, model, todoDone, todoTotal, onTodo, onModel, agentErro
 
   return (
     <div className="status">
-      <span className="status-cell" title={agentError || (isConnected ? connectedLabel : disconnectedLabel)}>
-        <span className={`dot ${isConnected ? "live" : "error"}`} />
-        {!isConnected && <span style={{ color: "var(--rose)" }}>{disconnectedLabel}</span>}
+      <span className="status-cell" title={agentStarting ? startingLabel : (agentError || (isConnected ? connectedLabel : disconnectedLabel))}>
+        <span className={`dot ${agentStarting ? "warn" : (isConnected ? "live" : "error")}`} />
+        {agentStarting && <span style={{ color: "var(--amber)" }}>{startingLabel}</span>}
+        {!agentStarting && !isConnected && <span style={{ color: "var(--rose)" }}>{disconnectedLabel}</span>}
       </span>
       <span className="status-sep">·</span>
       <button className="status-cell btn ghost" onClick={onModel} style={_SB_BTN_STYLE}>
