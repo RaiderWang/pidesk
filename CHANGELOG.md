@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **"No project" sessions now use a dedicated workspace**: instead of the running executable's directory (which could sit inside a repo under `cargo run`, be read-only under `Program Files`, and moves between versions), project-less sessions (default tab, New Standalone, Quick Bar) start in `<app local data>/workspace` (e.g. `%LOCALAPPDATA%\com.raiderwang.pidesk\workspace`), which normally stays empty so no project files influence the agent. The directory is created on demand and falls back to the executable's directory if it can't be created. Sessions saved by older builds are still recognised as project-less and resume into the new workspace.
+
 ### Fixed
 
 - **Empty ghost bubble after omp fails to start**: when omp wasn't up yet at launch or after an update restart, a blank assistant bubble (avatar, `–`, timestamp, no body) was left in the chat next to the error banner. The banner now owns the error (no duplicate chat bubble that goes stale after Retry), and the "model switch failed" / "restarted after model config" notices render properly through a shared `NoticeBubble` helper. The "model switch failed" text is now localised. Also fixes a `ReferenceError` when Retry itself failed to spawn omp. Client-side notice bubbles are now tagged (`notice: true`) so they no longer get dropped by the `get_messages` merge, break "branch from here" for earlier messages, or get picked as the annotatable plan reply, the undo count, the provider-error target or the Quick Bar reply. Restarting a stopped session after saving models now also clears or updates the error banner.

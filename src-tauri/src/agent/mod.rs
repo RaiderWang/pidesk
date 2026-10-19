@@ -10,10 +10,12 @@
 //! - [`spawn`]  — `spawn_omp` candidate-list resolution + Windows
 //!   `CREATE_NO_WINDOW` flag.
 //! - [`reader`] — stdout/stderr reader threads + bounded `read_until_capped`.
+//! - [`workspace`] — default (app-private) cwd for "no project" sessions.
 
 mod inner;
 mod reader;
 pub mod spawn;
+pub mod workspace;
 
 use std::collections::HashMap;
 use std::io::Write;
@@ -70,7 +72,13 @@ impl AgentBridge {
         resume: Option<&str>,
         app: AppHandle,
     ) -> Result<(), String> {
-        let mut child = match spawn_omp(cwd, resume) {
+        // Only touch the filesystem for the workspace when it is needed.
+        let fallback_cwd = if cwd.is_some_and(|d| !d.is_empty()) {
+            std::path::PathBuf::new()
+        } else {
+            workspace::default_cwd(&app)
+        };
+        let mut child = match spawn_omp(cwd, &fallback_cwd, resume) {
             Ok(c) => c,
             Err(e) => {
                 self.cache_error(&session_id, e.clone());

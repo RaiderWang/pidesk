@@ -157,7 +157,11 @@ fn probe_rpc_ui() -> bool {
 
 /// Spawn omp for a live session using the best available RPC mode.
 /// If `resume` is specified, `--resume <path_or_id>` is passed to resume an existing session.
-pub(super) fn spawn_omp(cwd: Option<&str>, resume: Option<&str>) -> Result<Child, String> {
+pub(super) fn spawn_omp(
+    cwd: Option<&str>,
+    default_cwd: &std::path::Path,
+    resume: Option<&str>,
+) -> Result<Child, String> {
     let mode = rpc_mode();
     let mut last_err = String::from("no candidates tried");
     for path in omp_candidates() {
@@ -178,20 +182,14 @@ pub(super) fn spawn_omp(cwd: Option<&str>, resume: Option<&str>) -> Result<Child
         if let Some(dir) = cwd.filter(|d| !d.is_empty()) {
             cmd.current_dir(dir);
         } else {
-            // No project specified — pin the child to the running
-            // executable's own directory instead of letting it inherit
-            // whatever ambient CWD the Tauri process happens to have.
-            // That ambient value is fragile and inconsistent between
-            // launch sites (crate root under `cargo run`, a scratch
-            // folder if launched from a terminal, etc.), which is exactly
-            // what made "no project" sessions started from different
-            // places (main window default/"New Standalone" vs. the
-            // Quick Bar) disagree on their default working directory.
-            // Pinning to the exe's directory matches what Explorer/the
-            // Start Menu use as the default CWD for an installed build,
-            // so every "no project" session — wherever it's started —
-            // lands in the same place.
-            cmd.current_dir(default_cwd());
+            // No project specified — pin the child to the dedicated
+            // app-private workspace instead of letting it inherit the
+            // ambient CWD of the Tauri process (fragile and different per
+            // launch site) or the exe directory (can sit inside a repo
+            // under `cargo run`, or be read-only under Program Files).
+            // The workspace stays empty so no project files influence
+            // the agent, and every "no project" session lands there.
+            cmd.current_dir(default_cwd);
         }
         match cmd.spawn() {
             Ok(child) => return Ok(child),
@@ -207,37 +205,11 @@ pub(super) fn spawn_omp(cwd: Option<&str>, resume: Option<&str>) -> Result<Child
     ))
 }
 
-/// Return the fallback working directory for "no project" sessions: the
-/// directory containing the running executable.
-pub fn default_cwd() -> std::path::PathBuf {
-    exe_dir(std::env::current_exe().ok())
-}
-
-/// Pure helper: derive the containing directory of an executable path,
-/// falling back to `.` (the process's actual ambient CWD at spawn time)
-/// when the executable's own path can't be resolved.
-fn exe_dir(exe_path: Option<std::path::PathBuf>) -> std::path::PathBuf {
-    exe_path
-        .and_then(|p| p.parent().map(std::path::Path::to_path_buf))
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
-}
-
 // ── tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
-    use super::{exe_dir, help_text_supports_rpc_ui};
-
-    #[test]
-    fn exe_dir_uses_parent_of_executable() {
-        let exe = std::path::PathBuf::from("/opt/pidesk/pidesk");
-        assert_eq!(exe_dir(Some(exe)), std::path::PathBuf::from("/opt/pidesk"));
-    }
-
-    #[test]
-    fn exe_dir_falls_back_to_dot_when_unresolvable() {
-        assert_eq!(exe_dir(None), std::path::PathBuf::from("."));
-    }
+    use super::help_text_supports_rpc_ui;
 
     #[test]
     fn detects_rpc_ui_in_mode_line() {

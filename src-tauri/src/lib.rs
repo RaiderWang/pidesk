@@ -90,8 +90,10 @@ fn is_session_running(session_id: String, bridge: State<'_, AgentBridge>) -> boo
 
 /// Return the fallback working directory for "no project" sessions.
 #[tauri::command]
-fn get_default_cwd() -> String {
-    agent::spawn::default_cwd().to_string_lossy().into_owned()
+fn get_default_cwd(app: tauri::AppHandle) -> String {
+    agent::workspace::default_cwd(&app)
+        .to_string_lossy()
+        .into_owned()
 }
 
 /// Native folder picker — returns the chosen path or null.
