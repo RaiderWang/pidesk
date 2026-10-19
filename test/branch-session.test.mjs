@@ -62,6 +62,15 @@ describe('BranchSession.resolveTarget', () => {
     assert.equal(BranchSession.resolveTarget(ui, 3, es, leafOf(es)), es[3].id);
   });
 
+  it('ignores client-side notice bubbles (not in the session file)', () => {
+    const es = chain([['user', 'q1'], ['assistant', 'a1'], ['user', 'q2'], ['assistant', 'a2']]);
+    const notice = { ...uiAsst('⚠️ model switch failed'), notice: true };
+    const ui = [uiUser('q1'), uiAsst('a1'), uiUser('q2'), uiAsst('a2'), notice];
+    assert.equal(BranchSession.resolveTarget(ui, 1, es, leafOf(es)), es[1].id);
+    assert.equal(BranchSession.resolveTarget(ui, 3, es, leafOf(es)), es[3].id);
+    assert.equal(BranchSession.resolveTarget(ui, 4, es, leafOf(es)), null, 'the notice itself is not branchable');
+  });
+
   it('resolves correctly after head trimming', () => {
     const es = chain([
       ['user', 'q1'], ['assistant', 'a1'], ['user', 'q2'], ['assistant', 'a2'],

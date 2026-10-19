@@ -29,7 +29,11 @@
   "use strict";
 
   const EPHEMERAL = new Set(["tool", "ask", "compact"]);
-  const isText = (m) => m && (m.kind === "user" || m.kind === "assistant");
+  // Client-side notice bubbles (`notice: true`) never exist in omp's session
+  // file: they must not take part in alignment, and they stay where they are.
+  const isNotice = (m) => Boolean(m && m.notice);
+  const isText = (m) => m && (m.kind === "user" || m.kind === "assistant") && !isNotice(m);
+  const isEphemeral = (m) => EPHEMERAL.has(m.kind) || isNotice(m);
 
   /** Whitespace-insensitive: UI joins text blocks with "\n", omp with "". */
   function textKey(text) {
@@ -101,7 +105,7 @@
 
     const shift = findShift(localText.map(messageKey), comp.map(messageKey));
     if (shift === null) {
-      return [...comp, ...local.filter((m) => EPHEMERAL.has(m.kind))];
+      return [...comp, ...local.filter(isEphemeral)];
     }
 
     const out = [];

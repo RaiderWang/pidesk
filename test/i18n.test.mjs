@@ -198,12 +198,12 @@ describe('known-key spot-checks', () => {
     setLocale('en');
   });
 
-  it('agent.processExited and agent.restartedAfterModelConfig resolve in en and zh-CN', () => {
+  it('agent.modelSwitchFailed and agent.restartedAfterModelConfig resolve in en and zh-CN', () => {
     setLocale('en');
-    assert.equal(t('agent.processExited', { reason: 'err' }), 'Agent process exited: err');
+    assert.ok(t('agent.modelSwitchFailed', { error: 'boom' }).startsWith('⚠️ **Model Switch Failed:** boom'));
     assert.equal(t('agent.restartedAfterModelConfig'), 'Restarted session with new model configuration.');
     setLocale('zh-CN');
-    assert.equal(t('agent.processExited', { reason: 'err' }), 'Agent 进程已退出：err');
+    assert.ok(t('agent.modelSwitchFailed', { error: 'boom' }).startsWith('⚠️ **切换模型失败：** boom'));
     assert.equal(t('agent.restartedAfterModelConfig'), '已根据最新的模型配置自动重新启动会话。');
     setLocale('en');
   });

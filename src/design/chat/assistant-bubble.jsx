@@ -217,7 +217,7 @@ function AssistantBubble({ msg, idx, highlighted, annotable, annotations, onAnno
           >
             <_ChatIcon name={copied ? "check" : "copy"} size={12} />
           </button>
-          {onBranch && !msg.streaming && (
+          {onBranch && !msg.streaming && !msg.notice && (
             <button
               className="msg-act-btn"
               title={window.t ? window.t("cmd.branch.fromHere", null, "branch from here") : "branch from here"}

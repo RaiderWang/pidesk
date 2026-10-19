@@ -64,6 +64,7 @@
       return text || image ? `u|${text}|${image ? 1 : 0}` : "";
     }
     if (msg?.kind === "assistant") {
+      if (msg.notice) return ""; // client-side notice: not in the session file
       const text = textKey(
         (msg.blocks ?? [])
           .filter((b) => b && b.type === "text" && typeof b.text === "string")

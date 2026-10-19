@@ -69,7 +69,7 @@
     if (!messages || messages.length === 0) return empty;
     for (let i = messages.length - 1; i >= baselineLen; i--) {
       const m = messages[i];
-      if (m.kind !== "assistant") continue;
+      if (m.kind !== "assistant" || m.notice) continue;
       if (!m.blocks || m.blocks.length === 0) return empty;
       const markdown = m.blocks
         .filter(b => b.type === "text")

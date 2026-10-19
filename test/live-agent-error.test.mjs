@@ -78,6 +78,76 @@ describe('live.js — agent start failure surfaces without a ghost bubble', () =
     }
   });
 
+  it('retrySession surfaces a failed start_session without throwing or adding a bubble', async () => {
+    const prevTauri = globalThis.window.__TAURI__;
+    globalThis.window.__TAURI__ = {
+      core: {
+        invoke: async (name) => {
+          if (name === 'start_session') throw 'failed to spawn omp: still missing';
+          return null;
+        },
+      },
+      event: { listen: async () => () => {} },
+    };
+
+    try {
+      const state = bridge.getState();
+      const before = state.messages.length;
+      await bridge.retrySession();
+      assert.equal(state.agentError, 'failed to spawn omp: still missing');
+      assert.equal(state.messages.length, before);
+    } finally {
+      globalThis.window.__TAURI__ = prevTauri;
+    }
+  });
+
+  it('refreshModels restarts a stopped session, clears agentError and adds a notice', async () => {
+    const prevTauri = globalThis.window.__TAURI__;
+    globalThis.window.__TAURI__ = {
+      core: {
+        invoke: async (name) => (name === 'is_session_running' ? false : null),
+      },
+      event: { listen: async () => () => {} },
+    };
+
+    try {
+      const state = bridge.getState();
+      state.agentError = 'No models available';
+      const before = state.messages.length;
+      await bridge.refreshModels();
+      assert.equal(state.agentError, null);
+      const added = state.messages.slice(before);
+      assert.equal(added.length, 1);
+      assert.equal(added[0].notice, true);
+      assert.ok(added[0].blocks[0].text.startsWith('✨'));
+    } finally {
+      globalThis.window.__TAURI__ = prevTauri;
+    }
+  });
+
+  it('refreshModels records the error when the restart fails', async () => {
+    const prevTauri = globalThis.window.__TAURI__;
+    globalThis.window.__TAURI__ = {
+      core: {
+        invoke: async (name) => {
+          if (name === 'is_session_running') return false;
+          if (name === 'start_session') throw new Error('spawn failed');
+          return null;
+        },
+      },
+      event: { listen: async () => () => {} },
+    };
+
+    try {
+      const state = bridge.getState();
+      state.agentError = null;
+      await bridge.refreshModels();
+      assert.equal(state.agentError, 'spawn failed');
+    } finally {
+      globalThis.window.__TAURI__ = prevTauri;
+    }
+  });
+
   it('failed set_model adds a renderable notice (blocks, not bare text)', () => {
     const state = bridge.getState();
     const before = state.messages.length;
@@ -93,6 +163,7 @@ describe('live.js — agent start failure surfaces without a ghost bubble', () =
     const bubble = state.messages[state.messages.length - 1];
     assert.equal(bubble.kind, 'assistant');
     assert.equal(bubble.text, undefined);
+    assert.equal(bubble.notice, true);
     assert.equal(bubble.blocks[0].type, 'text');
     assert.ok(bubble.blocks[0].text.includes('unknown model'));
   });

@@ -502,15 +502,14 @@
       _sessionFresh = false;
     }
 
-    function _surfaceAgentExit(reason) {
-      if (!reason || typeof reason !== "string") return;
-      const trimmed = reason.trim();
-      if (!trimmed) return;
+    const notRunningText = () =>
+      (window.t ? window.t("agent.processNotRunning") : "Agent process (omp) is not running");
+
+    // The AgentErrorBanner shows the full reason with Retry/Copy; a chat
+    // bubble would duplicate it and go stale once Retry succeeds. Callers notify().
+    function _setAgentFailure(reason) {
       state.isStreaming = false;
-      // The AgentErrorBanner already shows the full reason with Retry/Copy;
-      // a chat bubble would duplicate it and go stale once Retry succeeds.
-      state.agentError = trimmed;
-      notify();
+      state.agentError = (typeof reason === "string" && reason.trim()) || notRunningText();
     }
 
     const { listen } = window.__TAURI__.event;
@@ -518,11 +517,7 @@
     const ulExit = await listen(`agent://exit/${id}`, ev => {
       const reason = (ev?.payload && String(ev.payload).trim()) || "";
       console.warn(`[live] session '${id}' omp process exited${reason ? ": " + reason : ""}`);
-      state.isStreaming = false;
-      state.agentError = reason || (window.t ? window.t("agent.processNotRunning") : "Agent process (omp) is not running");
-      if (reason) {
-        _surfaceAgentExit(reason);
-      }
+      _setAgentFailure(reason);
       notify();
     });
     activeListeners = [ulLine, ulExit];
@@ -535,12 +530,12 @@
     try {
       const startupError = await window.__TAURI__.core.invoke("session_status", { sessionId: id });
       const isRunning = await window.__TAURI__.core.invoke("is_session_running", { sessionId: id }).catch(() => false);
-      if (startupError) {
-        console.warn(`[live] session '${id}' startup error: ${startupError}`);
-        state.agentError = startupError;
-        _surfaceAgentExit(startupError);
+      const startupMsg = typeof startupError === "string" ? startupError.trim() : "";
+      if (startupMsg) {
+        console.warn(`[live] session '${id}' startup error: ${startupMsg}`);
+        _setAgentFailure(startupMsg);
       } else if (!isRunning) {
-        state.agentError = window.t ? window.t("agent.processNotRunning") : "Agent process (omp) is not running";
+        state.agentError = notRunningText();
       } else {
         state.agentError = null;
       }
@@ -895,12 +890,7 @@
         if (ev.instructions) {
           state.messages = [
             ...state.messages,
-            {
-              kind: "assistant", time: timeNow(),
-              model: state.model?.name ?? null,
-              blocks: [{ type: "text", text: ev.instructions }],
-              thought: null, lead: null, streaming: false, completed: true,
-            },
+            window.NoticeBubble.make(ev.instructions, timeNow(), state.model?.name ?? null),
           ];
           notify();
         }
@@ -1332,7 +1322,7 @@
     if (!err) return;
     let lastAsst = null;
     for (let i = state.messages.length - 1; i >= 0; i--) {
-      if (state.messages[i].kind === "assistant") {
+      if (state.messages[i].kind === "assistant" && !state.messages[i].notice) {
         lastAsst = state.messages[i];
         break;
       }
@@ -1366,7 +1356,7 @@
   }
 
   function _injectInlinePlan(phases) {
-    const idx = [...state.messages].reverse().findIndex(m => m.kind === "assistant");
+    const idx = [...state.messages].reverse().findIndex(m => m.kind === "assistant" && !m.notice);
     if (idx === -1) return;
     const realIdx = state.messages.length - 1 - idx;
     const msg     = state.messages[realIdx];
@@ -1751,11 +1741,10 @@
       const originId = activeSessionId;
       const warn = (key, params) => {
         if (activeSessionId !== originId) return;
-        state.messages = [...state.messages, {
-          kind: "assistant", time: timeNow(),
-          blocks: [{ type: "text", text: window.t ? window.t(key, params) : key }],
-          thought: null, lead: null, streaming: false, completed: true,
-        }];
+        state.messages = [
+          ...state.messages,
+          window.NoticeBubble.make(window.t ? window.t(key, params) : key, timeNow()),
+        ];
         notify();
       };
 
@@ -1841,11 +1830,10 @@
           // Construct the full path from the session's cwd + returned filename.
           const filename = data?.path ?? null;
           if (!filename) {
-            state.messages = [...state.messages, {
-              kind: "assistant", time: timeNow(),
-              blocks: [{ type: "text", text: "⚠️ **Export failed:** omp did not return an export file path." }],
-              thought: null, lead: null, streaming: false, completed: true,
-            }];
+            state.messages = [
+              ...state.messages,
+              window.NoticeBubble.make("⚠️ **Export failed:** omp did not return an export file path.", timeNow()),
+            ];
             notify();
             return;
           }
@@ -1859,20 +1847,18 @@
 
           const saved = await window.__TAURI__.core.invoke("save_html_export", { sourcePath });
           if (saved) {
-            state.messages = [...state.messages, {
-              kind: "assistant", time: timeNow(),
-              blocks: [{ type: "text", text: "✅ Session exported to HTML." }],
-              thought: null, lead: null, streaming: false, completed: true,
-            }];
+            state.messages = [
+              ...state.messages,
+              window.NoticeBubble.make("✅ Session exported to HTML.", timeNow()),
+            ];
           }
           notify();
         } catch (err) {
           console.warn("[live] exportHtml failed:", err);
-          state.messages = [...state.messages, {
-            kind: "assistant", time: timeNow(),
-            blocks: [{ type: "text", text: `⚠️ **Export failed:** ${err?.message ?? String(err)}` }],
-            thought: null, lead: null, streaming: false, completed: true,
-          }];
+          state.messages = [
+            ...state.messages,
+            window.NoticeBubble.make(`⚠️ **Export failed:** ${err?.message ?? String(err)}`, timeNow()),
+          ];
           notify();
         }
       })();
@@ -1897,12 +1883,14 @@
               sessionId: activeSessionId,
               cwd,
             });
+            state.agentError = null;
             const notice = window.t
               ? window.t("agent.restartedAfterModelConfig")
               : "Restarted session with new model configuration.";
             state.messages = [...state.messages, window.NoticeBubble.make(`✨ **${notice}**`, timeNow())];
           } catch (e) {
             console.warn("[live] failed to restart session:", e);
+            state.agentError = (e && typeof e === "string") ? e : (e?.message || String(e));
           }
         }
       }
@@ -1956,13 +1944,10 @@
      * @param {string} text  Markdown text.
      */
     addAssistantMessage(text) {
-      state.messages = [...state.messages, {
-        kind: "assistant",
-        time: timeNow(),
-        model: state.model?.name ?? null,
-        blocks: [{ type: "text", text }],
-        thought: null, lead: null, streaming: false, completed: true,
-      }];
+      state.messages = [
+        ...state.messages,
+        window.NoticeBubble.make(text, timeNow(), state.model?.name ?? null),
+      ];
       notify();
     },
 
