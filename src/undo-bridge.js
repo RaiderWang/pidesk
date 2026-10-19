@@ -35,11 +35,7 @@
     function warn(text) {
       deps.state.messages = [
         ...deps.state.messages,
-        {
-          kind: "assistant", time: window.timeNow ? window.timeNow() : "",
-          blocks: [{ type: "text", text: `⚠️ ${text}` }],
-          thought: null, lead: null, streaming: false, completed: true,
-        },
+        window.NoticeBubble.make(`⚠️ ${text}`),
       ];
       deps.notify();
     }

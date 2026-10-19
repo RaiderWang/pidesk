@@ -183,6 +183,11 @@ describe('UndoMessage.countAffected', () => {
     assert.deepEqual(UndoMessage.countAffected(msgs, 0), { messages: 3, tools: 2 });
     assert.deepEqual(UndoMessage.countAffected(null, 0), { messages: 0, tools: 0 });
   });
+
+  it('does not count client-side notice bubbles', () => {
+    const msgs = [ui('user', 'a'), ui('assistant', 'b'), { ...ui('assistant', 'oops'), notice: true }];
+    assert.deepEqual(UndoMessage.countAffected(msgs, 0), { messages: 1, tools: 0 });
+  });
 });
 
 describe('UndoMessage.stripPlanFraming', () => {

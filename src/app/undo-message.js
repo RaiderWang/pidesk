@@ -110,6 +110,7 @@
     if (!Array.isArray(uiMessages)) return { messages, tools };
     for (let i = uiIdx + 1; i < uiMessages.length; i++) {
       const k = uiMessages[i]?.kind;
+      if (uiMessages[i]?.notice) continue; // client-side notice, not a session message
       if (k === "user" || k === "assistant") messages++;
       else if (k === "tool") tools++;
     }

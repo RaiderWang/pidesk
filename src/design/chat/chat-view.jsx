@@ -164,7 +164,7 @@ function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, 
   let lastAsstIdx = -1;
   if (planMode) {
     for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].kind === "assistant" && !messages[i].streaming) { lastAsstIdx = i; break; }
+      if (messages[i].kind === "assistant" && !messages[i].streaming && !messages[i].notice) { lastAsstIdx = i; break; }
     }
   }
 
