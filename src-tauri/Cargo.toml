@@ -25,6 +25,16 @@ base64 = "0.22"
 tauri-plugin-single-instance = "2"
 tauri-plugin-updater = "2"
 
+[target.'cfg(windows)'.dependencies]
+# Already in the lock file via tauri; used to rebuild the user's environment
+# block when an installer relaunches the app (see `agent/win_env.rs`).
+windows-sys = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_Environment",
+  "Win32_System_Threading",
+] }
+
 [profile.release]
 opt-level = 3
 lto = "thin"

@@ -27,14 +27,15 @@ pub fn hide_console_window(cmd: &mut Command) {
 /// macOS GUI apps launched from Finder/Dock run under launchd with a minimal
 /// PATH (/usr/bin:/bin:/usr/sbin:/sbin), missing tools in ~/.bun/bin, /opt/homebrew/bin, etc.
 ///
-/// Windows: an installer-relaunched app (in-app update) can inherit a `PATH`
-/// without the user's entries; merge the registry `PATH` back in (see
-/// `win_path`).
+/// Windows: the MSI updater relaunches the app from a Windows Installer
+/// custom action, which can hand it an environment that is not the user's
+/// (no user `PATH` entries, possibly another profile's `USERPROFILE`); the
+/// user's own environment is restored (see `win_env`).
 pub fn ensure_gui_path() {
     #[cfg(windows)]
     {
         static PATH_INITIALIZED: OnceLock<()> = OnceLock::new();
-        PATH_INITIALIZED.get_or_init(super::win_path::refresh_process_path);
+        PATH_INITIALIZED.get_or_init(super::win_env::refresh_process_env);
     }
     #[cfg(not(windows))]
     {
