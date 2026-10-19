@@ -85,7 +85,8 @@ fn norm_path(p: &str) -> String {
 }
 
 /// Flag sessions whose cwd is empty, `.`, or equal to one of `dirs` as
-/// "no project".
+/// "no project", and label them `Default` instead of the internal folder
+/// name (`workspace`, `debug`, ...).
 fn mark_standalone(sessions: &mut [SavedSession], dirs: &[PathBuf]) {
     let norm_dirs: Vec<String> = dirs
         .iter()
@@ -95,6 +96,7 @@ fn mark_standalone(sessions: &mut [SavedSession], dirs: &[PathBuf]) {
         let norm = norm_path(&s.cwd);
         if norm.is_empty() || norm == "." || norm_dirs.contains(&norm) {
             s.is_standalone = true;
+            s.project_name = "Default".to_string();
         }
     }
 }
@@ -314,19 +316,8 @@ pub fn scan_saved_sessions(app: &AppHandle, cwd_filter: Option<&str>) -> Vec<Sav
             {
                 if let Some(session) = parse_session_file(&path) {
                     if let Some(filter) = cwd_filter {
-                        if !filter.is_empty() {
-                            let norm_filter = filter
-                                .replace('\\', "/")
-                                .trim_end_matches('/')
-                                .to_lowercase();
-                            let norm_cwd = session
-                                .cwd
-                                .replace('\\', "/")
-                                .trim_end_matches('/')
-                                .to_lowercase();
-                            if norm_cwd != norm_filter {
-                                continue;
-                            }
+                        if !filter.is_empty() && norm_path(&session.cwd) != norm_path(filter) {
+                            continue;
                         }
                     }
                     sessions.push(session);
@@ -335,11 +326,12 @@ pub fn scan_saved_sessions(app: &AppHandle, cwd_filter: Option<&str>) -> Vec<Sav
         }
     }
 
-    // New dedicated workspace plus the exe dir used by older builds.
-    let standalone_dirs = [
-        crate::agent::workspace::default_cwd(app),
-        crate::agent::workspace::legacy_exe_dir(),
-    ];
+    // New dedicated workspace plus the exe dir used by older builds. Path
+    // comparison only — must not create the workspace directory.
+    let standalone_dirs: Vec<PathBuf> = crate::agent::workspace::workspace_dir(app)
+        .into_iter()
+        .chain(std::iter::once(crate::agent::workspace::legacy_exe_dir()))
+        .collect();
     mark_standalone(&mut sessions, &standalone_dirs);
 
     // Sort descending by timestamp / updated_at (newest first)
@@ -521,5 +513,8 @@ mod tests {
         mark_standalone(&mut sessions, &dirs);
         let flags: Vec<bool> = sessions.iter().map(|s| s.is_standalone).collect();
         assert_eq!(flags, [true, true, true, true, false]);
+        assert!(sessions[..4].iter().all(|s| s.project_name == "Default"));
+        // Real projects keep whatever name they already had.
+        assert_eq!(sessions[4].project_name, "");
     }
 }

@@ -43,6 +43,12 @@
       return true;
     }
 
+    // Dedicated no-project workspace: <app local data>/<tauri identifier>/workspace.
+    // Static fallback for before `getDefaultCwd` resolves (identifier from tauri.conf.json).
+    if (/\/com\.raiderwang\.pidesk\/workspace(\/|$)/.test(norm)) {
+      return true;
+    }
+
     // Build/target directories where dev executable runs (e.g. target/debug, target/release)
     if (
       norm.endsWith("/target/debug") ||

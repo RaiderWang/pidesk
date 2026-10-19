@@ -17,8 +17,10 @@ mod reader;
 pub mod spawn;
 pub mod workspace;
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::io::Write;
+use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -72,13 +74,17 @@ impl AgentBridge {
         resume: Option<&str>,
         app: AppHandle,
     ) -> Result<(), String> {
-        // Only touch the filesystem for the workspace when it is needed.
-        let fallback_cwd = if cwd.is_some_and(|d| !d.is_empty()) {
-            std::path::PathBuf::new()
-        } else {
-            workspace::default_cwd(&app)
-        };
-        let mut child = match spawn_omp(cwd, &fallback_cwd, resume) {
+        // No project specified — pin the child to the dedicated app-private
+        // workspace instead of letting it inherit the ambient CWD of the
+        // Tauri process (fragile and different per launch site) or the exe
+        // directory (can sit inside a repo under `cargo run`, or be
+        // read-only under Program Files). The workspace stays empty so no
+        // project files influence the agent. It is only created when needed.
+        let cwd_path: Cow<'_, Path> = cwd.filter(|d| !d.is_empty()).map_or_else(
+            || Cow::Owned(workspace::default_cwd(&app)),
+            |dir| Cow::Borrowed(Path::new(dir)),
+        );
+        let mut child = match spawn_omp(&cwd_path, resume) {
             Ok(c) => c,
             Err(e) => {
                 self.cache_error(&session_id, e.clone());

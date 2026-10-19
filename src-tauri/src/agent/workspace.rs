@@ -19,7 +19,17 @@ const WORKSPACE_DIR: &str = "workspace";
 /// Creates `<app local data>/workspace` if needed; on any failure falls back
 /// to the executable's directory so a session can still start.
 pub fn default_cwd(app: &AppHandle) -> PathBuf {
-    resolve(workspace_dir(app), legacy_exe_dir())
+    resolve(workspace_dir(app), legacy_exe_dir)
+}
+
+/// Resolve a path omp reported relative to its working directory when that
+/// directory was the "no project" workspace. Absolute paths pass through.
+pub fn anchor_to_workspace(path: &Path, workspace: &Path) -> PathBuf {
+    if path.is_relative() {
+        workspace.join(path)
+    } else {
+        path.to_path_buf()
+    }
 }
 
 /// Directory used by builds that predate the dedicated workspace: the
@@ -28,9 +38,10 @@ pub fn legacy_exe_dir() -> PathBuf {
     exe_dir(std::env::current_exe().ok())
 }
 
-/// The intended (not yet created) workspace path, if the platform exposes
-/// an app local data directory.
-fn workspace_dir(app: &AppHandle) -> Option<PathBuf> {
+/// The intended workspace path, if the platform exposes an app local data
+/// directory. Pure path computation: never touches the filesystem, so it is
+/// safe for read-only queries (e.g. classifying saved sessions).
+pub fn workspace_dir(app: &AppHandle) -> Option<PathBuf> {
     match app.path().app_local_data_dir() {
         Ok(base) => Some(base.join(WORKSPACE_DIR)),
         Err(e) => {
@@ -40,21 +51,22 @@ fn workspace_dir(app: &AppHandle) -> Option<PathBuf> {
     }
 }
 
-/// Pure(ish) helper: ensure `primary` exists and return it, otherwise
-/// return `legacy`.
-fn resolve(primary: Option<PathBuf>, legacy: PathBuf) -> PathBuf {
+/// Ensure `primary` exists and return it, otherwise return the (lazily
+/// computed) `legacy` directory.
+fn resolve(primary: Option<PathBuf>, legacy: impl FnOnce() -> PathBuf) -> PathBuf {
     let Some(dir) = primary else {
-        return legacy;
+        return legacy();
     };
     match ensure_dir(&dir) {
         Ok(()) => dir,
         Err(e) => {
+            let fallback = legacy();
             eprintln!(
                 "[pidesk] cannot create workspace {}: {e}; falling back to {}",
                 dir.display(),
-                legacy.display()
+                fallback.display()
             );
-            legacy
+            fallback
         }
     }
 }
@@ -80,8 +92,9 @@ fn exe_dir(exe_path: Option<PathBuf>) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::{exe_dir, resolve};
-    use std::path::PathBuf;
+    use super::{anchor_to_workspace, exe_dir, resolve};
+    use std::cell::Cell;
+    use std::path::{Path, PathBuf};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_base(name: &str) -> PathBuf {
@@ -108,9 +121,14 @@ mod tests {
     fn resolve_creates_and_returns_primary() {
         let base = temp_base("primary");
         let target = base.join("a").join("workspace");
-        let legacy = PathBuf::from("/legacy");
-        assert_eq!(resolve(Some(target.clone()), legacy), target);
+        let calls = Cell::new(0);
+        let got = resolve(Some(target.clone()), || {
+            calls.set(calls.get() + 1);
+            PathBuf::from("/legacy")
+        });
+        assert_eq!(got, target);
         assert!(target.is_dir());
+        assert_eq!(calls.get(), 0, "fallback must stay lazy on success");
         let _ = std::fs::remove_dir_all(&base);
     }
 
@@ -119,16 +137,33 @@ mod tests {
         let base = temp_base("blocked");
         let blocker = base.join("file");
         std::fs::write(&blocker, b"x").expect("blocker file");
-        let legacy = PathBuf::from("/legacy");
         // A path nested under a regular file can never be created.
-        let got = resolve(Some(blocker.join("workspace")), legacy.clone());
-        assert_eq!(got, legacy);
+        let got = resolve(Some(blocker.join("workspace")), || PathBuf::from("/legacy"));
+        assert_eq!(got, PathBuf::from("/legacy"));
         let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn resolve_falls_back_without_primary() {
-        let legacy = PathBuf::from("/legacy");
-        assert_eq!(resolve(None, legacy.clone()), legacy);
+        assert_eq!(
+            resolve(None, || PathBuf::from("/legacy")),
+            PathBuf::from("/legacy")
+        );
+    }
+
+    #[test]
+    fn anchor_joins_relative_paths_to_workspace() {
+        let ws = PathBuf::from("/data/workspace");
+        assert_eq!(
+            anchor_to_workspace(Path::new("export.html"), &ws),
+            ws.join("export.html")
+        );
+    }
+
+    #[test]
+    fn anchor_keeps_absolute_paths() {
+        let ws = PathBuf::from("/data/workspace");
+        let abs = std::env::temp_dir().join("export.html");
+        assert_eq!(anchor_to_workspace(&abs, &ws), abs);
     }
 }

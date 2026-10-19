@@ -219,7 +219,8 @@ fn delete_saved_session(path: String, app: tauri::AppHandle) -> Result<(), Strin
 /// Relocate an HTML export file that omp wrote to a user-chosen location
 /// via the native save dialog.
 ///
-/// `source_path` is the absolute path to the HTML file omp already wrote.
+/// `source_path` is the path to the HTML file omp already wrote; a relative
+/// path is resolved against the "no project" workspace.
 /// Returns `true` when the file was copied, `false` when the user
 /// cancelled the dialog.  Same main-thread dispatch pattern as
 /// `open_project` — see that doc-comment for the threading rationale.
@@ -227,9 +228,15 @@ fn delete_saved_session(path: String, app: tauri::AppHandle) -> Result<(), Strin
 async fn save_html_export(source_path: String, app: tauri::AppHandle) -> Result<bool, String> {
     use tauri_plugin_dialog::DialogExt;
 
-    let src = std::path::Path::new(&source_path);
+    // omp writes relative export names into its own cwd; for "no project"
+    // sessions that is the dedicated workspace, not this process's CWD.
+    let resolved = agent::workspace::anchor_to_workspace(
+        std::path::Path::new(&source_path),
+        &agent::workspace::default_cwd(&app),
+    );
+    let src = resolved.as_path();
     if !src.exists() {
-        return Err(format!("export file not found: {source_path}"));
+        return Err(format!("export file not found: {}", src.display()));
     }
     let default_name = src.file_name().map_or_else(
         || "session-export.html".to_owned(),

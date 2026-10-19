@@ -157,11 +157,8 @@ fn probe_rpc_ui() -> bool {
 
 /// Spawn omp for a live session using the best available RPC mode.
 /// If `resume` is specified, `--resume <path_or_id>` is passed to resume an existing session.
-pub(super) fn spawn_omp(
-    cwd: Option<&str>,
-    default_cwd: &std::path::Path,
-    resume: Option<&str>,
-) -> Result<Child, String> {
+/// `cwd` is the already-resolved working directory (see `AgentBridge::start_session`).
+pub(super) fn spawn_omp(cwd: &std::path::Path, resume: Option<&str>) -> Result<Child, String> {
     let mode = rpc_mode();
     let mut last_err = String::from("no candidates tried");
     for path in omp_candidates() {
@@ -179,18 +176,7 @@ pub(super) fn spawn_omp(
         // otherwise attach to a console-subsystem child of a GUI parent.
         #[cfg(windows)]
         cmd.creation_flags(CREATE_NO_WINDOW);
-        if let Some(dir) = cwd.filter(|d| !d.is_empty()) {
-            cmd.current_dir(dir);
-        } else {
-            // No project specified — pin the child to the dedicated
-            // app-private workspace instead of letting it inherit the
-            // ambient CWD of the Tauri process (fragile and different per
-            // launch site) or the exe directory (can sit inside a repo
-            // under `cargo run`, or be read-only under Program Files).
-            // The workspace stays empty so no project files influence
-            // the agent, and every "no project" session lands there.
-            cmd.current_dir(default_cwd);
-        }
+        cmd.current_dir(cwd);
         match cmd.spawn() {
             Ok(child) => return Ok(child),
             Err(e) => {
