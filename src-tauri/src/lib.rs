@@ -88,6 +88,12 @@ fn is_session_running(session_id: String, bridge: State<'_, AgentBridge>) -> boo
     bridge.is_running(&session_id)
 }
 
+/// Query whether a session is still retrying its post-update startup.
+#[tauri::command]
+fn is_session_starting(session_id: String, bridge: State<'_, AgentBridge>) -> bool {
+    bridge.is_starting(&session_id)
+}
+
 /// Return the fallback working directory for "no project" sessions.
 #[tauri::command]
 fn get_default_cwd(app: tauri::AppHandle) -> String {
@@ -296,6 +302,13 @@ fn warm_up_overlays_and_start_default(app: &tauri::AppHandle) {
     // by session_id. The frontend's activateSession queries
     // session_status on attach and surfaces the cached reason
     // if any — no event timing race, no delayed emit thread.
+    //
+    // Right after an in-app update omp can be briefly unavailable, so that
+    // start retries in the background for a grace period instead.
+    if agent::grace::take_update_marker(app) {
+        AgentBridge::start_session_with_grace(app, "default".into(), None, None);
+        return;
+    }
     let bridge = app.state::<AgentBridge>();
     if let Err(e) = bridge.start_session("default".into(), None, None, app.clone()) {
         eprintln!("[pidesk] failed to start default session: {e}");
@@ -341,6 +354,7 @@ pub fn run() {
             stop_session,
             session_status,
             is_session_running,
+            is_session_starting,
             open_project,
             start_git_watch,
             stop_git_watch,

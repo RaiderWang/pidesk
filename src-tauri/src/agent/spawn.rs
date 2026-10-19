@@ -101,18 +101,36 @@ fn omp_candidates() -> Vec<std::path::PathBuf> {
 
 // ── rpc-ui probe ─────────────────────────────────────────────────────────────
 
-/// Probe result cache — evaluated once per process lifetime.
+/// Probe result cache. Only filled when the probe actually ran, so an omp
+/// that is briefly missing (e.g. right after an update) does not pin the
+/// process to plain `rpc` forever.
 static RPC_UI_SUPPORTED: OnceLock<bool> = OnceLock::new();
 
 /// Return the RPC mode string to use when spawning omp.
 /// Calls `omp --help` on first use and checks whether `rpc-ui` appears in the
-/// output. Result is cached in a `OnceLock` for the process lifetime.
+/// output. A conclusive result is cached in a `OnceLock` for the process
+/// lifetime; an inconclusive one (omp not found) falls back to `rpc` for this
+/// spawn only and is probed again next time.
 pub(super) fn rpc_mode() -> &'static str {
-    if *RPC_UI_SUPPORTED.get_or_init(probe_rpc_ui) {
+    let (supported, cache) = resolve_probe(RPC_UI_SUPPORTED.get().copied(), probe_rpc_ui);
+    if cache {
+        let _ = RPC_UI_SUPPORTED.set(supported);
+    }
+    if supported {
         "rpc-ui"
     } else {
         "rpc"
     }
+}
+
+/// Combine the cached probe result with a fresh probe.
+/// Returns `(supported, should_cache)`; `probe` only runs on a cache miss and
+/// reports `None` when omp could not be run at all.
+fn resolve_probe(cached: Option<bool>, probe: impl FnOnce() -> Option<bool>) -> (bool, bool) {
+    if let Some(v) = cached {
+        return (v, false);
+    }
+    probe().map_or((false, false), |v| (v, true))
 }
 
 /// Return true if the given help text advertises `rpc-ui` mode support.
@@ -121,13 +139,26 @@ fn help_text_supports_rpc_ui(text: &str) -> bool {
     text.contains("rpc-ui")
 }
 
+/// Interpret one `omp --help` run: `Some(true)` when the text advertises
+/// `rpc-ui`, `Some(false)` when a *successful* run doesn't, and `None`
+/// (inconclusive) when it failed without mentioning `rpc-ui` — a failed run
+/// proves nothing about support and must not be cached.
+fn probe_verdict(exit_success: bool, text: &str) -> Option<bool> {
+    if help_text_supports_rpc_ui(text) {
+        Some(true)
+    } else {
+        exit_success.then_some(false)
+    }
+}
+
 /// Run `omp --help`, collect stdout+stderr, and check for `rpc-ui`.
+/// `None` means no candidate gave a usable answer, so the result is unknown.
 ///
 /// `--help` exits immediately without model initialisation or stdin reads,
 /// so there are no pipe-buffering races and no dependency on API keys being
 /// present in the environment. Old omp binaries that don't know about
 /// `rpc-ui` simply won't mention it in their help output.
-fn probe_rpc_ui() -> bool {
+fn probe_rpc_ui() -> Option<bool> {
     for path in omp_candidates() {
         let mut cmd = Command::new(path);
         cmd.arg("--help")
@@ -144,13 +175,22 @@ fn probe_rpc_ui() -> bool {
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr),
         );
-        let supported = help_text_supports_rpc_ui(&text);
+        let Some(supported) = probe_verdict(output.status.success(), &text) else {
+            // Started but failed without a usable answer (e.g. a wrapper
+            // whose runtime isn't ready yet): try the next candidate.
+            eprintln!(
+                "[pidesk] rpc-ui probe: `--help` failed ({}), inconclusive",
+                output.status
+            );
+            continue;
+        };
         eprintln!("[pidesk] rpc-ui probe: supported={supported}");
-        return supported;
+        return Some(supported);
     }
-    // omp not found on PATH — spawn_omp will surface the real error.
-    eprintln!("[pidesk] rpc-ui probe: omp not found, defaulting to rpc");
-    false
+    // omp not found on PATH or never answered — spawn_omp will surface the
+    // real error.
+    eprintln!("[pidesk] rpc-ui probe: no usable answer, defaulting to rpc (not cached)");
+    None
 }
 
 // ── session spawn ─────────────────────────────────────────────────────────────
@@ -195,7 +235,43 @@ pub(super) fn spawn_omp(cwd: &std::path::Path, resume: Option<&str>) -> Result<C
 
 #[cfg(test)]
 mod tests {
-    use super::help_text_supports_rpc_ui;
+    use super::{help_text_supports_rpc_ui, probe_verdict, resolve_probe};
+
+    #[test]
+    fn verdict_trusts_rpc_ui_text_regardless_of_exit_code() {
+        assert_eq!(probe_verdict(true, "modes: rpc, rpc-ui"), Some(true));
+        assert_eq!(probe_verdict(false, "modes: rpc, rpc-ui"), Some(true));
+    }
+
+    #[test]
+    fn verdict_false_only_from_a_successful_run() {
+        assert_eq!(probe_verdict(true, "modes: text, rpc"), Some(false));
+        assert_eq!(probe_verdict(true, ""), Some(false));
+    }
+
+    #[test]
+    fn verdict_inconclusive_when_run_failed_without_rpc_ui() {
+        assert_eq!(probe_verdict(false, ""), None);
+        assert_eq!(probe_verdict(false, "error: module not found"), None);
+    }
+
+    #[test]
+    fn cached_probe_result_skips_the_probe() {
+        let (v, cache) = resolve_probe(Some(true), || panic!("must not probe"));
+        assert!(v);
+        assert!(!cache);
+    }
+
+    #[test]
+    fn conclusive_probe_is_cached() {
+        assert_eq!(resolve_probe(None, || Some(true)), (true, true));
+        assert_eq!(resolve_probe(None, || Some(false)), (false, true));
+    }
+
+    #[test]
+    fn inconclusive_probe_falls_back_without_caching() {
+        assert_eq!(resolve_probe(None, || None), (false, false));
+    }
 
     #[test]
     fn detects_rpc_ui_in_mode_line() {

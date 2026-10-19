@@ -38,6 +38,7 @@ function useBridgeSnapshot(bridge, setters) {
       setters.setHubHistory?.(snap.hubHistory ?? []);
       // Agent error — status and process errors
       setters.setAgentError?.(snap.agentError ?? null);
+      setters.setAgentStarting?.(!!snap.agentStarting);
       // Tool logs buffer
       setters.setToolLogs?.(snap.toolLogs ?? {});
       // Background async work & settlement (omp 18.4+)

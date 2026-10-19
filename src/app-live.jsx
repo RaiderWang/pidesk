@@ -116,6 +116,7 @@ function App() {
   const [hubAgents,  setHubAgents]  = React.useState([]);
   const [hubHistory, setHubHistory] = React.useState([]);
   const [agentError, setAgentError] = React.useState(null);
+  const [agentStarting, setAgentStarting] = React.useState(false);
   const [hasPendingAsyncWork, setHasPendingAsyncWork] = React.useState(false);
   const [isSettled,           setIsSettled]           = React.useState(true);
 
@@ -172,7 +173,7 @@ function App() {
     setPeer, setPeerSessionId,
     setRunningTools, setRecentTools, setTurnStartMs,
     setHubMode, setHubAgents, setHubHistory,
-    setAgentError, setToolLogs,
+    setAgentError, setAgentStarting, setToolLogs,
     setHasPendingAsyncWork, setIsSettled,
   });
   useThemeEffect(t);
@@ -556,6 +557,7 @@ function App() {
                 onModel={() => openBridge("models")}
                 isStreaming={streaming}
                 agentError={agentError}
+                agentStarting={agentStarting}
               />
             </main>
 

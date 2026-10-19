@@ -12,7 +12,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
-use crate::agent::AgentBridge;
+use crate::agent::{grace, AgentBridge};
 
 /// Event carrying [`Progress`] while an update downloads.
 const PROGRESS_EVENT: &str = "update://progress";
@@ -135,6 +135,8 @@ pub async fn check_update(
     let updater = app
         .updater_builder()
         .on_before_exit(move || {
+            // The relaunched app gives omp a longer startup grace period.
+            grace::mark_update_restart(&exit_app);
             exit_app.state::<AgentBridge>().stop_all();
             exit_app.cleanup_before_exit();
         })
@@ -165,7 +167,11 @@ pub async fn install_update(app: AppHandle, state: State<'_, UpdateState>) -> Re
             || {},
         )
         .await
-        .map_err(|e| describe_error(&e))
+        .map_err(|e| describe_error(&e))?;
+    // Non-Windows installs finish here and restart via `restart_app`, which
+    // never passes through the `on_before_exit` hook above.
+    grace::mark_update_restart(&app);
+    Ok(())
 }
 
 /// Stop every omp child, then relaunch the app (applies an installed update).
@@ -175,6 +181,9 @@ pub async fn install_update(app: AppHandle, state: State<'_, UpdateState>) -> Re
 /// exit-request path.
 #[tauri::command]
 pub async fn restart_app(app: AppHandle) {
+    // Refresh the marker written at install time: the user may have clicked
+    // "Later" and restarted long after (the marker expires after 10 minutes).
+    grace::mark_update_restart(&app);
     let stopper = app.clone();
     let _ = tauri::async_runtime::spawn_blocking(move || {
         stopper.state::<AgentBridge>().stop_all();
