@@ -158,6 +158,7 @@
   let activeListeners  = [];          // unlisten functions for current session
   let agentStarting    = false;       // omp still starting (post-update grace period); not an error
   let _startWaitSeq    = 0;           // bumps per tab switch so a stale startup wait stops
+  const _startQueues   = new Map();   // sessionId -> commands issued while omp was still starting
 
   // ── ID-keyed response correlation ─────────────────────────────────────────
   // Used by _sendWithResponse to correlate commands that need a typed reply.
@@ -514,6 +515,11 @@
     // bubble would duplicate it and go stale once Retry succeeds. Callers notify().
     function _setAgentFailure(reason) {
       state.isStreaming = false;
+      // Any failure ends a pending startup wait: stop its poll, drop what
+      // was queued for it and clear the "Starting agent…" indicator.
+      _startWaitSeq++;
+      agentStarting = false;
+      _startQueues.delete(id);
       state.agentError = (typeof reason === "string" && reason.trim()) || notRunningText();
     }
 
@@ -534,27 +540,34 @@
     // synchronously — no event timing race.
     let waitForStartup = false;
     const invoke = (cmd) => window.__TAURI__.core.invoke(cmd, { sessionId: id });
+    // Read order matters: the backend flips `starting` off *last* (after the
+    // process is registered or the failure is cached), so once `starting`
+    // reads false the other two are final. Reading it last could pair a stale
+    // running=false with an already finished start and report a false failure.
+    const readStatus = async () => {
+      const starting = window.AgentStartupWait
+        ? await invoke("is_session_starting").catch(() => false)
+        : false;
+      const running = await invoke("is_session_running").catch(() => false);
+      const error = await invoke("session_status");
+      return { starting, running, error };
+    };
     try {
-      const startupError = await invoke("session_status");
-      const isRunning = await invoke("is_session_running").catch(() => false);
+      const { starting, running: isRunning, error: startupError } = await readStatus();
       const startupMsg = typeof startupError === "string" ? startupError.trim() : "";
       if (startupMsg) {
         console.warn(`[live] session '${id}' startup error: ${startupMsg}`);
         _setAgentFailure(startupMsg);
-      } else if (!isRunning) {
+      } else if (isRunning) {
+        state.agentError = null;
+      } else if (starting) {
         // Right after an in-app update omp may still be coming up: wait for
         // it instead of flashing a "not running" error that clears itself.
-        const starting = !!window.AgentStartupWait
-          && await invoke("is_session_starting").catch(() => false);
-        if (starting) {
-          state.agentError = null;
-          agentStarting = true;
-          waitForStartup = true;
-        } else {
-          state.agentError = notRunningText();
-        }
-      } else {
         state.agentError = null;
+        agentStarting = true;
+        waitForStartup = true;
+      } else {
+        state.agentError = notRunningText();
       }
     } catch (e) {
       console.warn(`[live] session_status query failed:`, e);
@@ -562,20 +575,10 @@
 
     if (waitForStartup) {
       window.AgentStartupWait.waitUntilStarted({
-        query: async () => ({
-          error: await invoke("session_status").catch(() => null),
-          running: await invoke("is_session_running").catch(() => false),
-          starting: await invoke("is_session_starting").catch(() => false),
-        }),
+        query: () => readStatus().catch(() => ({ starting: true, running: false, error: null })),
         isCurrent: () => activeSessionId === id && waitSeq === _startWaitSeq,
-        onRunning: () => {
-          agentStarting = false;
-          state.agentError = null;
-          _initFetch();
-          notify();
-        },
+        onRunning: () => _onAgentStarted(),
         onFailed: (reason) => {
-          agentStarting = false;
           _setAgentFailure(reason);
           notify();
         },
@@ -604,7 +607,10 @@
 
     if (type === "ready") {
       console.log(`[live] ready from session '${activeSessionId}'`);
-      _initFetch();
+      // Still waiting out a slow start: finish it here (one init fetch, queue
+      // flushed) instead of again when the poll notices the process.
+      if (agentStarting) _onAgentStarted();
+      else _initFetch();
       return;
     }
 
@@ -1607,9 +1613,39 @@
     }).catch(() => {});
   }
 
+  // True when the session's omp is gone and nothing is about to bring it
+  // back. A grace-period start in progress must not be pre-empted by an
+  // explicit start_session (the backend treats that as cancelling it).
+  async function _needsRestart(id) {
+    if (!window.__TAURI__ || !id || agentStarting) return false;
+    const { invoke } = window.__TAURI__.core;
+    const running = await invoke("is_session_running", { sessionId: id }).catch(() => false);
+    if (running) return false;
+    const starting = await invoke("is_session_starting", { sessionId: id }).catch(() => false);
+    return !starting;
+  }
+
+  // omp is up after a grace-period start: fetch initial state, then deliver
+  // what the user issued meanwhile (prompts, steers, model changes…).
+  function _onAgentStarted() {
+    _startWaitSeq++;                 // stop any pending startup poll
+    agentStarting = false;
+    state.agentError = null;
+    _initFetch();
+    for (const cmd of window.AgentStartupWait.drain(_startQueues, activeSessionId)) _send(cmd);
+    notify();
+  }
+
   // ── Send a command to the active session's omp ────────────────────────────
   function _send(cmd) {
     if (!window.__TAURI__ || !activeSessionId) return;
+    // The process isn't there yet: hold the command rather than lose it.
+    if (agentStarting && window.AgentStartupWait) {
+      if (!window.AgentStartupWait.enqueue(_startQueues, activeSessionId, cmd)) {
+        console.warn("[live] startup queue full; dropping", cmd?.type);
+      }
+      return;
+    }
     window.__TAURI__.core
       .invoke("send_command", { sessionId: activeSessionId, json: JSON.stringify(cmd) })
       .catch(e => {
@@ -1696,17 +1732,12 @@
       _send({ type: "steer", message: text, images: [] });
     },
     async setModel(model) {
-      if (window.__TAURI__ && activeSessionId) {
-        const isRunning = await window.__TAURI__.core
-          .invoke("is_session_running", { sessionId: activeSessionId })
-          .catch(() => false);
-        if (!isRunning) {
-          const entry = sessionRegistry.get(activeSessionId);
-          const cwd = entry?.path ?? "";
-          await window.__TAURI__.core
-            .invoke("start_session", { sessionId: activeSessionId, cwd })
-            .catch(() => {});
-        }
+      if (await _needsRestart(activeSessionId)) {
+        const entry = sessionRegistry.get(activeSessionId);
+        const cwd = entry?.path ?? "";
+        await window.__TAURI__.core
+          .invoke("start_session", { sessionId: activeSessionId, cwd })
+          .catch(() => {});
       }
       state.agentError = null;
       _send({ type: "set_model", provider: model.provider, modelId: model.id });
@@ -1913,28 +1944,23 @@
     clearPeer()   { window.PeerSessionBridge.unpin(); },
 
     async refreshModels() {
-      if (window.__TAURI__ && activeSessionId) {
-        const isRunning = await window.__TAURI__.core
-          .invoke("is_session_running", { sessionId: activeSessionId })
-          .catch(() => false);
-        if (!isRunning) {
-          const entry = sessionRegistry.get(activeSessionId);
-          const cwd = entry?.path ?? "";
-          console.log(`[live] session '${activeSessionId}' is not running; restarting with new models config`);
-          try {
-            await window.__TAURI__.core.invoke("start_session", {
-              sessionId: activeSessionId,
-              cwd,
-            });
-            state.agentError = null;
-            const notice = window.t
-              ? window.t("agent.restartedAfterModelConfig")
-              : "Restarted session with new model configuration.";
-            state.messages = [...state.messages, window.NoticeBubble.make(`✨ **${notice}**`, timeNow())];
-          } catch (e) {
-            console.warn("[live] failed to restart session:", e);
-            state.agentError = (e && typeof e === "string") ? e : (e?.message || String(e));
-          }
+      if (await _needsRestart(activeSessionId)) {
+        const entry = sessionRegistry.get(activeSessionId);
+        const cwd = entry?.path ?? "";
+        console.log(`[live] session '${activeSessionId}' is not running; restarting with new models config`);
+        try {
+          await window.__TAURI__.core.invoke("start_session", {
+            sessionId: activeSessionId,
+            cwd,
+          });
+          state.agentError = null;
+          const notice = window.t
+            ? window.t("agent.restartedAfterModelConfig")
+            : "Restarted session with new model configuration.";
+          state.messages = [...state.messages, window.NoticeBubble.make(`✨ **${notice}**`, timeNow())];
+        } catch (e) {
+          console.warn("[live] failed to restart session:", e);
+          state.agentError = (e && typeof e === "string") ? e : (e?.message || String(e));
         }
       }
       const customData = await _loadCustomModelsFromConfig();
@@ -1943,7 +1969,8 @@
       }
       _syncCurrentModel();
       notify();
-      _initFetch();
+      // While omp is still starting the post-start init fetch covers this.
+      if (!agentStarting) _initFetch();
     },
 
     // ── Login ─────────────────────────────────────────────────────────────────
@@ -2317,6 +2344,7 @@
 
     /** Close a tab and kill its omp process. */
     async closeSession(id) {
+      _startQueues.delete(id);
       if (window.__TAURI__) {
         window.__TAURI__.core.invoke("stop_session",   { sessionId: id }).catch(() => {});
         window.__TAURI__.core.invoke("stop_git_watch", { sessionId: id }).catch(() => {});

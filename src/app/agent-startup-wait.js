@@ -55,5 +55,30 @@
     return finish("failed", "");
   }
 
-  window.AgentStartupWait = { decide, waitUntilStarted, POLL_MS, MAX_WAIT_MS };
+  /** Cap per session so a stuck start can't buffer unbounded commands. */
+  const QUEUE_MAX = 20;
+
+  /**
+   * Commands issued while omp is still starting can't be delivered yet, and
+   * dropping them would leave e.g. a sent prompt on screen that omp never
+   * saw. `queues` is a Map<sessionId, command[]>; returns false when full.
+   */
+  function enqueue(queues, id, cmd) {
+    const q = queues.get(id) || [];
+    if (q.length >= QUEUE_MAX) return false;
+    q.push(cmd);
+    queues.set(id, q);
+    return true;
+  }
+
+  /** Take (and forget) everything queued for `id`, oldest first. */
+  function drain(queues, id) {
+    const q = queues.get(id) || [];
+    queues.delete(id);
+    return q;
+  }
+
+  window.AgentStartupWait = {
+    decide, waitUntilStarted, enqueue, drain, POLL_MS, MAX_WAIT_MS, QUEUE_MAX,
+  };
 })();

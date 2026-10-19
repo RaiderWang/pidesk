@@ -33,6 +33,9 @@ use reader::{spawn_stderr_reader, spawn_stdout_reader};
 pub use spawn::ensure_gui_path;
 use spawn::spawn_omp;
 
+/// Error reported by a grace-period attempt that was cancelled mid-spawn.
+const START_CANCELLED: &str = "start cancelled";
+
 /// Manages one omp process per tab session.
 ///
 /// # Events
@@ -91,7 +94,7 @@ impl AgentBridge {
         );
         // An explicit start supersedes any grace-period retry loop.
         self.set_starting(&session_id, false);
-        self.spawn_and_install(&session_id, &cwd_path, resume, &app)
+        self.spawn_and_install(&session_id, &cwd_path, resume, &app, false)
             .inspect_err(|e| self.cache_error(&session_id, e.clone()))
     }
 
@@ -118,33 +121,55 @@ impl AgentBridge {
             );
             let began = Instant::now();
             let result = grace::retry_with_grace(
-                || bridge.spawn_and_install(&session_id, &cwd_path, resume.as_deref(), &app),
+                || bridge.spawn_and_install(&session_id, &cwd_path, resume.as_deref(), &app, true),
                 || began.elapsed(),
                 |delay| {
                     thread::sleep(delay);
                     bridge.is_starting(&session_id)
                 },
             );
-            // `false` here means an explicit start/stop took over: leave
-            // its state alone instead of reporting our stale outcome.
-            if bridge.set_starting(&session_id, false) {
-                if let Err(e) = result {
-                    eprintln!("[pidesk] session '{session_id}' did not start within grace: {e}");
-                    bridge.cache_error(&session_id, e);
-                }
-            }
+            bridge.finish_grace(&session_id, result);
         });
+    }
+
+    /// Conclude a grace-period start. Runs under the `starting` lock so a
+    /// reader that sees the id no longer starting also sees the final
+    /// outcome: a failure is cached *before* the id leaves the set, and a
+    /// successful install already happened. If an explicit start/stop took
+    /// the id over (it is no longer in the set), this stale outcome is dropped.
+    fn finish_grace(&self, session_id: &str, result: Result<(), String>) {
+        let Ok(mut set) = self.starting.lock() else {
+            return;
+        };
+        if !set.contains(session_id) {
+            return;
+        }
+        if let Err(e) = result {
+            eprintln!("[pidesk] session '{session_id}' did not start within grace: {e}");
+            self.cache_error(session_id, e);
+        }
+        set.remove(session_id);
+    }
+
+    /// Whether a freshly spawned child may be registered. Grace-period
+    /// attempts (`require_starting`) must still be wanted: a `stop_session`,
+    /// `stop_all` or explicit `start_session` since the last check cancels them.
+    fn may_install(&self, session_id: &str, require_starting: bool) -> bool {
+        !require_starting || self.is_starting(session_id)
     }
 
     /// Spawn omp and register it as `session_id`, replacing any previous
     /// incarnation. Does not touch the cached-error state on failure; callers
-    /// decide whether a failure is final.
+    /// decide whether a failure is final. With `require_starting` the
+    /// install is re-validated under the sessions lock and a cancelled
+    /// attempt kills its child instead of registering it.
     fn spawn_and_install(
         &self,
         session_id: &str,
         cwd_path: &Path,
         resume: Option<&str>,
         app: &AppHandle,
+        require_starting: bool,
     ) -> Result<(), String> {
         let mut child = spawn_omp(cwd_path, resume)?;
         let stdin = child.stdin.take().expect("stdin piped");
@@ -155,19 +180,32 @@ impl AgentBridge {
 
         // Atomic install: drop any previous BridgeInner under the lock,
         // install the new one in the same critical section.
-        let prev = {
+        let installed = {
             let mut s = self
                 .sessions
                 .lock()
                 .map_err(|_| "lock poisoned".to_string())?;
-            s.insert(
-                session_id.to_owned(),
-                BridgeInner {
-                    gen,
-                    stdin: Some(stdin_arc),
-                    child: Some(child),
-                },
-            )
+            if self.may_install(session_id, require_starting) {
+                Some(s.insert(
+                    session_id.to_owned(),
+                    BridgeInner {
+                        gen,
+                        stdin: Some(stdin_arc),
+                        child: Some(child),
+                    },
+                ))
+            } else {
+                // Cancelled while spawning: reap the stray child off-thread.
+                drop(s);
+                thread::spawn(move || {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                });
+                None
+            }
+        };
+        let Some(prev) = installed else {
+            return Err(START_CANCELLED.to_string());
         };
         if let Some(mut prev) = prev {
             prev.stdin = None;
@@ -327,6 +365,11 @@ impl AgentBridge {
     /// before an in-process restart (which skips managed-state destructors),
     /// so no omp process is orphaned.
     pub fn stop_all(&self) {
+        // Cancel pending grace-period starts first: an attempt re-checks
+        // this set under the sessions lock, so none can slip in after the drain.
+        if let Ok(mut starting) = self.starting.lock() {
+            starting.clear();
+        }
         if let Ok(mut sessions) = self.sessions.lock() {
             for (_, mut inner) in sessions.drain() {
                 inner.stdin = None;
@@ -375,6 +418,57 @@ mod tests {
         bridge.set_starting("a", false);
         bridge.cache_error("a", "boom".to_string());
         assert_eq!(bridge.send("a", "{}"), Err("boom".to_string()));
+    }
+
+    #[test]
+    fn finish_grace_failure_caches_error_before_clearing_starting() {
+        let bridge = AgentBridge::new();
+        bridge.set_starting("a", true);
+        bridge.finish_grace("a", Err("no omp".to_string()));
+        assert!(!bridge.is_starting("a"));
+        assert_eq!(bridge.last_error("a"), Some("no omp".to_string()));
+    }
+
+    #[test]
+    fn finish_grace_success_clears_starting_without_error() {
+        let bridge = AgentBridge::new();
+        bridge.set_starting("a", true);
+        bridge.finish_grace("a", Ok(()));
+        assert!(!bridge.is_starting("a"));
+        assert_eq!(bridge.last_error("a"), None);
+    }
+
+    #[test]
+    fn finish_grace_drops_a_superseded_outcome() {
+        let bridge = AgentBridge::new();
+        // An explicit start/stop already took the id over.
+        bridge.set_starting("a", true);
+        bridge.stop_session("a");
+        bridge.finish_grace("a", Err("stale".to_string()));
+        assert_eq!(bridge.last_error("a"), None);
+        assert!(!bridge.is_starting("a"));
+    }
+
+    #[test]
+    fn may_install_requires_a_pending_start_only_for_grace_attempts() {
+        let bridge = AgentBridge::new();
+        assert!(bridge.may_install("a", false));
+        assert!(!bridge.may_install("a", true));
+        bridge.set_starting("a", true);
+        assert!(bridge.may_install("a", true));
+        bridge.stop_session("a");
+        assert!(!bridge.may_install("a", true));
+    }
+
+    #[test]
+    fn stop_all_cancels_pending_starts() {
+        let bridge = AgentBridge::new();
+        bridge.set_starting("a", true);
+        bridge.set_starting("b", true);
+        bridge.stop_all();
+        assert!(!bridge.is_starting("a"));
+        assert!(!bridge.is_starting("b"));
+        assert!(!bridge.may_install("a", true));
     }
 
     #[test]

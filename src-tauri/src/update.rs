@@ -181,6 +181,9 @@ pub async fn install_update(app: AppHandle, state: State<'_, UpdateState>) -> Re
 /// exit-request path.
 #[tauri::command]
 pub async fn restart_app(app: AppHandle) {
+    // Refresh the marker written at install time: the user may have clicked
+    // "Later" and restarted long after (the marker expires after 10 minutes).
+    grace::mark_update_restart(&app);
     let stopper = app.clone();
     let _ = tauri::async_runtime::spawn_blocking(move || {
         stopper.state::<AgentBridge>().stop_all();

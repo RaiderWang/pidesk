@@ -16,7 +16,39 @@ import './helpers/shim.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 new Function(readFileSync(join(__dirname, '../src/app/agent-startup-wait.js'), 'utf-8'))();
-const { decide, waitUntilStarted, POLL_MS, MAX_WAIT_MS } = globalThis.AgentStartupWait;
+const {
+  decide, waitUntilStarted, enqueue, drain, POLL_MS, MAX_WAIT_MS, QUEUE_MAX,
+} = globalThis.AgentStartupWait;
+
+describe('AgentStartupWait command queue', () => {
+  it('drains in order and forgets what it returned', () => {
+    const q = new Map();
+    enqueue(q, 'a', { type: 'prompt', message: '1' });
+    enqueue(q, 'a', { type: 'prompt', message: '2' });
+    assert.deepEqual(drain(q, 'a').map((c) => c.message), ['1', '2']);
+    assert.deepEqual(drain(q, 'a'), []);
+    assert.equal(q.has('a'), false);
+  });
+
+  it('keeps sessions separate', () => {
+    const q = new Map();
+    enqueue(q, 'a', { n: 1 });
+    enqueue(q, 'b', { n: 2 });
+    assert.deepEqual(drain(q, 'b'), [{ n: 2 }]);
+    assert.deepEqual(drain(q, 'a'), [{ n: 1 }]);
+  });
+
+  it('refuses commands past the cap without losing queued ones', () => {
+    const q = new Map();
+    for (let i = 0; i < QUEUE_MAX; i++) assert.equal(enqueue(q, 'a', { i }), true);
+    assert.equal(enqueue(q, 'a', { i: 'overflow' }), false);
+    assert.equal(drain(q, 'a').length, QUEUE_MAX);
+  });
+
+  it('drain of an unknown session is empty', () => {
+    assert.deepEqual(drain(new Map(), 'nope'), []);
+  });
+});
 
 describe('AgentStartupWait.decide', () => {
   it('a cached error wins over everything', () => {
