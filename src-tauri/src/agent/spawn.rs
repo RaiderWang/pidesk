@@ -26,9 +26,16 @@ pub fn hide_console_window(cmd: &mut Command) {
 /// Ensure PATH contains standard user binary directories on Unix (macOS / Linux).
 /// macOS GUI apps launched from Finder/Dock run under launchd with a minimal
 /// PATH (/usr/bin:/bin:/usr/sbin:/sbin), missing tools in ~/.bun/bin, /opt/homebrew/bin, etc.
-// Body is empty on Windows; on Unix it mutates PATH and cannot be `const`.
-#[cfg_attr(windows, allow(clippy::missing_const_for_fn))]
+///
+/// Windows: an installer-relaunched app (in-app update) can inherit a `PATH`
+/// without the user's entries; merge the registry `PATH` back in (see
+/// `win_path`).
 pub fn ensure_gui_path() {
+    #[cfg(windows)]
+    {
+        static PATH_INITIALIZED: OnceLock<()> = OnceLock::new();
+        PATH_INITIALIZED.get_or_init(super::win_path::refresh_process_path);
+    }
     #[cfg(not(windows))]
     {
         static PATH_INITIALIZED: OnceLock<()> = OnceLock::new();
@@ -85,6 +92,9 @@ fn omp_candidates() -> Vec<std::path::PathBuf> {
     if cfg!(windows) {
         list.push(std::path::PathBuf::from("omp.exe"));
         list.push(std::path::PathBuf::from("omp"));
+        list.extend(super::win_path::fallback_candidates(|k| {
+            std::env::var(k).ok()
+        }));
     } else {
         list.push(std::path::PathBuf::from("omp"));
         if let Ok(home) = std::env::var("HOME") {

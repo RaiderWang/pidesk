@@ -16,6 +16,7 @@ pub mod grace;
 mod inner;
 mod reader;
 pub mod spawn;
+mod win_path;
 pub mod workspace;
 
 use std::borrow::Cow;

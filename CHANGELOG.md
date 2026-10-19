@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **"omp not found" after an in-app update, and Retry never recovering (Windows)**: the real cause was not timing. The installer relaunches the app with an environment whose `PATH` can lack the user's entries (e.g. `~\.bun\bin` where omp lives), so the new process could never find `omp.exe` — retrying or waiting in that process was pointless, while closing and reopening the app from Explorer worked. On startup PiDesk now merges the machine and user `PATH` from the registry into its own `PATH` (existing entries keep priority; omp inherits the fixed `PATH`), and also probes the usual install locations as absolute paths (`~\.bun\bin`, `%BUN_INSTALL%\bin`, `%LOCALAPPDATA%\omp`, `~\.cargo\bin`, `~\.local\bin`, `%APPDATA%\npm`) when the bare `omp.exe` lookup fails.
+
 ## [0.4.6] - 2026-10-19
 
 ### Changed
