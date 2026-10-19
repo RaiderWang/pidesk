@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.6] - 2026-10-19
+
 ### Changed
 
 - **"No project" sessions now use a dedicated workspace**: instead of the running executable's directory (which could sit inside a repo under `cargo run`, be read-only under `Program Files`, and moves between versions), project-less sessions (default tab, New Standalone, Quick Bar) start in `<app local data>/workspace` (e.g. `%LOCALAPPDATA%\com.raiderwang.pidesk\workspace`), which normally stays empty so no project files influence the agent. The directory is created on demand and falls back to the executable's directory if it can't be created. Sessions saved by older builds are still recognised as project-less and resume into the new workspace. Project-less saved sessions are listed as `Default` (not the internal folder name), listing them no longer touches the disk, and exporting such a session to HTML still finds the file omp wrote into the workspace.
