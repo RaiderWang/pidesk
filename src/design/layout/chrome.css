@@ -41,8 +41,15 @@
 .win-close { color: #FF5F57 !important; }
 .win-min   { color: #FEBC2E !important; }
 .win-max   { color: #28C840 !important; }
-.chrome-title { display: flex; align-items: center; gap: 6px; font-size: var(--d-text-sm); flex: 1; justify-content: center; }
-.chrome-right { display: flex; gap: 6px; }
+.chrome-title {
+  display: flex; align-items: center; gap: 6px; font-size: var(--d-text-sm);
+  flex: 1; justify-content: center; min-width: 0; overflow: hidden;
+}
+.chrome-title-text {
+  max-width: 320px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chrome-right { display: flex; gap: 6px; flex-shrink: 0; }
 
 /* ── Tabs ────────────────────────────────────────────────────────────── */
 .tabs {
@@ -55,14 +62,16 @@
 .tab {
   position: relative;
   display: flex; align-items: center; gap: 8px;
-  padding: 0 14px;
+  padding: 0 12px;
   height: 100%;
   font-size: var(--d-text-sm);
   color: var(--fg-3);
   cursor: pointer;
   border-right: 1px solid var(--line-soft);
   transition: color 120ms, background 120ms;
-  min-width: 140px;
+  flex: 0 1 200px;
+  min-width: 64px;
+  max-width: 200px;
 }
 .tab:hover { color: var(--fg-2); background: var(--bg-hover); }
 .tab.active { color: var(--fg); background: var(--bg-surface); }
@@ -70,8 +79,18 @@
   position: absolute; top: 0; left: 0; right: 0; height: 2px;
   transition: background 200ms var(--ease-out);
 }
-.tab-name { font-family: var(--font-sans); font-size: var(--d-text-sm); font-weight: 500; }
+.tab-name {
+  font-family: var(--font-sans);
+  font-size: var(--d-text-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
 .tab-close {
+  flex-shrink: 0;
   width: 16px; height: 16px; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: 4px; opacity: 0; background: transparent; border: 0;
@@ -86,6 +105,13 @@
   display: inline-flex;
   align-items: stretch;
   height: 100%;
+  flex-shrink: 0;
+}
+.tabs-right {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding-right: 8px;
 }
 .tab-add {
   display: inline-flex; align-items: center; justify-content: center;

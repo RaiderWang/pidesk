@@ -995,6 +995,12 @@
       return;
     }
 
+    if (type === "session_info_update" || type === "session_title_changed") {
+      const title = ev.title ?? ev.sessionName;
+      if (title) _setTabTitle(title);
+      return;
+    }
+
     if (type === "thinking_level_changed") {
       let newLevel = ev.thinkingLevel ?? "off";
       if (Array.isArray(state.availableThinkingLevels) && state.availableThinkingLevels.length > 0) {
@@ -1068,6 +1074,7 @@
           } else if (images.length > 0 && (!last.images || last.images.length === 0)) {
             last.images = images;
           }
+          if (text) _updateTabTitleIfDefault(text);
           notify();
         }
       } else if (role === "assistant") {
@@ -1427,6 +1434,45 @@
     }
   }
 
+  function _formatTitle(raw, folderName = "", fallback = "") {
+    return (typeof window !== "undefined" && window.SessionTitle?.formatSessionTitle)
+      ? window.SessionTitle.formatSessionTitle(raw, folderName, { fallback })
+      : (folderName ? `${folderName}: ${raw}` : raw || fallback);
+  }
+
+  function _updateTabTitleIfDefault(text) {
+    if (!text || !activeSessionId || !sessionRegistry.has(activeSessionId)) return;
+    const entry = sessionRegistry.get(activeSessionId);
+    const folderName = entry.path
+      ? entry.path.replace(/\\/g, "/").split("/").filter(Boolean).pop() || ""
+      : "";
+
+    // Check if the tab title is still in initial state (default name for standalone, or bare folderName for project)
+    const isInitial = (typeof window !== "undefined" && window.SessionTitle?.isInitialSessionName)
+      ? window.SessionTitle.isInitialSessionName(entry.name, folderName)
+      : (!entry.path && /^(PiDesk(\s*\(\d+\))?|new session|resumed|session)$/i.test(entry.name || "")) || (entry.name === folderName);
+
+    if (isInitial) {
+      const formatted = _formatTitle(text, folderName, entry.name);
+      if (formatted && formatted !== entry.name) {
+        sessionRegistry.set(activeSessionId, { ...entry, name: formatted });
+      }
+    }
+  }
+
+  function _setTabTitle(rawTitle) {
+    if (!rawTitle || !activeSessionId || !sessionRegistry.has(activeSessionId)) return;
+    const entry = sessionRegistry.get(activeSessionId);
+    const folderName = entry.path
+      ? entry.path.replace(/\\/g, "/").split("/").filter(Boolean).pop() || ""
+      : "";
+    const formatted = _formatTitle(rawTitle, folderName, entry.name);
+    if (formatted && formatted !== entry.name) {
+      sessionRegistry.set(activeSessionId, { ...entry, name: formatted });
+      notify();
+    }
+  }
+
   function _applyRpcState(rpcState) {
     if (!rpcState) return;
     state.rpcState      = rpcState;
@@ -1471,9 +1517,8 @@
     // Only update the tab name if omp provides an explicit human-readable
     // sessionName. The sessionFile is a timestamp ID — leave the folder-based
     // name set at tab-open time intact when sessionName is absent.
-    if (rpcState.sessionName && activeSessionId && sessionRegistry.has(activeSessionId)) {
-      const entry = sessionRegistry.get(activeSessionId);
-      sessionRegistry.set(activeSessionId, { ...entry, name: rpcState.sessionName });
+    if (rpcState.sessionName) {
+      _setTabTitle(rpcState.sessionName);
     }
     if (rpcState.sessionFile && activeSessionId && sessionRegistry.has(activeSessionId)) {
       const entry = sessionRegistry.get(activeSessionId);
@@ -1716,6 +1761,7 @@
     send(text, images) {
       const userMsg = { kind: "user", time: timeNow(), text, images: images ?? [] };
       state.messages = [...state.messages, userMsg];
+      if (text) _updateTabTitleIfDefault(text);
       notify();
       _send({ type: "prompt", message: text, images: images ?? [] });
     },
@@ -2303,7 +2349,11 @@
         session.is_standalone === true ||
         (window.RecentProjects?.isStandalonePath?.(savedCwd) ?? !savedCwd);
       const cwd = standalone ? "" : savedCwd;
-      const name = session.title || (cwd ? cwd.replace(/\\/g, "/").split("/").pop() || cwd : "resumed");
+      const folderName = cwd ? cwd.replace(/\\/g, "/").split("/").filter(Boolean).pop() || cwd : "";
+      const rawTitle = session.title || folderName || "resumed";
+      const name = (typeof window !== "undefined" && window.SessionTitle?.formatSessionTitle)
+        ? window.SessionTitle.formatSessionTitle(rawTitle, folderName, { fallback: "resumed" })
+        : rawTitle;
       sessionRegistry.set(id, {
         id,
         name,

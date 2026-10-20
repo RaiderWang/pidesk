@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Session tab title truncation, native tooltips, and project-aware title formatting**:
+  - Automatically format session tab titles upon starting a conversation: standalone sessions use the sanitized first prompt, while project-bound sessions use `<folderName>: <prompt>` format so multi-session project tabs are distinguishable.
+  - Added pure `SessionTitle` module (`src/app/session-title.js`) that strips Plan mode framing (`INTENT_FRAMING`), removes Markdown header markers, normalizes newlines/whitespace, and clamps character length.
+  - Implemented elastic tab layout in CSS (`flex: 0 1 200px; min-width: 64px; max-width: 200px;`) with single-line ellipsis (`text-overflow: ellipsis`) preventing tab width explosion.
+  - Added native `title` tooltips to tabs and window chrome, showing full conversation titles and directory paths on hover.
+  - Hardened layout against overflow: preserved `.tabs` `overflow: visible` to protect the `+` dropdown menu from clipping (P0 safeguard), and prevented long title overflow in window chrome, file tree panel, and ambient peer rails (P1 safeguards).
+  - Added live event listeners for omp `session_info_update` and `session_title_changed` events.
+
 ### Documentation
 
 - **Redesigned README showcase and screenshot assets**: overhaul feature matrix in `README.md` and `README.zh-CN.md` with an 8-pillar visual architecture (Activity Bar workspace, context-aware `@` chips & Undo, `/review` drawer, Plan Mode & Kanban, Quick Bar overlay, screenshot annotation suite with mosaic blur, Model Manager thinking depth, and command palette / themes). Replaced legacy stacked screenshots with 8 high-DPI feature screenshots and removed deprecated image assets.

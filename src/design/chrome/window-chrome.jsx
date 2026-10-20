@@ -21,11 +21,13 @@ function WindowChrome({ project, peer, onCmd }) {
       )}
 
       <div className="chrome-title">
-        <span className="mono" style={{ color: "var(--fg-3)" }}>OMP</span>
-        <span className="mono" style={{ color: "var(--fg-5)" }}>·</span>
-        <span style={{ color: "var(--fg-2)" }}>{project.name}</span>
+        <span className="mono" style={{ color: "var(--fg-3)", flexShrink: 0 }}>OMP</span>
+        <span className="mono" style={{ color: "var(--fg-5)", flexShrink: 0 }}>·</span>
+        <span className="chrome-title-text" style={{ color: "var(--fg-2)" }} title={project.name}>
+          {project.name}
+        </span>
         {project.branch && (
-          <span className="chip muted" style={{ marginLeft: 6 }}>
+          <span className="chip muted" style={{ marginLeft: 6, flexShrink: 0 }}>
             <Icon name="branch" size={9} color="var(--fg-3)" />
             <span className="mono" style={{ color: "var(--fg-3)" }}>{project.branch}</span>
           </span>
