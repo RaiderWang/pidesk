@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Documentation
+
+- **Redesigned README showcase and screenshot assets**: overhaul feature matrix in `README.md` and `README.zh-CN.md` with an 8-pillar visual architecture (Activity Bar workspace, context-aware `@` chips & Undo, `/review` drawer, Plan Mode & Kanban, Quick Bar overlay, screenshot annotation suite with mosaic blur, Model Manager thinking depth, and command palette / themes). Replaced legacy stacked screenshots with 8 high-DPI feature screenshots and removed deprecated image assets.
+
 ## [0.4.7] - 2026-10-19
 
 ### Fixed
