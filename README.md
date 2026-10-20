@@ -21,98 +21,98 @@ PiDesk is a fast, lightweight **omp desktop** app that wraps the `omp` (oh-my-pi
 | ⚡ **Quick Bar** | Global hotkey overlay — ask the AI agent without leaving your workflow |
 | 🎨 **Customisable UI** | Themes, density, font size, accent colours — all adjustable at runtime |
 
-![Chat](screenshots/1.jpg)
-![Tools](screenshots/2.jpg)
-![Minimap](screenshots/3.jpg)
+![PiDesk Workspace Overview](screenshots/hero-workspace.png)
 
 ---
 
 ## Features
 
-### Chat & Sessions
+### 🖥️ Modern Multi-Panel Workspace
+PiDesk introduces a sleek, distraction-free IDE-like layout engineered specifically for AI-assisted coding:
+- **Left Activity Bar**: Single 44px entry strip for instant access to Files (`Ctrl+B` / `⌘B`), Plan (`Ctrl+J` / `⌘J`), Code Review, Overview, History (`Ctrl+H` / `⌘H`), and Models (`Ctrl+M` / `⌘M`).
+- **Interactive File Explorer**: Full directory tree with file watcher sync, syntax icons, and right-click "Reference File" integration.
+- **Dockable Right Panel**: Tabbed with live session `Overview` (Agent Hub, peer sessions, token minimap) and active `Plan`. Double-click border to reset width.
+- **Recent Projects**: Tab bar `+` menu tracks your 10 most recent repositories for instantaneous 1-click switching.
+- **Isolated Multi-Tab Sessions**: Each tab runs an isolated `omp --mode rpc` background process with full state and stream persistence.
 
-- **Per-tab session isolation** — each tab owns its own `omp --mode rpc` process
-- **Full session snapshots** — switch tabs freely; in-flight streams are preserved
-- `/new` command starts a fresh session (history kept on disk)
-- **Conversation history** (`Ctrl+H` / `⌘H` / `/history`) — browse, search, and resume past sessions in new tabs
-- **Model picker** — cycle or select directly from the status bar; supports 100+ models via OAuth login
-- **Thinking-level control** — cycle `off / minimal / low / medium / high / xhigh` per model
-- Streaming token display with tokens/sec sparkline and context-window gauge
+![PiDesk Workspace](screenshots/hero-workspace.png)
 
-### Model Management
+---
 
-PiDesk includes a visual **Model Manager** (`Ctrl+M` / `/models`) that unifies OAuth-authenticated providers with any custom model:
+### 💬 Context-Aware Chat & Precision Control
+Interact with the coding agent with unprecedented control and clarity:
+- **`@` File Mentions & Chips**: Type `@` anywhere in the composer to fuzzy-search project files and attach them as token-efficient reference chips.
+- **Non-Destructive Message Undo**: Made a typo or steered off course? Click **Undo** on any user bubble to rollback agent execution via native branch RPC and return your exact prompt to the composer for editing.
+- **Smart Tool Folding**: Long sequences of 3+ tool invocations automatically collapse into a tidy summary chip with duration and status counts.
+- **Branch From Here**: Fork any point in the conversation history from assistant replies into an independent session tab.
+- **Collapsible Reasoning**: Dedicated container for thinking process with live elapsed timer and token metrics.
+- **Visual Token Heatmap**: Minimap grid providing instant bird's-eye overview of 200+ conversation turns with click-to-scroll.
 
-- **OAuth login models** (Cursor, Anthropic, OpenAI Codex, GitHub Copilot) — authenticate once with `omp login <provider>`, then all available models appear in the picker automatically
-- **Custom models** — add any OpenAI-compatible, Anthropic, or Gemini endpoint: commercial APIs (DeepSeek, OpenRouter, SiliconFlow, Groq), self-hosted runtimes (Ollama, vLLM, LM Studio), or your own reverse proxy
-- **Dual editing** — structured visual form *or* raw YAML with syntax validation
-- **Auth modes**: `apiKey` (standard), `oauth` (reuse login credentials), `none` (keyless local endpoints)
+![Chat Context and Undo](screenshots/chat-context-undo.png)
 
-> **Tip**: Leave API Base URL blank for OAuth providers (e.g. Cursor) — PiDesk uses the correct official endpoint automatically.
+---
 
-### Plan Mode
+### 🔍 Interactive Code Review Drawer (`/review`)
+Review code modifications side-by-side with your agent without ever opening a separate Git GUI:
+- **Comprehensive Diff Target Selection**: Inspect uncommitted working directory changes, base branch comparisons (PR style), or specific commits.
+- **Split & Unified Views**: Toggle side-by-side split diff or unified view; click the header toggle to expand the drawer to full window width.
+- **Human-in-the-Loop Line Annotations**: Click `+` on any code line to attach inline comments, change requests, or review questions.
+- **Direct Agent Feedback**: Click "Send to Session" to compile all inline notes and diff context into a structured steering prompt for the agent.
 
-Activates a *draft-before-write* workflow entirely inside the chat window:
+![Code Review Drawer](screenshots/code-review.png)
 
-- First message is wrapped in an intent framing prompt; subsequent messages steer the plan
-- **Inline annotations** — click any paragraph to leave a comment before approving
-- **Approve** sends all annotations as a single feedback prompt and opens the task kanban
-- Kanban auto-populates from the agent's `todo_write` tool calls (running / done)
+---
 
-### Tool Cards
+### 📋 Plan Mode & Dynamic Kanban Board
+Enforce a disciplined *draft-before-write* workflow for complex tasks:
+- **Draft & Iterate**: First prompt is framed into a planning phase where the agent drafts architecture without touching files.
+- **Inline Paragraph Annotations**: Click on any paragraph of the agent's proposed plan to leave targeted feedback.
+- **Approval Transition**: Approving the plan submits all feedback and seamlessly kicks off execution.
+- **Real-Time Kanban Tracking**: Watch the agent automatically populate and advance tasks across Backlog, In Progress, and Done boards via `todo_write`.
 
-- Live streaming output for `eval` (JS/Python kernel) and `bash` tool calls
-- Syntax-highlighted code blocks (highlight.js, atom-one-dark) once a cell completes
-- **Scrubbable diff viewer** for `edit` calls with animated line reveal
-- Search preview, read summary, task board for the respective tools
-- Distinct icon + colour per tool type: read, search, edit, bash, eval, task, debug, ask
+![Plan Mode and Kanban](screenshots/plan-kanban.png)
 
-### Minimap
+---
 
-- Dense cell grid (one cell per message) — fits 200+ messages at a glance
-- **Token heatmap** — assistant cell brightness log-scaled by tokens used
-- Hover a cell → corresponding chat bubble highlights with an accent ring
-- Click a cell → chat scrolls smoothly to that message
-- Tooltip shows role, token count (in/out), tool name, duration, or message preview
+### ⚡ Spotlight Quick Bar & System Tray
+Ask questions and solve problems without disrupting your active workflow:
+- **Global Hotkey (`Ctrl+Shift+Space` / `⌘⇧Space`)**: Instant floating overlay with seamless backdrop blur.
+- **Sticky-Bottom Streaming**: AI responses stream in real-time with automatic bottom pinning (pauses smoothly if you scroll up).
+- **Screen Context Auto-Capture**: Toggle the camera button to send full-screen or cropped screenshots along with your question.
+- **Session Routing**: Press `Enter` to ask follow-up questions in the active session, or `Shift+Enter` to launch an isolated inquiry.
+- **Copy as Markdown**: Top-right copy action writes raw Markdown output directly to the clipboard.
 
-### Agent Hub *(right-rail ambient card)*
+![Quick Bar](screenshots/quick-bar.png)
 
-Three auto-switching display modes driven by live session state:
+---
 
-- **Compact** (default): heartbeat indicator, current phase label, running tools with elapsed timers, rolling trail of the last 8 completed actions, mini colour-coded tool-distribution bar
-- **Tree**: activates automatically when a `task` (subagent fan-out) tool starts — live worker nodes with status, token count, duration, task description, and expandable log stream per worker
-- **Summary**: shown on task completion with per-worker result rows and totals; auto-collapses back to Compact after 5 s
+### ✂️ Screen Capture & Privacy Annotation Suite
+Built-in high-DPI screenshot utility designed for sharing bug reports and visual prompts:
+- **Two-Stage Region Selection**: Press `Alt+S` (macOS `⌥S`) to freeze the display; drag to frame and adjust freely using 8-direction handles.
+- **Professional Annotation Suite**: Crisp swallowtail notched arrows, bounding rectangles, ellipses, freehand brush, and text labels.
+- **Mosaic Blur (Redaction)**: Locally pixel-average sensitive tokens, passwords, and private API keys before sending to AI.
+- **Multi-Channel Export**: Send directly to composer (`Enter`), copy to clipboard (`Ctrl+C`), or save to disk as PNG/JPEG (`Ctrl+S`).
 
-### Quick Bar & System Tray
+![Screenshot Annotation](screenshots/screenshot-annotation.png)
 
-- **Global hotkey** `Ctrl+Shift+Space` (Windows/Linux) or `⌘⇧Space` (macOS) — press again to hide
-- Spotlight-style floating input overlay; AI replies stream in-place without opening the main window
-- **Enter** — send to the active tab session (ask follow-up questions without reopening)
-- **Shift+Enter** — create a new tab session and send there
-- **Ctrl+Enter** / **⌘Enter** — show the full PiDesk window and hide the Quick Bar
-- **Esc** — hide the Quick Bar (aborts an in-progress turn while streaming)
-- System tray: single-click toggles Quick Bar; double-click opens the main window; right-click menu has **Show PiDesk**, **Quick Bar**, **Quit**
-- Closing the main window **hides** it (tray and Quick Bar keep working); exit fully via tray **Quit**
+---
 
-### Screenshot Capture & Annotation
+### 🧠 Model Manager & Dynamic Reasoning Effort
+Take full advantage of modern reasoning and frontier AI models:
+- **OAuth Providers**: Authenticate Cursor, Anthropic, OpenAI Codex, or GitHub Copilot with `omp login <provider>` — all available models sync automatically.
+- **Custom Endpoints**: Connect any OpenAI-compatible, Anthropic, or Gemini endpoint (DeepSeek, OpenRouter, SiliconFlow, Ollama, vLLM, LM Studio).
+- **Configurable Thinking Effort**: Customize multi-level reasoning depth per model (e.g. Claude 6-level thinking, DeepSeek dual-level, or OpenAI effort sequences) with live status bar cycling and instant hot-reload.
 
-- **Quick Trigger** — Global shortcut `Alt+S` (customizable in Tweaks), or click the screenshot action in the chat composer image menu or Quick Bar
-- **Two-stage Region Selection** — Drag to select a region, adjust freely with 8-direction resize handles or move the selection box, and annotate via a floating dark-mode glassmorphic toolbar
-- **Rich Annotation Suite**:
-  - **Rectangle & Circle/Ellipse** — Clean bounding boxes
-  - **Streamlined Arrow** — Professional swallowtail notched arrow with sharp pointers
-  - **Freehand Pen** — Smooth sketching and underlining
-  - **Mosaic Blur** — Local pixel-averaging to redact sensitive credentials, tokens, or personal information
-  - **Inline Text** — In-place multi-line typing with automatic font sizing and color sync
-  - **Color & Stroke Pickers** — 6 vibrant preset colors and 3 stroke widths
-  - **Undo / Redo** — Full history stack via `Ctrl+Z` / `Ctrl+Y` (`⌘Z` / `⌘⇧Z`)
-- **Multi-channel Export**:
-  - **Done** (`Enter` or ✔) — Synthesizes high-DPI annotated image directly into the active session composer
-  - **Copy to Clipboard** (`Ctrl+C` or 📋) — Writes image to system clipboard with a toast notification, keeping the overlay open for continuous workflow
-  - **Save to Disk** (`Ctrl+S` or 💾) — Prompts native cross-platform save dialog to export as PNG or JPEG
-  - **Cancel** (`Esc` or ✕) — Discards selection and returns
-- **Headless Quick Bar Screen Mode** — When auto-screenshot is enabled in Quick Bar, pressing Enter sends screen context directly in the background without opening the annotation overlay
+![Model Manager](screenshots/model-manager.png)
 
+---
+
+### 🎨 Command Palette & Modern Aesthetics
+- **Command Palette (`Ctrl+K` / `⌘K`)**: Fast fuzzy launcher across slash commands (`/`), saved sessions (`#`), project files (`@`), and shortcut cheatsheet (`?`).
+- **4 Curated Themes**: Dark modes (**Aurora**, **Phosphor**) and light modes (**Daylight**, and the modern cool-gray **Clarity**).
+- **High-Contrast Palette**: 8 meticulously chosen accent colors meeting WCAG AA contrast standards (>= 4.5:1).
+
+![Command Palette](screenshots/command-palette.png)
 
 ---
 
@@ -191,7 +191,7 @@ Dev mode auto-opens the WebView DevTools in debug builds.
 
 ## UI Customisation (Tweaks)
 
-Open the Tweaks panel (cog icon in the bottom-right status bar) to adjust:
+Open the Tweaks panel (gear icon at the bottom of the Activity Bar or `Ctrl+,` / `⌘,`) to adjust:
 
 | Setting | Options |
 |---------|---------|
