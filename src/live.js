@@ -2082,9 +2082,32 @@
       let name = "PiDesk";
       if (cwd) {
         const folder = window.SessionTitle?.folderName ? window.SessionTitle.folderName(cwd) : cwd;
-        name = folder || cwd;
+        const norm = p => (p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+        const targetNorm = norm(cwd);
+        const sameProjSessions = [...sessionRegistry.values()].filter(s => s.path && norm(s.path) === targetNorm);
+        const baseName = folder || cwd;
+        if (sameProjSessions.length === 0) {
+          name = baseName;
+        } else {
+          const usedNums = new Set();
+          const escBase = baseName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const re = new RegExp(`^${escBase}\\s*(?:\\((\\d+)\\))?$`, "i");
+          for (const s of sameProjSessions) {
+            const m = s.name ? s.name.match(re) : null;
+            if (m) {
+              usedNums.add(m[1] ? parseInt(m[1], 10) : 1);
+            }
+          }
+          if (!usedNums.has(1)) {
+            name = baseName;
+          } else {
+            let next = 2;
+            while (usedNums.has(next)) next++;
+            name = `${baseName} (${next})`;
+          }
+        }
         if (typeof window !== "undefined" && window.RecentProjects?.addRecentProject) {
-          window.RecentProjects.addRecentProject(cwd, name);
+          window.RecentProjects.addRecentProject(cwd, baseName);
         }
       } else {
         const noProjSessions = [...sessionRegistry.values()].filter(s => !s.path);

@@ -257,9 +257,20 @@ describe('SessionTitle.nextTitle', () => {
     assert.equal(next, 'omp-desktop: Renamed from slash command');
   });
 
-  it('returns null if formatted title equals existing name', () => {
-    const projectEntry = { name: 'omp-desktop', path: 'F:/Project/omp-desktop' };
-    assert.equal(SessionTitle.nextTitle(projectEntry, 'omp-desktop'), null);
+  it('generates folder-prefixed title for numbered initial project session', () => {
+    const numberedProject = { name: 'omp-desktop (2)', path: 'F:/Project/omp-desktop' };
+    const next = SessionTitle.nextTitle(numberedProject, 'Investigate memory issue');
+    assert.equal(next, 'omp-desktop: Investigate memory issue');
+  });
+
+  it('recognizes numbered project names as initial unstarted names in isInitialSessionName', () => {
+    assert.equal(SessionTitle.isInitialSessionName('omp-desktop', 'omp-desktop'), true);
+    assert.equal(SessionTitle.isInitialSessionName('omp-desktop (2)', 'omp-desktop'), true);
+    assert.equal(SessionTitle.isInitialSessionName('omp-desktop (10)', 'omp-desktop'), true);
+    assert.equal(SessionTitle.isInitialSessionName('PiDesk', ''), true);
+    assert.equal(SessionTitle.isInitialSessionName('PiDesk (3)', ''), true);
+    assert.equal(SessionTitle.isInitialSessionName('omp-desktop: some task', 'omp-desktop'), false);
+    assert.equal(SessionTitle.isInitialSessionName('other-project', 'omp-desktop'), false);
   });
 });
 

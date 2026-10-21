@@ -101,7 +101,11 @@
     const trimmed = name.trim();
     if (isDefaultSessionName(trimmed)) return true;
     const folderStr = folderName(folder);
-    if (folderStr && trimmed.toLowerCase() === folderStr.toLowerCase()) return true;
+    if (folderStr) {
+      if (trimmed.toLowerCase() === folderStr.toLowerCase()) return true;
+      const esc = folderStr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      if (new RegExp(`^${esc}\\s*\\(\\d+\\)$`, "i").test(trimmed)) return true;
+    }
     return false;
   }
 
