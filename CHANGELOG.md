@@ -8,10 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- **Multi-session tab support per project and duplicate tab-switch removal**:
+- **Open same project in multiple tabs & tab bar creation refinement**:
   - Removed project deduplication check when opening projects from the tab bar `+` dropdown menu ("Recent Projects"), allowing users to open multiple independent conversation tabs for the same workspace directory without auto-switching to an existing tab.
-  - Added automatic sequence numbering for initial project tabs (`<folder>`, `<folder> (2)`, `<folder> (3)`), preventing visual confusion before the first prompt while recycling unused indices when tabs are closed.
-  - Enhanced `SessionTitle.isInitialSessionName` to recognize numbered project initial titles so that upon sending the first prompt, the title formats seamlessly into `<folder>: <prompt>`.
+  - Added pure `nextInitialName` and `normalizePath` helpers in `src/app/session-title.js`, auto-numbering initial project tabs (`<folder>`, `<folder> (2)`, `<folder> (3)`) without bloating `src/live.js` while recycling freed indices upon closing tabs.
+  - Enhanced `SessionTitle.isInitialSessionName` and `nextTitle` to recognize numbered project initial titles and gracefully preserve sequence numbers if the first prompt equals the folder name.
+  - *Note on concurrent agents*: multiple active sessions sharing a project directory operate on the same filesystem; workspace-level features (such as Code Review and File Tree) reflect live state across all sessions in that directory.
 - **Session tab title truncation, native tooltips, and project-aware title formatting**:
   - Automatically format session tab titles upon starting a conversation: standalone sessions use the sanitized first prompt, while project-bound sessions use `<folderName>: <prompt>` format so multi-session project tabs are distinguishable.
   - Added pure `SessionTitle` module (`src/app/session-title.js`) that strips Plan mode framing (`INTENT_FRAMING`), removes Markdown header markers, normalizes newlines/whitespace, clamps character length safely across surrogate pairs (emojis/CJK), and provides unified `folderName` path parsing.

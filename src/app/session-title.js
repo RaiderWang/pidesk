@@ -93,6 +93,25 @@
   }
 
   /**
+   * Normalizes a filesystem path for comparisons:
+   * replaces backslashes with forward slashes, strips trailing slashes,
+   * and lowercases the string.
+   */
+  function normalizePath(path) {
+    if (!path || typeof path !== "string") return "";
+    return path.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  }
+
+  /**
+   * Builds the regex for matching an initial unstarted session name
+   * with an optional sequence number: e.g. /^omp-desktop(?:\s*\((\d+)\))?$/i
+   */
+  function initialNamePattern(baseName) {
+    const esc = (baseName || "").trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`^${esc}(?:\\s*\\((\\d+)\\))?$`, "i");
+  }
+
+  /**
    * Checks whether a session name is still in its initial / unstarted state
    * (e.g. "PiDesk", "PiDesk (2)", or matches the bare folder name before conversation starts).
    */
@@ -102,11 +121,31 @@
     if (isDefaultSessionName(trimmed)) return true;
     const folderStr = folderName(folder);
     if (folderStr) {
-      if (trimmed.toLowerCase() === folderStr.toLowerCase()) return true;
-      const esc = folderStr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      if (new RegExp(`^${esc}\\s*\\(\\d+\\)$`, "i").test(trimmed)) return true;
+      return initialNamePattern(folderStr).test(trimmed);
     }
     return false;
+  }
+
+  /**
+   * Calculates the next initial tab name for a given baseName (e.g. folder name or "PiDesk"),
+   * allocating the lowest unused sequence number (1 -> baseName, 2+ -> `${baseName} (${next})`).
+   */
+  function nextInitialName(baseName, existingNames = []) {
+    if (!baseName || typeof baseName !== "string") return "PiDesk";
+    const cleanBase = baseName.trim();
+    const pattern = initialNamePattern(cleanBase);
+    const usedNums = new Set();
+    for (const name of existingNames) {
+      if (!name || typeof name !== "string") continue;
+      const m = name.trim().match(pattern);
+      if (m) {
+        usedNums.add(m[1] ? parseInt(m[1], 10) : 1);
+      }
+    }
+    if (!usedNums.has(1)) return cleanBase;
+    let next = 2;
+    while (usedNums.has(next)) next++;
+    return `${cleanBase} (${next})`;
   }
 
   /**
@@ -140,6 +179,7 @@
    * - Strips file mentions and sanitizes text; returns null if cleaned text is empty.
    * - Formats with folder prefix when applicable.
    * - Returns null if the formatted title equals entry.name.
+   * - Returns null if formatted title doesn't add prompt info beyond the folder name.
    * - Returns the formatted title string otherwise.
    */
   function nextTitle(entry, raw, options = {}) {
@@ -161,6 +201,9 @@
 
     const formatted = formatSessionTitle(cleaned, folder, { fallback: entry.name });
     if (!formatted || formatted === entry.name) return null;
+    if (!force && folder && formatted.toLowerCase() === folder.toLowerCase()) {
+      return null;
+    }
     return formatted;
   }
 
@@ -170,6 +213,9 @@
     resolveFolderTitle,
     isDefaultSessionName,
     isInitialSessionName,
+    initialNamePattern,
+    nextInitialName,
+    normalizePath,
     formatSessionTitle,
     nextTitle,
   };

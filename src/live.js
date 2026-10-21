@@ -1529,7 +1529,7 @@
     }
     if (rpcState.sessionFile && activeSessionId && sessionRegistry.has(activeSessionId)) {
       const entry = sessionRegistry.get(activeSessionId);
-      const normFile = p => (p || "").replace(/\\/g, "/").toLowerCase();
+      const normFile = window.SessionTitle?.normalizePath || (p => (p || "").replace(/\\/g, "/").toLowerCase());
       if (!entry.sessionFile) {
         sessionRegistry.set(activeSessionId, { ...entry, sessionFile: rpcState.sessionFile });
       } else if (normFile(entry.sessionFile) !== normFile(rpcState.sessionFile)) {
@@ -2080,53 +2080,24 @@
     async openSession(cwd) {
       const id   = _genSessionId();
       let name = "PiDesk";
+      const norm = window.SessionTitle?.normalizePath || (p => (p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase());
+
       if (cwd) {
         const folder = window.SessionTitle?.folderName ? window.SessionTitle.folderName(cwd) : cwd;
-        const norm = p => (p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
-        const targetNorm = norm(cwd);
-        const sameProjSessions = [...sessionRegistry.values()].filter(s => s.path && norm(s.path) === targetNorm);
         const baseName = folder || cwd;
-        if (sameProjSessions.length === 0) {
-          name = baseName;
-        } else {
-          const usedNums = new Set();
-          const escBase = baseName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-          const re = new RegExp(`^${escBase}\\s*(?:\\((\\d+)\\))?$`, "i");
-          for (const s of sameProjSessions) {
-            const m = s.name ? s.name.match(re) : null;
-            if (m) {
-              usedNums.add(m[1] ? parseInt(m[1], 10) : 1);
-            }
-          }
-          if (!usedNums.has(1)) {
-            name = baseName;
-          } else {
-            let next = 2;
-            while (usedNums.has(next)) next++;
-            name = `${baseName} (${next})`;
-          }
-        }
+        const targetNorm = norm(cwd);
+        const existingNames = [...sessionRegistry.values()]
+          .filter(s => s.path && norm(s.path) === targetNorm)
+          .map(s => s.name);
+        name = window.SessionTitle?.nextInitialName ? window.SessionTitle.nextInitialName(baseName, existingNames) : baseName;
         if (typeof window !== "undefined" && window.RecentProjects?.addRecentProject) {
           window.RecentProjects.addRecentProject(cwd, baseName);
         }
       } else {
-        const noProjSessions = [...sessionRegistry.values()].filter(s => !s.path);
-        const usedNums = new Set();
-        for (const s of noProjSessions) {
-          if (s.name === "PiDesk") {
-            usedNums.add(1);
-          } else {
-            const m = s.name.match(/^PiDesk\s*\((\d+)\)$/);
-            if (m) usedNums.add(parseInt(m[1], 10));
-          }
-        }
-        if (!usedNums.has(1)) {
-          name = "PiDesk";
-        } else {
-          let next = 2;
-          while (usedNums.has(next)) next++;
-          name = `PiDesk (${next})`;
-        }
+        const existingNames = [...sessionRegistry.values()]
+          .filter(s => !s.path)
+          .map(s => s.name);
+        name = window.SessionTitle?.nextInitialName ? window.SessionTitle.nextInitialName("PiDesk", existingNames) : "PiDesk";
       }
       const color = cwd ? "var(--lilac)" : "var(--accent)";
       // Register in tab list before starting omp so the tab shows immediately
@@ -2340,7 +2311,7 @@
     async resumeSession(session) {
       if (!session || !session.path) return null;
 
-      const norm = p => (p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+      const norm = window.SessionTitle?.normalizePath || (p => (p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase());
       const targetPathNorm = norm(session.path);
       const targetId = session.id ? String(session.id).trim() : null;
 

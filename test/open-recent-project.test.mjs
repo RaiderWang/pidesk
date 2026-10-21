@@ -6,7 +6,7 @@
  * Run: node --test test/open-recent-project.test.mjs
  */
 
-import { describe, it } from 'node:test';
+import { describe, it, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -89,5 +89,12 @@ describe('live.js — openSession multiple tabs for the same project', () => {
 
     bridge.closeSession(idA);
     bridge.closeSession(idB);
+  });
+
+  after(() => {
+    const sessions = bridge.getSessions();
+    for (const s of sessions) {
+      bridge.closeSession(s.id);
+    }
   });
 });
