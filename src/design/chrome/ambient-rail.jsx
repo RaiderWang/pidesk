@@ -88,8 +88,8 @@ function PeerSession({ peer, onFocus, onClear }) {
       <div className="peer-head">
         <span className={`dot ${peer.isStreaming ? "live" : ""}`}
           style={{ background: "var(--cyan)", boxShadow: peer.isStreaming ? undefined : "none" }} />
-        <span style={{ color: "var(--cyan)", fontWeight: 500 }}>{peer.project}</span>
-        <span className="mono" style={{ marginLeft: "auto", color: "var(--fg-4)" }}>{peer.tps} t/s</span>
+        <span style={{ color: "var(--cyan)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }} title={peer.project}>{peer.project}</span>
+        <span className="mono" style={{ marginLeft: 8, color: "var(--fg-4)", flexShrink: 0 }}>{peer.tps} t/s</span>
       </div>
       <div className="peer-title selectable">{peer.title}</div>
       <div className="peer-row">

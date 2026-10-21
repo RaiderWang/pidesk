@@ -82,6 +82,8 @@ loadScript('app/file-index.js');
 loadScript('app/plan-stats.js');
 loadScript('app/dock-layout.js');
 loadScript('app/dock-state.js');
+loadScript('app/undo-message.js');
+loadScript('app/session-title.js');
 loadScript('app/updater.js');
 loadScript('app/appearance.js');
 
@@ -138,6 +140,10 @@ export const DockState = globalThis.DockState;
 
 // app/updater.js namespace object (window.Updater)
 export const Updater = globalThis.Updater;
+
+// app/undo-message.js, session-title.js exports
+export const UndoMessage = globalThis.UndoMessage;
+export const SessionTitle = globalThis.SessionTitle;
 
 // app/appearance.js exports
 export const {

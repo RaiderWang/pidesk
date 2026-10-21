@@ -68,15 +68,19 @@ function TabBar({ projects, activeId, onSelect, onClose, peer, onNew, onNewProje
         const active = p.id === activeId;
         const hasPath = Boolean(p.path && p.path.trim());
         const tabIcon = hasPath ? "folder" : "agent";
+        const tabTooltip = hasPath ? `${p.name}\n${p.path}` : p.name;
         return (
           <div key={p.id}
             className={`tab ${active ? "active" : ""}`}
+            title={tabTooltip}
             onClick={() => onSelect(p.id)}>
             <span className="tab-bar-mark" style={{ background: active ? p.color : "transparent" }} />
-            <Icon name={tabIcon} size={11} color={active ? p.color : "var(--fg-4)"} />
+            <span style={{ display: "inline-flex", flexShrink: 0 }}>
+              <Icon name={tabIcon} size={11} color={active ? p.color : "var(--fg-4)"} />
+            </span>
             <span className="tab-name">{p.name}</span>
             {p.id === peer?.projectId && (
-              <span className="chip accent" style={{ padding: "1px 6px" }}>split</span>
+              <span className="chip accent" style={{ padding: "1px 6px", flexShrink: 0 }}>split</span>
             )}
             <button className="tab-close" onClick={e => { e.stopPropagation(); onClose?.(p.id); }}><Icon name="close" size={9} /></button>
           </div>

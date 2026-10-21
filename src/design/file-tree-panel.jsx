@@ -668,7 +668,9 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge, width, onWidthC
     return () => window.removeEventListener("keydown", handleModalKeyDown);
   }, [deleteTarget, handleDeleteExecute]);
 
-  const displayName = projectName || (rootPath ? rootPath.replace(/\\/g, "/").split("/").pop() : "Files");
+  const displayName = (typeof window !== "undefined" && window.SessionTitle?.resolveFolderTitle)
+    ? window.SessionTitle.resolveFolderTitle(rootPath, projectName)
+    : (projectName || "Files");
 
   const [isDragging, setIsDragging] = React.useState(false);
 

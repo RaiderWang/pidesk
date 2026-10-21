@@ -90,6 +90,10 @@
   let activityLog     = [];           // [{ts, toolName}], pruned to 60s
   let _compactBackfillId = null; // compact msg id awaiting tokensAfter back-fill
   let _msgSeq = 0;  // monotonic counter — stable React keys for message bubbles
+  let _sessionSeq = 0; // monotonic counter — guarantees unique session IDs across rapid opens
+  function _genSessionId() {
+    return `session-${Date.now()}-${++_sessionSeq}`;
+  }
   let _sessionFresh = false; // true after _resetSessionVars (new/restarted session, no snapshot)
 
   // ── User preference persistence ──────────────────────────────────────────
@@ -995,6 +999,12 @@
       return;
     }
 
+    if (type === "session_info_update") {
+      const title = ev.title;
+      if (title) _setTabTitle(title, ev.sessionId);
+      return;
+    }
+
     if (type === "thinking_level_changed") {
       let newLevel = ev.thinkingLevel ?? "off";
       if (Array.isArray(state.availableThinkingLevels) && state.availableThinkingLevels.length > 0) {
@@ -1068,6 +1078,7 @@
           } else if (images.length > 0 && (!last.images || last.images.length === 0)) {
             last.images = images;
           }
+          if (text) _updateTabTitleIfDefault(text);
           notify();
         }
       } else if (role === "assistant") {
@@ -1427,6 +1438,48 @@
     }
   }
 
+  function _resolveSessionId(targetId) {
+    if (!targetId) return activeSessionId;
+    if (sessionRegistry.has(targetId)) return targetId;
+    for (const [id, entry] of sessionRegistry.entries()) {
+      if (entry.savedSessionId && entry.savedSessionId === targetId) return id;
+    }
+    return activeSessionId;
+  }
+
+  function _updateTabTitleIfDefault(text) {
+    if (!text || !activeSessionId || !sessionRegistry.has(activeSessionId)) return;
+    const entry = sessionRegistry.get(activeSessionId);
+    const formatted = window.SessionTitle?.nextTitle
+      ? window.SessionTitle.nextTitle(entry, text, { force: false })
+      : null;
+    if (formatted) {
+      sessionRegistry.set(activeSessionId, { ...entry, name: formatted, titleLocked: true, userTitled: true });
+      notify();
+    }
+  }
+
+  function _setTabTitle(rawTitle, targetSessionId = null) {
+    const sid = _resolveSessionId(targetSessionId);
+    if (!rawTitle || !sid || !sessionRegistry.has(sid)) return;
+    const entry = sessionRegistry.get(sid);
+    const formatted = window.SessionTitle?.nextTitle
+      ? window.SessionTitle.nextTitle(entry, rawTitle, { force: true })
+      : rawTitle;
+    if (formatted && formatted !== entry.name) {
+      sessionRegistry.set(sid, {
+        ...entry,
+        name: formatted,
+        // Never backfill savedSessionId here: when targetSessionId matches nothing we
+        // fall back to the active tab, and binding an unrelated omp id to it would
+        // corrupt resume de-dup / fork. _applyRpcState owns savedSessionId.
+        titleLocked: true,
+        userTitled: true,
+      });
+      if (sid === activeSessionId) notify();
+    }
+  }
+
   function _applyRpcState(rpcState) {
     if (!rpcState) return;
     state.rpcState      = rpcState;
@@ -1471,9 +1524,8 @@
     // Only update the tab name if omp provides an explicit human-readable
     // sessionName. The sessionFile is a timestamp ID — leave the folder-based
     // name set at tab-open time intact when sessionName is absent.
-    if (rpcState.sessionName && activeSessionId && sessionRegistry.has(activeSessionId)) {
-      const entry = sessionRegistry.get(activeSessionId);
-      sessionRegistry.set(activeSessionId, { ...entry, name: rpcState.sessionName });
+    if (rpcState.sessionName) {
+      _setTabTitle(rpcState.sessionName);
     }
     if (rpcState.sessionFile && activeSessionId && sessionRegistry.has(activeSessionId)) {
       const entry = sessionRegistry.get(activeSessionId);
@@ -1716,6 +1768,7 @@
     send(text, images) {
       const userMsg = { kind: "user", time: timeNow(), text, images: images ?? [] };
       state.messages = [...state.messages, userMsg];
+      if (text) _updateTabTitleIfDefault(text);
       notify();
       _send({ type: "prompt", message: text, images: images ?? [] });
     },
@@ -1861,7 +1914,7 @@
           untilEntryId,
         });
 
-        const id = `session-${Date.now()}`;
+        const id = _genSessionId();
         const baseName = activeEntry?.name ?? "session";
         const label = `${baseName} (fork)`;
         sessionRegistry.set(id, {
@@ -2025,25 +2078,31 @@
 
     /** Open a new tab for the given project folder (or standalone if null/empty). Returns the new session id. */
     async openSession(cwd) {
-      const id   = `session-${Date.now()}`;
+      const id   = _genSessionId();
       let name = "PiDesk";
       if (cwd) {
-        name = cwd.replace(/\\/g, "/").split("/").pop() || cwd;
+        const folder = window.SessionTitle?.folderName ? window.SessionTitle.folderName(cwd) : cwd;
+        name = folder || cwd;
         if (typeof window !== "undefined" && window.RecentProjects?.addRecentProject) {
           window.RecentProjects.addRecentProject(cwd, name);
         }
       } else {
         const noProjSessions = [...sessionRegistry.values()].filter(s => !s.path);
-        if (noProjSessions.length > 0) {
-          // Parse existing names to find the highest number — avoids
-          // collisions after closing earlier tabs (e.g. close PiDesk,
-          // PiDesk(2) remains, next should be PiDesk(3) not PiDesk(2)).
-          let maxNum = 1; // bare "PiDesk" counts as 1
-          for (const s of noProjSessions) {
+        const usedNums = new Set();
+        for (const s of noProjSessions) {
+          if (s.name === "PiDesk") {
+            usedNums.add(1);
+          } else {
             const m = s.name.match(/^PiDesk\s*\((\d+)\)$/);
-            if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
+            if (m) usedNums.add(parseInt(m[1], 10));
           }
-          name = `PiDesk (${maxNum + 1})`;
+        }
+        if (!usedNums.has(1)) {
+          name = "PiDesk";
+        } else {
+          let next = 2;
+          while (usedNums.has(next)) next++;
+          name = `PiDesk (${next})`;
         }
       }
       const color = cwd ? "var(--lilac)" : "var(--accent)";
@@ -2293,7 +2352,7 @@
         }
       }
 
-      const id = `session-${Date.now()}`;
+      const id = _genSessionId();
       // "No project" sessions were recorded with the exe directory (e.g.
       // target/debug) as their cwd. Treat them as standalone again: empty
       // path → no project tab/file tree, and let the backend pin the child
@@ -2303,7 +2362,12 @@
         session.is_standalone === true ||
         (window.RecentProjects?.isStandalonePath?.(savedCwd) ?? !savedCwd);
       const cwd = standalone ? "" : savedCwd;
-      const name = session.title || (cwd ? cwd.replace(/\\/g, "/").split("/").pop() || cwd : "resumed");
+      const folderName = window.SessionTitle?.folderName ? window.SessionTitle.folderName(cwd) : "";
+      const rawTitle = session.title || folderName || "resumed";
+      const name = window.SessionTitle?.formatSessionTitle
+        ? window.SessionTitle.formatSessionTitle(rawTitle, folderName, { fallback: "resumed" })
+        : rawTitle;
+      const isCustom = Boolean(session.title && !window.SessionTitle?.isDefaultSessionName?.(session.title));
       sessionRegistry.set(id, {
         id,
         name,
@@ -2312,6 +2376,8 @@
         branch: null,
         sessionPath: session.path,
         savedSessionId: targetId,
+        titleLocked: isCustom,
+        userTitled: isCustom,
       });
       if (window.__TAURI__) {
         try {

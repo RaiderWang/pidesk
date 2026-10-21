@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Session tab title truncation, native tooltips, and project-aware title formatting**:
+  - Automatically format session tab titles upon starting a conversation: standalone sessions use the sanitized first prompt, while project-bound sessions use `<folderName>: <prompt>` format so multi-session project tabs are distinguishable.
+  - Added pure `SessionTitle` module (`src/app/session-title.js`) that strips Plan mode framing (`INTENT_FRAMING`), removes Markdown header markers, normalizes newlines/whitespace, clamps character length safely across surrogate pairs (emojis/CJK), and provides unified `folderName` path parsing.
+  - Implemented elastic tab layout in CSS (`flex: 0 1 auto; min-width: 100px; max-width: 200px;`) with single-line ellipsis (`text-overflow: ellipsis`), allowing short titles to fit naturally without forcing 200px width while keeping `.tabs` `overflow: visible` to prevent clipping the `+` dropdown menu.
+  - Added native `title` tooltips to tabs and window chrome, showing full conversation titles and directory paths on hover.
+  - Hardened title formatting and event dispatch: factored out `SessionTitle.nextTitle` pure logic, ignored slash commands (`/plan`, `/compact`, `/review`) and file-only mentions so they never lock titles prematurely, verified and matched `session_info_update` by `savedSessionId` from omp RPC, and guarded established titles (`titleLocked: true`) against subsequent prompt overwrites.
+  - Improved standalone tab numbering to recycle unassigned `PiDesk` slots when existing tabs are custom-titled.
+  - Updated File Tree panel header (`displayName`) via `SessionTitle.resolveFolderTitle` to prioritize folder name over generic project labels (standalone sessions display `workspace`).
+  - Cleaned up duplicate `.tabs-right` CSS rules, consolidating `flex-shrink: 0` into the main rule.
+
 ### Documentation
 
 - **Redesigned README showcase and screenshot assets**: overhaul feature matrix in `README.md` and `README.zh-CN.md` with an 8-pillar visual architecture (Activity Bar workspace, context-aware `@` chips & Undo, `/review` drawer, Plan Mode & Kanban, Quick Bar overlay, screenshot annotation suite with mosaic blur, Model Manager thinking depth, and command palette / themes). Replaced legacy stacked screenshots with 8 high-DPI feature screenshots and removed deprecated image assets.

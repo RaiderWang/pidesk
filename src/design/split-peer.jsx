@@ -23,7 +23,7 @@ function SplitPeer({ peer, onFocus, onClear }) {
       <div className="split-head">
         <span className={`dot ${peer.isStreaming ? "live" : ""}`}
           style={{ background: "var(--cyan)", boxShadow: peer.isStreaming ? undefined : "none" }} />
-        <span className="mono" style={{ color: "var(--cyan)" }}>{peer.project}</span>
+        <span className="mono split-peer-label" style={{ color: "var(--cyan)" }} title={peer.project}>{peer.project}</span>
         <span style={{ color: "var(--fg-3)", overflow: "hidden", textOverflow: "ellipsis",
                        whiteSpace: "nowrap", flex: 1 }}>· {peer.title}</span>
         {onFocus && (
