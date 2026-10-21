@@ -178,4 +178,89 @@ describe('SessionTitle.formatSessionTitle', () => {
   });
 });
 
+describe('SessionTitle.cleanSessionTitle — file mentions', () => {
+  it('strips leading @file mention tokens', () => {
+    assert.equal(SessionTitle.cleanSessionTitle('@src/live.js Fix memory leak'), 'Fix memory leak');
+    assert.equal(SessionTitle.cleanSessionTitle('@"path with spaces/file.js" Refactor UI'), 'Refactor UI');
+    assert.equal(SessionTitle.cleanSessionTitle("@'single/quoted.js' Add unit tests"), 'Add unit tests');
+  });
+
+  it('returns empty string when prompt contains only file mentions', () => {
+    assert.equal(SessionTitle.cleanSessionTitle('@src/live.js'), '');
+    assert.equal(SessionTitle.cleanSessionTitle('@src/live.js @"docs/spec.md"'), '');
+  });
+
+  it('preserves email addresses', () => {
+    assert.equal(SessionTitle.cleanSessionTitle('Contact support@example.com for help'), 'Contact support@example.com for help');
+  });
+});
+
+describe('SessionTitle.resolveFolderTitle', () => {
+  it('prioritizes folder name for project paths', () => {
+    assert.equal(SessionTitle.resolveFolderTitle('/home/user/my-app', 'PiDesk'), 'my-app');
+    assert.equal(SessionTitle.resolveFolderTitle('C:\\Projects\\billing-api\\', 'PiDesk'), 'billing-api');
+  });
+
+  it('resolves standalone workspace path to workspace', () => {
+    assert.equal(SessionTitle.resolveFolderTitle('C:/Users/user/AppData/Local/com.raiderwang.pidesk/workspace', 'PiDesk'), 'workspace');
+  });
+
+  it('falls back to projectName when rootPath is empty or null', () => {
+    assert.equal(SessionTitle.resolveFolderTitle('', 'PiDesk'), 'PiDesk');
+    assert.equal(SessionTitle.resolveFolderTitle(null, 'Custom Name'), 'Custom Name');
+    assert.equal(SessionTitle.resolveFolderTitle(undefined, ''), 'Files');
+    assert.equal(SessionTitle.resolveFolderTitle(null, null), 'Files');
+  });
+});
+
+describe('SessionTitle.nextTitle', () => {
+  const initialStandalone = { name: 'PiDesk', path: '' };
+  const initialProject = { name: 'omp-desktop', path: 'F:/Project/omp-desktop' };
+
+  it('generates prompt title for initial standalone session', () => {
+    const next = SessionTitle.nextTitle(initialStandalone, 'Write a quick python script');
+    assert.equal(next, 'Write a quick python script');
+  });
+
+  it('generates folder-prefixed title for initial project session', () => {
+    const next = SessionTitle.nextTitle(initialProject, 'Refactor session tab titles');
+    assert.equal(next, 'omp-desktop: Refactor session tab titles');
+  });
+
+  it('skips slash commands (/plan, /compact, /review)', () => {
+    assert.equal(SessionTitle.nextTitle(initialStandalone, '/plan design compiler'), null);
+    assert.equal(SessionTitle.nextTitle(initialProject, '/compact'), null);
+    assert.equal(SessionTitle.nextTitle(initialProject, '/review check changes'), null);
+  });
+
+  it('skips prompts consisting only of @file mentions', () => {
+    assert.equal(SessionTitle.nextTitle(initialStandalone, '@src/live.js'), null);
+    assert.equal(SessionTitle.nextTitle(initialProject, '@"docs/spec.md" @src/app.js'), null);
+  });
+
+  it('strips @file mentions when prompt includes text', () => {
+    const next = SessionTitle.nextTitle(initialProject, '@src/live.js Fix memory leak in listeners');
+    assert.equal(next, 'omp-desktop: Fix memory leak in listeners');
+  });
+
+  it('rejects update when titleLocked or userTitled is true (unless force: true)', () => {
+    const lockedEntry = { name: 'omp-desktop: Existing task', path: 'F:/Project/omp-desktop', titleLocked: true };
+    assert.equal(SessionTitle.nextTitle(lockedEntry, 'Another follow up question'), null);
+
+    const legacyLockedEntry = { name: 'Existing task', path: '', userTitled: true };
+    assert.equal(SessionTitle.nextTitle(legacyLockedEntry, 'Another follow up question'), null);
+  });
+
+  it('allows overwrite when force: true (e.g. omp session_info_update)', () => {
+    const lockedEntry = { name: 'omp-desktop: Existing task', path: 'F:/Project/omp-desktop', titleLocked: true };
+    const next = SessionTitle.nextTitle(lockedEntry, 'Renamed from slash command', { force: true });
+    assert.equal(next, 'omp-desktop: Renamed from slash command');
+  });
+
+  it('returns null if formatted title equals existing name', () => {
+    const projectEntry = { name: 'omp-desktop', path: 'F:/Project/omp-desktop' };
+    assert.equal(SessionTitle.nextTitle(projectEntry, 'omp-desktop'), null);
+  });
+});
+
 

@@ -41,16 +41,19 @@
       } catch (_) {}
     }
 
-    // 2. Remove Markdown heading prefixes
+    // 2. Strip @file references (e.g. @"file.txt", @src/live.js)
+    text = text.replace(/(?:^|\s)@(?:"[^"]+"|'[^']+'|[^\s@]+)/g, " ");
+
+    // 3. Remove Markdown heading prefixes
     text = text.replace(/^\s*#{1,6}\s+/, "");
 
-    // 3. Replace newlines, tabs, and carriage returns with spaces
+    // 4. Replace newlines, tabs, and carriage returns with spaces
     text = text.replace(/[\r\n\t]+/g, " ");
 
-    // 4. Collapse consecutive whitespace and trim
+    // 5. Collapse consecutive whitespace and trim
     text = text.replace(/\s{2,}/g, " ").trim();
 
-    // 5. Clamps maximum length (surrogate-pair safe)
+    // 6. Clamps maximum length (surrogate-pair safe)
     const chars = Array.from(text);
     if (chars.length > maxLen) {
       text = chars.slice(0, maxLen).join("").trim();
@@ -67,6 +70,15 @@
   function folderName(path) {
     if (!path || typeof path !== "string") return "";
     return path.replace(/\\/g, "/").split("/").filter(Boolean).pop() || "";
+  }
+
+  /**
+   * Resolves a folder title for file tree / drawer headers, prioritizing
+   * folder name over generic project names or "Files".
+   */
+  function resolveFolderTitle(rootPath, fallbackProjectName = "Files") {
+    const folder = folderName(rootPath);
+    return folder || fallbackProjectName || "Files";
   }
 
   const DEFAULT_NAME_RE = /^(PiDesk(\s*\(\d+\))?|resumed)$/i;
@@ -107,11 +119,54 @@
       if (!cleaned) return folderStr;
       const prefixPattern = new RegExp(`^${folderStr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*:\\s*`, "i");
       const bareTitle = cleaned.replace(prefixPattern, "");
+      if (!bareTitle || bareTitle.toLowerCase() === folderStr.toLowerCase()) return folderStr;
       return `${folderStr}: ${bareTitle}`;
     }
 
     return cleaned || (options.fallback ?? "");
   }
 
-  return { cleanSessionTitle, folderName, isDefaultSessionName, isInitialSessionName, formatSessionTitle };
+  /**
+   * Computes the next session title given the current session entry and raw title/prompt:
+   * - Skips if entry is missing or raw text is blank.
+   * - When !options.force:
+   *     - Returns null if the title is already locked (entry.titleLocked || entry.userTitled).
+   *     - Returns null if raw starts with "/" (slash commands like /plan, /compact, /review).
+   *     - Returns null if the entry name is not in initial state (isInitialSessionName).
+   * - Strips file mentions and sanitizes text; returns null if cleaned text is empty.
+   * - Formats with folder prefix when applicable.
+   * - Returns null if the formatted title equals entry.name.
+   * - Returns the formatted title string otherwise.
+   */
+  function nextTitle(entry, raw, options = {}) {
+    if (!entry || typeof raw !== "string" || !raw.trim()) return null;
+    const force = Boolean(options.force);
+    const isLocked = Boolean(entry.titleLocked || entry.userTitled);
+
+    if (!force) {
+      if (isLocked) return null;
+      const trimmed = raw.trim();
+      if (trimmed.startsWith("/")) return null;
+      const folder = folderName(entry.path);
+      if (!isInitialSessionName(entry.name, folder)) return null;
+    }
+
+    const folder = folderName(entry.path);
+    const cleaned = cleanSessionTitle(raw, "", options);
+    if (!cleaned) return null;
+
+    const formatted = formatSessionTitle(cleaned, folder, { fallback: entry.name });
+    if (!formatted || formatted === entry.name) return null;
+    return formatted;
+  }
+
+  return {
+    cleanSessionTitle,
+    folderName,
+    resolveFolderTitle,
+    isDefaultSessionName,
+    isInitialSessionName,
+    formatSessionTitle,
+    nextTitle,
+  };
 });

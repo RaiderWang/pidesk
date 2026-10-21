@@ -90,6 +90,10 @@
   let activityLog     = [];           // [{ts, toolName}], pruned to 60s
   let _compactBackfillId = null; // compact msg id awaiting tokensAfter back-fill
   let _msgSeq = 0;  // monotonic counter — stable React keys for message bubbles
+  let _sessionSeq = 0; // monotonic counter — guarantees unique session IDs across rapid opens
+  function _genSessionId() {
+    return `session-${Date.now()}-${++_sessionSeq}`;
+  }
   let _sessionFresh = false; // true after _resetSessionVars (new/restarted session, no snapshot)
 
   // ── User preference persistence ──────────────────────────────────────────
@@ -1434,45 +1438,44 @@
     }
   }
 
-  function _formatTitle(raw, folderName = "", fallback = "") {
-    return (typeof window !== "undefined" && window.SessionTitle?.formatSessionTitle)
-      ? window.SessionTitle.formatSessionTitle(raw, folderName, { fallback })
-      : (folderName ? `${folderName}: ${raw}` : raw || fallback);
+  function _resolveSessionId(targetId) {
+    if (!targetId) return activeSessionId;
+    if (sessionRegistry.has(targetId)) return targetId;
+    for (const [id, entry] of sessionRegistry.entries()) {
+      if (entry.savedSessionId && entry.savedSessionId === targetId) return id;
+    }
+    return activeSessionId;
   }
 
-  function _updateTabTitleIfDefault(text, targetSessionId = activeSessionId) {
-    const sid = (targetSessionId && sessionRegistry.has(targetSessionId)) ? targetSessionId : activeSessionId;
-    if (!text || !sid || !sessionRegistry.has(sid)) return;
-    const entry = sessionRegistry.get(sid);
-    if (entry.userTitled) return;
-    const folderName = (typeof window !== "undefined" && window.SessionTitle?.folderName)
-      ? window.SessionTitle.folderName(entry.path)
-      : (entry.path ? entry.path.replace(/\\/g, "/").split("/").filter(Boolean).pop() || "" : "");
-
-    // Check if the tab title is still in initial state (default name for standalone, or bare folderName for project)
-    const isInitial = (typeof window !== "undefined" && window.SessionTitle?.isInitialSessionName)
-      ? window.SessionTitle.isInitialSessionName(entry.name, folderName)
-      : false;
-
-    if (isInitial) {
-      const formatted = _formatTitle(text, folderName, entry.name);
-      if (formatted && formatted !== entry.name) {
-        sessionRegistry.set(sid, { ...entry, name: formatted, userTitled: true });
-        if (sid === activeSessionId) notify();
-      }
+  function _updateTabTitleIfDefault(text) {
+    if (!text || !activeSessionId || !sessionRegistry.has(activeSessionId)) return;
+    const entry = sessionRegistry.get(activeSessionId);
+    const formatted = window.SessionTitle?.nextTitle
+      ? window.SessionTitle.nextTitle(entry, text, { force: false })
+      : null;
+    if (formatted) {
+      sessionRegistry.set(activeSessionId, { ...entry, name: formatted, titleLocked: true, userTitled: true });
+      notify();
     }
   }
 
-  function _setTabTitle(rawTitle, targetSessionId = activeSessionId) {
-    const sid = (targetSessionId && sessionRegistry.has(targetSessionId)) ? targetSessionId : activeSessionId;
+  function _setTabTitle(rawTitle, targetSessionId = null) {
+    const sid = _resolveSessionId(targetSessionId);
     if (!rawTitle || !sid || !sessionRegistry.has(sid)) return;
     const entry = sessionRegistry.get(sid);
-    const folderName = (typeof window !== "undefined" && window.SessionTitle?.folderName)
-      ? window.SessionTitle.folderName(entry.path)
-      : (entry.path ? entry.path.replace(/\\/g, "/").split("/").filter(Boolean).pop() || "" : "");
-    const formatted = _formatTitle(rawTitle, folderName, entry.name);
+    const formatted = window.SessionTitle?.nextTitle
+      ? window.SessionTitle.nextTitle(entry, rawTitle, { force: true })
+      : rawTitle;
     if (formatted && formatted !== entry.name) {
-      sessionRegistry.set(sid, { ...entry, name: formatted, userTitled: true });
+      sessionRegistry.set(sid, {
+        ...entry,
+        name: formatted,
+        // Never backfill savedSessionId here: when targetSessionId matches nothing we
+        // fall back to the active tab, and binding an unrelated omp id to it would
+        // corrupt resume de-dup / fork. _applyRpcState owns savedSessionId.
+        titleLocked: true,
+        userTitled: true,
+      });
       if (sid === activeSessionId) notify();
     }
   }
@@ -1911,7 +1914,7 @@
           untilEntryId,
         });
 
-        const id = `session-${Date.now()}`;
+        const id = _genSessionId();
         const baseName = activeEntry?.name ?? "session";
         const label = `${baseName} (fork)`;
         sessionRegistry.set(id, {
@@ -2075,12 +2078,10 @@
 
     /** Open a new tab for the given project folder (or standalone if null/empty). Returns the new session id. */
     async openSession(cwd) {
-      const id   = `session-${Date.now()}`;
+      const id   = _genSessionId();
       let name = "PiDesk";
       if (cwd) {
-        const folder = (typeof window !== "undefined" && window.SessionTitle?.folderName)
-          ? window.SessionTitle.folderName(cwd)
-          : (cwd.replace(/\\/g, "/").split("/").filter(Boolean).pop() || cwd);
+        const folder = window.SessionTitle?.folderName ? window.SessionTitle.folderName(cwd) : cwd;
         name = folder || cwd;
         if (typeof window !== "undefined" && window.RecentProjects?.addRecentProject) {
           window.RecentProjects.addRecentProject(cwd, name);
@@ -2351,7 +2352,7 @@
         }
       }
 
-      const id = `session-${Date.now()}`;
+      const id = _genSessionId();
       // "No project" sessions were recorded with the exe directory (e.g.
       // target/debug) as their cwd. Treat them as standalone again: empty
       // path → no project tab/file tree, and let the backend pin the child
@@ -2361,11 +2362,9 @@
         session.is_standalone === true ||
         (window.RecentProjects?.isStandalonePath?.(savedCwd) ?? !savedCwd);
       const cwd = standalone ? "" : savedCwd;
-      const folderName = (typeof window !== "undefined" && window.SessionTitle?.folderName)
-        ? window.SessionTitle.folderName(cwd)
-        : (cwd ? cwd.replace(/\\/g, "/").split("/").filter(Boolean).pop() || cwd : "");
+      const folderName = window.SessionTitle?.folderName ? window.SessionTitle.folderName(cwd) : "";
       const rawTitle = session.title || folderName || "resumed";
-      const name = (typeof window !== "undefined" && window.SessionTitle?.formatSessionTitle)
+      const name = window.SessionTitle?.formatSessionTitle
         ? window.SessionTitle.formatSessionTitle(rawTitle, folderName, { fallback: "resumed" })
         : rawTitle;
       const isCustom = Boolean(session.title && !window.SessionTitle?.isDefaultSessionName?.(session.title));
@@ -2377,6 +2376,7 @@
         branch: null,
         sessionPath: session.path,
         savedSessionId: targetId,
+        titleLocked: isCustom,
         userTitled: isCustom,
       });
       if (window.__TAURI__) {

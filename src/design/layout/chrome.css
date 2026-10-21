@@ -69,8 +69,8 @@
   cursor: pointer;
   border-right: 1px solid var(--line-soft);
   transition: color 120ms, background 120ms;
-  flex: 0 1 200px;
-  min-width: 64px;
+  flex: 0 1 auto;
+  min-width: 100px;
   max-width: 200px;
 }
 .tab:hover { color: var(--fg-2); background: var(--bg-hover); }
