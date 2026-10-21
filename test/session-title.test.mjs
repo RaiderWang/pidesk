@@ -261,6 +261,64 @@ describe('SessionTitle.nextTitle', () => {
     const projectEntry = { name: 'omp-desktop', path: 'F:/Project/omp-desktop' };
     assert.equal(SessionTitle.nextTitle(projectEntry, 'omp-desktop'), null);
   });
+
+  it('returns null if prompt for numbered session equals folder name', () => {
+    const numberedEntry = { name: 'omp-desktop (2)', path: 'F:/Project/omp-desktop' };
+    assert.equal(SessionTitle.nextTitle(numberedEntry, 'omp-desktop'), null);
+    assert.equal(SessionTitle.nextTitle(numberedEntry, '# omp-desktop'), null);
+    assert.equal(SessionTitle.nextTitle(numberedEntry, '   omp-desktop   '), null);
+  });
+
+  it('generates folder-prefixed title for numbered initial project session', () => {
+    const numberedProject = { name: 'omp-desktop (2)', path: 'F:/Project/omp-desktop' };
+    const next = SessionTitle.nextTitle(numberedProject, 'Investigate memory issue');
+    assert.equal(next, 'omp-desktop: Investigate memory issue');
+  });
+
+  it('recognizes numbered project names as initial unstarted names in isInitialSessionName', () => {
+    assert.equal(SessionTitle.isInitialSessionName('omp-desktop', 'omp-desktop'), true);
+    assert.equal(SessionTitle.isInitialSessionName('omp-desktop (2)', 'omp-desktop'), true);
+    assert.equal(SessionTitle.isInitialSessionName('omp-desktop (10)', 'omp-desktop'), true);
+    assert.equal(SessionTitle.isInitialSessionName('PiDesk', ''), true);
+    assert.equal(SessionTitle.isInitialSessionName('PiDesk (3)', ''), true);
+    assert.equal(SessionTitle.isInitialSessionName('omp-desktop: some task', 'omp-desktop'), false);
+    assert.equal(SessionTitle.isInitialSessionName('other-project', 'omp-desktop'), false);
+  });
+});
+
+describe('SessionTitle.normalizePath', () => {
+  it('normalizes backslashes and trailing slashes to lowercase forward-slash path', () => {
+    assert.equal(SessionTitle.normalizePath('C:\\Projects\\MyApp\\'), 'c:/projects/myapp');
+    assert.equal(SessionTitle.normalizePath('D:/repo/lib///'), 'd:/repo/lib');
+  });
+
+  it('handles empty, null, and non-string inputs safely', () => {
+    assert.equal(SessionTitle.normalizePath(''), '');
+    assert.equal(SessionTitle.normalizePath(null), '');
+    assert.equal(SessionTitle.normalizePath(undefined), '');
+  });
+});
+
+describe('SessionTitle.nextInitialName', () => {
+  it('returns baseName when no existing names match', () => {
+    assert.equal(SessionTitle.nextInitialName('omp-desktop', []), 'omp-desktop');
+    assert.equal(SessionTitle.nextInitialName('PiDesk', ['other-session']), 'PiDesk');
+  });
+
+  it('allocates sequence numbers starting from 2', () => {
+    assert.equal(SessionTitle.nextInitialName('omp-desktop', ['omp-desktop']), 'omp-desktop (2)');
+    assert.equal(SessionTitle.nextInitialName('omp-desktop', ['omp-desktop', 'omp-desktop (2)']), 'omp-desktop (3)');
+  });
+
+  it('reuses lowest available unassigned sequence number', () => {
+    assert.equal(SessionTitle.nextInitialName('omp-desktop', ['omp-desktop (2)', 'omp-desktop (3)']), 'omp-desktop');
+    assert.equal(SessionTitle.nextInitialName('omp-desktop', ['omp-desktop', 'omp-desktop (3)']), 'omp-desktop (2)');
+  });
+
+  it('handles custom prompts and unrelated session names gracefully', () => {
+    const existing = ['omp-desktop: fix login', 'omp-desktop (2)', 'PiDesk', 'random'];
+    assert.equal(SessionTitle.nextInitialName('omp-desktop', existing), 'omp-desktop');
+  });
 });
 
 

@@ -339,19 +339,12 @@ function App() {
     // Tab list and activeSessionId are updated via onUpdate from the bridge
   };
 
-  // Open recent project (switches to tab if already open, else opens new session)
+  // Open recent project (always opens in a new tab)
   const handleOpenRecentProject = async (path) => {
     if (!bridge || !path) return;
     window.RecentProjects?.addRecentProject(path);
-    const norm = p => (p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
-    const targetNorm = norm(path);
-    const existing = sessions.find(s => s.path && norm(s.path) === targetNorm);
-    if (existing) {
-      handleSelectTab(existing.id);
-    } else {
-      setPlanActive(false);
-      await bridge.openSession(path);
-    }
+    setPlanActive(false);
+    await bridge.openSession(path);
   };
 
   // Open standalone session (no project folder)
