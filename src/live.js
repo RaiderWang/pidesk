@@ -995,9 +995,9 @@
       return;
     }
 
-    if (type === "session_info_update" || type === "session_title_changed") {
-      const title = ev.title ?? ev.sessionName;
-      if (title) _setTabTitle(title);
+    if (type === "session_info_update") {
+      const title = ev.title;
+      if (title) _setTabTitle(title, ev.sessionId);
       return;
     }
 
@@ -1440,36 +1440,40 @@
       : (folderName ? `${folderName}: ${raw}` : raw || fallback);
   }
 
-  function _updateTabTitleIfDefault(text) {
-    if (!text || !activeSessionId || !sessionRegistry.has(activeSessionId)) return;
-    const entry = sessionRegistry.get(activeSessionId);
-    const folderName = entry.path
-      ? entry.path.replace(/\\/g, "/").split("/").filter(Boolean).pop() || ""
-      : "";
+  function _updateTabTitleIfDefault(text, targetSessionId = activeSessionId) {
+    const sid = (targetSessionId && sessionRegistry.has(targetSessionId)) ? targetSessionId : activeSessionId;
+    if (!text || !sid || !sessionRegistry.has(sid)) return;
+    const entry = sessionRegistry.get(sid);
+    if (entry.userTitled) return;
+    const folderName = (typeof window !== "undefined" && window.SessionTitle?.folderName)
+      ? window.SessionTitle.folderName(entry.path)
+      : (entry.path ? entry.path.replace(/\\/g, "/").split("/").filter(Boolean).pop() || "" : "");
 
     // Check if the tab title is still in initial state (default name for standalone, or bare folderName for project)
     const isInitial = (typeof window !== "undefined" && window.SessionTitle?.isInitialSessionName)
       ? window.SessionTitle.isInitialSessionName(entry.name, folderName)
-      : (!entry.path && /^(PiDesk(\s*\(\d+\))?|new session|resumed|session)$/i.test(entry.name || "")) || (entry.name === folderName);
+      : false;
 
     if (isInitial) {
       const formatted = _formatTitle(text, folderName, entry.name);
       if (formatted && formatted !== entry.name) {
-        sessionRegistry.set(activeSessionId, { ...entry, name: formatted });
+        sessionRegistry.set(sid, { ...entry, name: formatted, userTitled: true });
+        if (sid === activeSessionId) notify();
       }
     }
   }
 
-  function _setTabTitle(rawTitle) {
-    if (!rawTitle || !activeSessionId || !sessionRegistry.has(activeSessionId)) return;
-    const entry = sessionRegistry.get(activeSessionId);
-    const folderName = entry.path
-      ? entry.path.replace(/\\/g, "/").split("/").filter(Boolean).pop() || ""
-      : "";
+  function _setTabTitle(rawTitle, targetSessionId = activeSessionId) {
+    const sid = (targetSessionId && sessionRegistry.has(targetSessionId)) ? targetSessionId : activeSessionId;
+    if (!rawTitle || !sid || !sessionRegistry.has(sid)) return;
+    const entry = sessionRegistry.get(sid);
+    const folderName = (typeof window !== "undefined" && window.SessionTitle?.folderName)
+      ? window.SessionTitle.folderName(entry.path)
+      : (entry.path ? entry.path.replace(/\\/g, "/").split("/").filter(Boolean).pop() || "" : "");
     const formatted = _formatTitle(rawTitle, folderName, entry.name);
     if (formatted && formatted !== entry.name) {
-      sessionRegistry.set(activeSessionId, { ...entry, name: formatted });
-      notify();
+      sessionRegistry.set(sid, { ...entry, name: formatted, userTitled: true });
+      if (sid === activeSessionId) notify();
     }
   }
 
@@ -2074,22 +2078,30 @@
       const id   = `session-${Date.now()}`;
       let name = "PiDesk";
       if (cwd) {
-        name = cwd.replace(/\\/g, "/").split("/").pop() || cwd;
+        const folder = (typeof window !== "undefined" && window.SessionTitle?.folderName)
+          ? window.SessionTitle.folderName(cwd)
+          : (cwd.replace(/\\/g, "/").split("/").filter(Boolean).pop() || cwd);
+        name = folder || cwd;
         if (typeof window !== "undefined" && window.RecentProjects?.addRecentProject) {
           window.RecentProjects.addRecentProject(cwd, name);
         }
       } else {
         const noProjSessions = [...sessionRegistry.values()].filter(s => !s.path);
-        if (noProjSessions.length > 0) {
-          // Parse existing names to find the highest number — avoids
-          // collisions after closing earlier tabs (e.g. close PiDesk,
-          // PiDesk(2) remains, next should be PiDesk(3) not PiDesk(2)).
-          let maxNum = 1; // bare "PiDesk" counts as 1
-          for (const s of noProjSessions) {
+        const usedNums = new Set();
+        for (const s of noProjSessions) {
+          if (s.name === "PiDesk") {
+            usedNums.add(1);
+          } else {
             const m = s.name.match(/^PiDesk\s*\((\d+)\)$/);
-            if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
+            if (m) usedNums.add(parseInt(m[1], 10));
           }
-          name = `PiDesk (${maxNum + 1})`;
+        }
+        if (!usedNums.has(1)) {
+          name = "PiDesk";
+        } else {
+          let next = 2;
+          while (usedNums.has(next)) next++;
+          name = `PiDesk (${next})`;
         }
       }
       const color = cwd ? "var(--lilac)" : "var(--accent)";
@@ -2349,11 +2361,14 @@
         session.is_standalone === true ||
         (window.RecentProjects?.isStandalonePath?.(savedCwd) ?? !savedCwd);
       const cwd = standalone ? "" : savedCwd;
-      const folderName = cwd ? cwd.replace(/\\/g, "/").split("/").filter(Boolean).pop() || cwd : "";
+      const folderName = (typeof window !== "undefined" && window.SessionTitle?.folderName)
+        ? window.SessionTitle.folderName(cwd)
+        : (cwd ? cwd.replace(/\\/g, "/").split("/").filter(Boolean).pop() || cwd : "");
       const rawTitle = session.title || folderName || "resumed";
       const name = (typeof window !== "undefined" && window.SessionTitle?.formatSessionTitle)
         ? window.SessionTitle.formatSessionTitle(rawTitle, folderName, { fallback: "resumed" })
         : rawTitle;
+      const isCustom = Boolean(session.title && !window.SessionTitle?.isDefaultSessionName?.(session.title));
       sessionRegistry.set(id, {
         id,
         name,
@@ -2362,6 +2377,7 @@
         branch: null,
         sessionPath: session.path,
         savedSessionId: targetId,
+        userTitled: isCustom,
       });
       if (window.__TAURI__) {
         try {

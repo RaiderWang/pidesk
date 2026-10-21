@@ -50,19 +50,30 @@
     // 4. Collapse consecutive whitespace and trim
     text = text.replace(/\s{2,}/g, " ").trim();
 
-    // 5. Clamps maximum length
-    if (text.length > maxLen) {
-      text = text.slice(0, maxLen).trim();
+    // 5. Clamps maximum length (surrogate-pair safe)
+    const chars = Array.from(text);
+    if (chars.length > maxLen) {
+      text = chars.slice(0, maxLen).join("").trim();
     }
 
     return text || fallback || "";
   }
 
-  const DEFAULT_NAME_RE = /^(PiDesk(\s*\(\d+\))?|new session|resumed|session)$/i;
+  /**
+   * Extracts the last folder segment from a filesystem path, normalizing
+   * slashes and ignoring trailing separators.
+   * e.g. "F:/Project/omp-desktop/" -> "omp-desktop"
+   */
+  function folderName(path) {
+    if (!path || typeof path !== "string") return "";
+    return path.replace(/\\/g, "/").split("/").filter(Boolean).pop() || "";
+  }
+
+  const DEFAULT_NAME_RE = /^(PiDesk(\s*\(\d+\))?|resumed)$/i;
 
   /**
    * Checks whether a session name is a default / uncustomized placeholder name
-   * (e.g. "PiDesk", "PiDesk (2)", "new session", "resumed").
+   * (e.g. "PiDesk", "PiDesk (2)", "resumed").
    */
   function isDefaultSessionName(name) {
     if (!name || typeof name !== "string") return true;
@@ -73,41 +84,34 @@
    * Checks whether a session name is still in its initial / unstarted state
    * (e.g. "PiDesk", "PiDesk (2)", or matches the bare folder name before conversation starts).
    */
-  function isInitialSessionName(name, folderName = "") {
+  function isInitialSessionName(name, folder = "") {
     if (!name || typeof name !== "string") return true;
     const trimmed = name.trim();
     if (isDefaultSessionName(trimmed)) return true;
-    if (folderName) {
-      const folder = String(folderName).replace(/\\/g, "/").split("/").filter(Boolean).pop() || "";
-      if (folder && trimmed.toLowerCase() === folder.toLowerCase()) return true;
-    }
+    const folderStr = folderName(folder);
+    if (folderStr && trimmed.toLowerCase() === folderStr.toLowerCase()) return true;
     return false;
   }
 
   /**
    * Formats a session title for display on a tab:
-   * - If folderName is provided, prefixes with `${folderName}: ${cleaned}`.
-   * - If no folderName, returns `${cleaned}`.
+   * - If folder is provided, prefixes with `${folderName}: ${cleaned}`.
+   * - If no folder, returns `${cleaned}`.
    * - Avoids duplicating the prefix if raw already starts with `${folderName}:`.
    */
-  function formatSessionTitle(raw, folderName = "", options = {}) {
-    const folder = (typeof folderName === "string" ? folderName.trim() : "")
-      .replace(/\\/g, "/")
-      .split("/")
-      .filter(Boolean)
-      .pop() || "";
-
+  function formatSessionTitle(raw, folder = "", options = {}) {
+    const folderStr = folderName(folder);
     const cleaned = cleanSessionTitle(raw, "", options);
 
-    if (folder) {
-      if (!cleaned) return folder;
-      const prefixPattern = new RegExp(`^${folder.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*:\\s*`, "i");
+    if (folderStr) {
+      if (!cleaned) return folderStr;
+      const prefixPattern = new RegExp(`^${folderStr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*:\\s*`, "i");
       const bareTitle = cleaned.replace(prefixPattern, "");
-      return `${folder}: ${bareTitle}`;
+      return `${folderStr}: ${bareTitle}`;
     }
 
     return cleaned || (options.fallback ?? "");
   }
 
-  return { cleanSessionTitle, isDefaultSessionName, isInitialSessionName, formatSessionTitle };
+  return { cleanSessionTitle, folderName, isDefaultSessionName, isInitialSessionName, formatSessionTitle };
 });

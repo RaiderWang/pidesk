@@ -23,7 +23,11 @@ function WindowChrome({ project, peer, onCmd }) {
       <div className="chrome-title">
         <span className="mono" style={{ color: "var(--fg-3)", flexShrink: 0 }}>OMP</span>
         <span className="mono" style={{ color: "var(--fg-5)", flexShrink: 0 }}>·</span>
-        <span className="chrome-title-text" style={{ color: "var(--fg-2)" }} title={project.name}>
+        <span
+          className="chrome-title-text"
+          style={{ color: "var(--fg-2)" }}
+          title={project.path ? `${project.name} — ${project.path}` : project.name}
+        >
           {project.name}
         </span>
         {project.branch && (

@@ -107,12 +107,6 @@
   height: 100%;
   flex-shrink: 0;
 }
-.tabs-right {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  padding-right: 8px;
-}
 .tab-add {
   display: inline-flex; align-items: center; justify-content: center;
   width: 32px;
@@ -255,5 +249,14 @@
 .tabs-right {
   display: flex; align-items: center; gap: 8px; padding: 0 12px;
   font-size: var(--d-text-xs);
+  flex-shrink: 0;
+}
+
+.split-peer-label {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 

@@ -73,25 +73,47 @@ describe('SessionTitle.cleanSessionTitle', () => {
     assert.equal(cleaned.length, 20);
     assert.equal(cleaned, 'This is a somewhat l');
   });
+
+  it('safely clamps multi-byte surrogate pairs and emojis without producing lone surrogates', () => {
+    const emojis = '😀😁😂😃😄';
+    const clamped = SessionTitle.cleanSessionTitle(emojis, '', { maxLength: 3 });
+    assert.equal(Array.from(clamped).length, 3);
+    assert.equal(clamped, '😀😁😂');
+  });
+});
+
+describe('SessionTitle.folderName', () => {
+  it('extracts folder from Unix and Windows paths', () => {
+    assert.equal(SessionTitle.folderName('/home/user/project'), 'project');
+    assert.equal(SessionTitle.folderName('C:\\Users\\user\\project'), 'project');
+  });
+
+  it('ignores trailing slashes and backslashes', () => {
+    assert.equal(SessionTitle.folderName('/home/user/project/'), 'project');
+    assert.equal(SessionTitle.folderName('C:\\Users\\user\\project\\\\'), 'project');
+  });
+
+  it('handles empty and null inputs', () => {
+    assert.equal(SessionTitle.folderName(''), '');
+    assert.equal(SessionTitle.folderName(null), '');
+    assert.equal(SessionTitle.folderName(undefined), '');
+  });
 });
 
 describe('SessionTitle.isDefaultSessionName', () => {
-  it('recognizes default PiDesk titles with and without numbers', () => {
+  it('recognizes default PiDesk titles and resumed', () => {
     assert.equal(SessionTitle.isDefaultSessionName('PiDesk'), true);
     assert.equal(SessionTitle.isDefaultSessionName('PiDesk (2)'), true);
     assert.equal(SessionTitle.isDefaultSessionName('PiDesk(10)'), true);
     assert.equal(SessionTitle.isDefaultSessionName('pidesk'), true);
-  });
-
-  it('recognizes generic fallback names', () => {
-    assert.equal(SessionTitle.isDefaultSessionName('new session'), true);
     assert.equal(SessionTitle.isDefaultSessionName('resumed'), true);
-    assert.equal(SessionTitle.isDefaultSessionName('session'), true);
     assert.equal(SessionTitle.isDefaultSessionName(''), true);
     assert.equal(SessionTitle.isDefaultSessionName(null), true);
   });
 
   it('rejects customized or project titles', () => {
+    assert.equal(SessionTitle.isDefaultSessionName('session'), false);
+    assert.equal(SessionTitle.isDefaultSessionName('new session'), false);
     assert.equal(SessionTitle.isDefaultSessionName('omp-desktop'), false);
     assert.equal(SessionTitle.isDefaultSessionName('Fix tab title truncation'), false);
     assert.equal(SessionTitle.isDefaultSessionName('贪吃蛇小游戏'), false);
@@ -107,6 +129,7 @@ describe('SessionTitle.isInitialSessionName', () => {
   it('treats bare folder name as initial before user prompt', () => {
     assert.equal(SessionTitle.isInitialSessionName('omp-desktop', 'omp-desktop'), true);
     assert.equal(SessionTitle.isInitialSessionName('omp-desktop', 'F:/Project/omp-desktop'), true);
+    assert.equal(SessionTitle.isInitialSessionName('omp-desktop', 'F:/Project/omp-desktop/'), true);
   });
 
   it('rejects once title has been formatted with prompt', () => {
@@ -124,12 +147,22 @@ describe('SessionTitle.formatSessionTitle', () => {
     assert.equal(SessionTitle.formatSessionTitle('优化查询性能', 'omp-desktop'), 'omp-desktop: 优化查询性能');
   });
 
-  it('extracts folder from full path', () => {
+  it('extracts folder from full path and trailing slashes', () => {
     assert.equal(SessionTitle.formatSessionTitle('优化查询性能', 'F:/Project/omp-desktop'), 'omp-desktop: 优化查询性能');
+    assert.equal(SessionTitle.formatSessionTitle('优化查询性能', 'F:/Project/omp-desktop/'), 'omp-desktop: 优化查询性能');
   });
 
   it('does not duplicate existing folder prefix', () => {
     assert.equal(SessionTitle.formatSessionTitle('omp-desktop: 优化查询性能', 'omp-desktop'), 'omp-desktop: 优化查询性能');
+  });
+
+  it('is idempotent on already formatted titles', () => {
+    const formatted = SessionTitle.formatSessionTitle('优化查询性能', 'omp-desktop');
+    assert.equal(formatted, 'omp-desktop: 优化查询性能');
+    const formattedAgain = SessionTitle.formatSessionTitle(formatted, 'omp-desktop');
+    assert.equal(formattedAgain, 'omp-desktop: 优化查询性能');
+    const fullPathAgain = SessionTitle.formatSessionTitle(formatted, 'F:/Project/omp-desktop/');
+    assert.equal(fullPathAgain, 'omp-desktop: 优化查询性能');
   });
 
   it('strips Plan framing when formatting', () => {
@@ -141,6 +174,7 @@ describe('SessionTitle.formatSessionTitle', () => {
   it('returns bare folderName when prompt is empty', () => {
     assert.equal(SessionTitle.formatSessionTitle('', 'omp-desktop'), 'omp-desktop');
     assert.equal(SessionTitle.formatSessionTitle('   ', 'omp-desktop'), 'omp-desktop');
+    assert.equal(SessionTitle.formatSessionTitle('', 'F:/Project/omp-desktop/'), 'omp-desktop');
   });
 });
 

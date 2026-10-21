@@ -10,11 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Session tab title truncation, native tooltips, and project-aware title formatting**:
   - Automatically format session tab titles upon starting a conversation: standalone sessions use the sanitized first prompt, while project-bound sessions use `<folderName>: <prompt>` format so multi-session project tabs are distinguishable.
-  - Added pure `SessionTitle` module (`src/app/session-title.js`) that strips Plan mode framing (`INTENT_FRAMING`), removes Markdown header markers, normalizes newlines/whitespace, and clamps character length.
-  - Implemented elastic tab layout in CSS (`flex: 0 1 200px; min-width: 64px; max-width: 200px;`) with single-line ellipsis (`text-overflow: ellipsis`) preventing tab width explosion.
+  - Added pure `SessionTitle` module (`src/app/session-title.js`) that strips Plan mode framing (`INTENT_FRAMING`), removes Markdown header markers, normalizes newlines/whitespace, clamps character length safely across surrogate pairs (emojis/CJK), and provides unified `folderName` path parsing.
+  - Implemented elastic tab layout in CSS (`flex: 0 1 200px; min-width: 64px; max-width: 200px;`) with single-line ellipsis (`text-overflow: ellipsis`), keeping `.tabs` `overflow: visible` to prevent clipping the `+` dropdown menu.
   - Added native `title` tooltips to tabs and window chrome, showing full conversation titles and directory paths on hover.
-  - Hardened layout against overflow: preserved `.tabs` `overflow: visible` to protect the `+` dropdown menu from clipping (P0 safeguard), and prevented long title overflow in window chrome, file tree panel, and ambient peer rails (P1 safeguards).
-  - Added live event listeners for omp `session_info_update` and `session_title_changed` events.
+  - Hardened title formatting and event dispatch: fixed `openSession` directory extraction when paths include trailing slashes, verified and streamlined `session_info_update` from omp RPC, removed non-existent `session_title_changed`, and guarded titled tabs (`userTitled: true`) against subsequent prompt overwrites.
+  - Improved standalone tab numbering to recycle unassigned `PiDesk` slots when existing tabs are custom-titled.
+  - Updated File Tree panel header (`displayName`) to prioritize folder name over generic project labels (standalone sessions display `workspace`).
+  - Cleaned up duplicate `.tabs-right` CSS rules, consolidating `flex-shrink: 0` into the main rule.
 
 ### Documentation
 
