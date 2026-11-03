@@ -47,6 +47,8 @@ describe('buildReleaseBody', () => {
     assert.match(body, /### 🚀 What's Changed \/ 版本变更说明/);
     assert.match(body, /- Feature X/);
     assert.match(body, /### 📦 Installation Guide \/ 安装指南/);
+    assert.match(body, /https:\/\/github\.com\/can1357\/oh-my-pi/);
+    assert.match(body, /至少完成一次对话/);
   });
 
   it('still includes installation guide when changelog is empty', () => {

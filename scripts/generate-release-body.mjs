@@ -42,6 +42,12 @@ export function buildReleaseBody(tag, changelogNotes) {
 
   parts.push(`### 📦 Installation Guide / 安装指南
 
+> [!IMPORTANT]
+> **前提条件 / Prerequisite**:
+> 运行 PiDesk 之前必须先安装 [oh-my-pi (omp)](https://github.com/can1357/oh-my-pi)，并在命令行终端中**至少完成一次对话**（以确保模型与环境配置已成功初始化）。
+> 
+> *Before running PiDesk, you must install [oh-my-pi (omp)](https://github.com/can1357/oh-my-pi) and **complete at least one conversation in \`omp\` via terminal** (to ensure your model and environment settings are initialized).*
+
 #### 🍎 macOS
 - **Homebrew (Recommended / 推荐)**:
   \`\`\`bash
@@ -65,7 +71,8 @@ export function buildReleaseBody(tag, changelogNotes) {
 ---
 
 ### ⚙️ Requirements
-- [oh-my-pi](https://github.com/can1357/oh-my-pi) (\`omp\`) must be installed and available on your \`PATH\`.`);
+- [oh-my-pi](https://github.com/can1357/oh-my-pi) (\`omp\`) must be installed and available on your \`PATH\`.
+- Must complete at least one conversation in \`omp\` in your terminal before launching PiDesk / 启动 PiDesk 前须在终端中至少完成一次对话。`);
 
   return parts.join('\n');
 }
