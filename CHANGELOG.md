@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.9] - 2026-11-03
+
 ### Added
 
 - **External editor setting**: Tweaks → General gains an "External editor" field (command line, e.g. `code -g`, with Browse… and Clear). When set, the file tree right-click menu shows "Open with External Editor" for files. Leave it empty to hide the item. Backed by new `open_with_editor` / `pick_editor_executable` commands (`src-tauri/src/external_editor/`); paths with spaces are auto-quoted on Browse, and Windows `.cmd` shims such as `code` are resolved from PATH.
