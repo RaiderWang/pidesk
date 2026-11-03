@@ -133,6 +133,13 @@ const __TWEAKS_STYLE = `
     border-radius:var(--r-1,7px);background:transparent;color:var(--fg-4);font-size:11px;cursor:pointer}
   .twk-shortcut-reset:hover{background:var(--bg-hover);color:var(--fg-2)}
   .twk-shortcut-err{font-size:11px;color:var(--rose,#f43f5e);margin-top:2px}
+
+  .twk-editor-actions{display:flex;align-items:center;gap:6px;width:100%}
+  .twk-editor-hint{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    font-size:10.5px;color:var(--fg-4)}
+  .twk-editor-btn{appearance:none;height:22px;padding:0 8px;border:1px solid var(--line);
+    border-radius:var(--r-1,7px);background:transparent;color:var(--fg-3);font-size:11px;cursor:pointer}
+  .twk-editor-btn:hover{background:var(--bg-hover);color:var(--fg-2)}
 `;
 
 window.__TWEAKS_STYLE = __TWEAKS_STYLE;

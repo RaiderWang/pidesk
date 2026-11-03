@@ -2265,6 +2265,17 @@
       }
     },
 
+    /** Open a file in the external editor command configured in Tweaks */
+    async openWithEditor(editor, path) {
+      if (!window.__TAURI__) return;
+      try {
+        await window.__TAURI__.core.invoke("open_with_editor", { editor, path });
+      } catch (err) {
+        console.error("[live] openWithEditor error:", err);
+        throw err;
+      }
+    },
+
     /** Reveal in OS file manager */
     async revealInExplorer(path) {
       if (!window.__TAURI__) return;

@@ -18,7 +18,7 @@ const {
   Icon, ChatView, Composer, CommandPalette, ShortcutsHelp, WindowChrome, TabBar,
   StatusBar, AmbientRail, SplitPeer, PlanKanban, PlanDockView, HistoryModal, ModelManagerModal, ToolLogModal, AgentErrorBanner, useTweaks,
   FileTreePanel, ActivityBar, DockPanel, useDockState, useViewportWidth,
-  TweaksPanel, TweakSection, TweakRadio, TweakToggle, TweakColor, TweakSlider, TweakShortcut,
+  TweaksPanel, TweakSection, TweakRadio, TweakToggle, TweakColor, TweakSlider, TweakShortcut, TweakEditor,
   TWEAK_DEFAULTS, NULL_MODEL, EMPTY_PROJECT, NULL_PEER,
   INTENT_FRAMING, APPROVAL_PROMPT,
   useBridgeSnapshot, useThemeEffect, useGlobalShortcuts, timeNow,
@@ -476,6 +476,7 @@ function App() {
                 bridge={bridge}
                 width={stage.filesW}
                 onWidthChange={dock.setFilesWidth}
+                externalEditor={t.externalEditor}
               />
             )}
             <main className="session">
@@ -698,6 +699,8 @@ function App() {
           <TweakToggle label={window.t("tweaks.update.auto", null, "check for updates automatically")} value={t.autoUpdate !== false}
             onChange={v => setTweak("autoUpdate", v)} />
           <TweakUpdate updater={updater} version={appVersion} />
+          <TweakEditor label={window.t("tweaks.editor.label", null, "External editor")}
+            value={t.externalEditor || ""} onChange={v => setTweak("externalEditor", v)} />
         </TweakSection>
         <TweakSection label={window.t("tweaks.section.look", null, "Look")}>
           <TweakRadio label={window.t("tweaks.theme", null, "theme")} value={t.theme}

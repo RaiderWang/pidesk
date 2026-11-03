@@ -5,6 +5,7 @@
 #![allow(clippy::needless_pass_by_value)]
 
 mod agent;
+mod external_editor;
 mod file_watcher;
 mod files;
 mod git;
@@ -396,6 +397,8 @@ pub fn run() {
             files::delete_file_or_dir,
             files::open_path_default,
             files::reveal_in_explorer,
+            external_editor::open_with_editor,
+            external_editor::pick_editor_executable,
             review::review_check_environment,
             review::review_list_branches,
             review::review_list_commits,
