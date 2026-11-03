@@ -34,6 +34,11 @@
       "tweaks.shortcut.screenshot": "Region screenshot",
       "tweaks.shortcut.recording": "Press keys…",
       "tweaks.shortcut.reset": "Reset",
+      "tweaks.editor.label": "External editor",
+      "tweaks.editor.placeholder": "e.g. code -g",
+      "tweaks.editor.hint": "Empty = hide the menu item",
+      "tweaks.editor.browse": "Browse…",
+      "tweaks.editor.clear": "Clear",
       "tweaks.close": "Close tweaks",
 
       // Chrome & Tabs
@@ -194,6 +199,7 @@
       "composer.fileChip.remove": "remove file",
       "composer.at.loading": "Indexing project files…",
       "files.menu.openDefault": "Open with Default Application",
+      "files.menu.openEditor": "Open with External Editor",
       "files.menu.reveal": "Reveal in File Explorer",
       "files.delete.confirm": "Are you sure you want to delete {name}?",
       "files.delete.title": "Delete Item",
@@ -208,6 +214,7 @@
       "files.error.load": "Failed to load directory",
       "files.error.rename": "Failed to rename: {error}",
       "files.error.delete": "Failed to delete: {error}",
+      "files.error.openEditor": "Failed to open in editor: {error}",
 
       // Composer
       "composer.placeholder.default": "what should we ship?  ·  / for commands  ·  ⌘K for the bridge",
@@ -551,6 +558,11 @@
       "tweaks.shortcut.screenshot": "选区截屏",
       "tweaks.shortcut.recording": "按下快捷键…",
       "tweaks.shortcut.reset": "恢复默认",
+      "tweaks.editor.label": "外部编辑器",
+      "tweaks.editor.placeholder": "例如 code -g",
+      "tweaks.editor.hint": "留空则隐藏右键菜单项",
+      "tweaks.editor.browse": "浏览…",
+      "tweaks.editor.clear": "清空",
       "tweaks.close": "关闭设置",
 
       // Chrome & Tabs
@@ -711,6 +723,7 @@
       "composer.fileChip.remove": "移除文件",
       "composer.at.loading": "正在索引项目文件…",
       "files.menu.openDefault": "用系统默认方式打开",
+      "files.menu.openEditor": "用外部编辑器打开",
       "files.menu.reveal": "在文件资源管理器中显示",
       "files.delete.confirm": "确定要删除 {name} 吗？此操作无法撤销。",
       "files.delete.title": "删除确认",
@@ -725,6 +738,7 @@
       "files.error.load": "加载目录失败",
       "files.error.rename": "重命名失败：{error}",
       "files.error.delete": "删除失败：{error}",
+      "files.error.openEditor": "用外部编辑器打开失败：{error}",
 
       // Composer
       "composer.placeholder.default": "需要执行什么任务？ · 输入 / 查看指令 · ⌘K/Ctrl+K 打开指令桥",

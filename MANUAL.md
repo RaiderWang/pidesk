@@ -134,6 +134,8 @@ The frontend calls these Rust commands via `invoke()`:
 | `rename_file` | `(oldPath: String, newPath: String) → Result<()>` | Rename a file or directory |
 | `delete_file_or_dir` | `(path: String) → Result<()>` | Delete a file or directory recursively |
 | `open_path_default` | `(path: String) → Result<()>` | Open with OS default application |
+| `open_with_editor` | `(editor: String, path: String) → Result<()>` | Open a file with the external editor command from Tweaks (`externalEditor`). `editor` is a command line (double quotes group tokens, backslashes are literal); an unquoted string that is itself an existing path is used whole. `{file}` in the args is replaced by the path, otherwise the path is appended. Windows probes `.exe/.cmd/.bat/.com` on PATH; macOS `.app` bundles go through `open -a` (extra args are forwarded after `--args`, which macOS ignores if the app is already running). An unquoted command whose leading part is an existing absolute path (e.g. `C:\Program Files\X\x.exe -g`) is split at that path. Detached: stdio nulled, child reaped on a background thread |
+| `pick_editor_executable` | `() → Result<Option<String>>` | Native file picker for the editor executable (extension filter on Windows only) |
 | `reveal_in_explorer` | `(path: String) → Result<()>` | Reveal and select file or directory in OS file manager (File Explorer / Finder) |
 | `start_file_watch` | `(watchId: String, path: String) → Result<()>` | Start debounced recursive filesystem watcher emitting `files://changed` |
 | `stop_file_watch` | `(watchId: String) → ()` | Stop filesystem watcher and release OS directory handles |

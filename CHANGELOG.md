@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **External editor setting**: Tweaks → General gains an "External editor" field (command line, e.g. `code -g`, with Browse… and Clear). When set, the file tree right-click menu shows "Open with External Editor" for files. Leave it empty to hide the item. Backed by new `open_with_editor` / `pick_editor_executable` commands (`src-tauri/src/external_editor/`); paths with spaces are auto-quoted on Browse, and Windows `.cmd` shims such as `code` are resolved from PATH.
+
+### Changed
+
+- File tree context menu and delete confirmation moved out of `file-tree-panel.jsx` into `file-tree-menu.jsx` / `file-tree-delete-modal.jsx`; the menu's viewport clamp height is now 275px to fit the extra item.
+
 ## [0.4.8] - 2026-10-21
 
 ### Added

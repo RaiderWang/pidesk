@@ -201,7 +201,7 @@ function FileTreeNode({
   );
 }
 
-function FileTreePanel({ rootPath, projectName, onClose, bridge, width, onWidthChange }) {
+function FileTreePanel({ rootPath, projectName, onClose, bridge, width, onWidthChange, externalEditor }) {
   const [rootEntries, setRootEntries] = React.useState([]);
   const [expandedPaths, setExpandedPaths] = React.useState(new Set());
   const [childrenMap, setChildrenMap] = React.useState(new Map());
@@ -451,8 +451,7 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge, width, onWidthC
 
   // Context Menu trigger
   const handleContextMenu = (e, item) => {
-    const menuWidth = 210;
-    const menuHeight = 240;
+    const { width: menuWidth, height: menuHeight } = window.FILE_TREE_MENU_SIZE;
     const x = Math.min(e.clientX, window.innerWidth - menuWidth - 10);
     const y = Math.min(e.clientY, window.innerHeight - menuHeight - 10);
     setSelectedItem(item);
@@ -595,6 +594,22 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge, width, onWidthC
     },
     [bridge]
   );
+
+  // Open with the external editor configured in Tweaks
+  const handleOpenEditor = async (item) => {
+    setContextMenu(null);
+    try {
+      await bridge?.openWithEditor(externalEditor, item.path);
+    } catch (err) {
+      console.error("Open with editor error:", err);
+      const errMsg = err?.message || String(err);
+      showToast(
+        window.t
+          ? window.t("files.error.openEditor", { error: errMsg }, `Failed to open in editor: ${errMsg}`)
+          : `Failed to open in editor: ${errMsg}`
+      );
+    }
+  };
 
   // Reveal in File Explorer / Finder
   const handleRevealInExplorer = async (item) => {
@@ -785,135 +800,27 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge, width, onWidthC
 
       {/* Context Menu */}
       {contextMenu && (
-        <div
-          className="files-context-menu"
-          style={{ top: contextMenu.y, left: contextMenu.x }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {!contextMenu.item.is_dir && (
-            <>
-              <button
-                className="files-context-item"
-                onClick={() => handleReferenceFile(contextMenu.item)}
-              >
-                <Icon name="at" size={11} color="var(--accent)" />
-                <span className="files-context-label">
-                  {window.t ? window.t("files.menu.reference", null, "Reference File") : "Reference File"}
-                </span>
-              </button>
-              <div className="files-context-sep" />
-            </>
-          )}
-
-          <button
-            className="files-context-item"
-            onClick={() => startRename(contextMenu.item)}
-          >
-            <Icon name="edit" size={11} color="var(--accent)" />
-            <span className="files-context-label">
-              {window.t ? window.t("files.menu.rename", null, "Rename") : "Rename"}
-            </span>
-          </button>
-
-          <button
-            className="files-context-item"
-            onClick={() => handleCopyPath(contextMenu.item)}
-          >
-            <Icon name="copy" size={11} color="var(--cyan)" />
-            <span className="files-context-label">
-              {window.t ? window.t("files.menu.copyPath", null, "Copy Path") : "Copy Path"}
-            </span>
-          </button>
-
-          <button
-            className="files-context-item"
-            onClick={() => handleCopyRelativePath(contextMenu.item)}
-          >
-            <Icon name="link" size={11} color="var(--lilac)" />
-            <span className="files-context-label">
-              {window.t ? window.t("files.menu.copyRelativePath", null, "Copy Relative Path") : "Copy Relative Path"}
-            </span>
-          </button>
-
-          <div className="files-context-sep" />
-
-          {!contextMenu.item.is_dir && (
-            <button
-              className="files-context-item"
-              onClick={() => handleOpenDefault(contextMenu.item)}
-            >
-              <Icon name="external" size={11} color="var(--fg-3)" />
-              <span className="files-context-label">
-                {window.t ? window.t("files.menu.openDefault", null, "Open with Default Application") : "Open with Default Application"}
-              </span>
-            </button>
-          )}
-
-          <button
-            className="files-context-item"
-            onClick={() => handleRevealInExplorer(contextMenu.item)}
-          >
-            <Icon name="folder" size={11} color="var(--fg-3)" />
-            <span className="files-context-label">
-              {window.t ? window.t("files.menu.reveal", null, "Reveal in File Explorer") : "Reveal in File Explorer"}
-            </span>
-          </button>
-
-          <div className="files-context-sep" />
-
-          <button
-            className="files-context-item danger"
-            onClick={() => confirmDelete(contextMenu.item)}
-          >
-            <Icon name="trash" size={11} color="var(--rose, #ff5f57)" />
-            <span className="files-context-label">
-              {window.t ? window.t("files.menu.delete", null, "Delete") : "Delete"}
-            </span>
-          </button>
-        </div>
+        <FileTreeContextMenu
+          menu={contextMenu}
+          hasEditor={window.EditorCommand?.isConfigured(externalEditor)}
+          onReference={handleReferenceFile}
+          onRename={startRename}
+          onCopyPath={handleCopyPath}
+          onCopyRelativePath={handleCopyRelativePath}
+          onOpenDefault={handleOpenDefault}
+          onOpenEditor={handleOpenEditor}
+          onReveal={handleRevealInExplorer}
+          onDelete={confirmDelete}
+        />
       )}
 
       {/* Delete Confirmation Modal */}
       {deleteTarget && (
-        <div
-          className="files-modal-scrim"
-          onClick={() => setDeleteTarget(null)}
-        >
-          <div
-            className="files-modal-box"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="files-modal-title">
-              <Icon name="trash" size={14} color="var(--rose, #ff5f57)" />
-              <span>
-                {window.t ? window.t("files.delete.title", null, "Delete Item") : "Delete Item"}
-              </span>
-            </div>
-            <div className="files-modal-body">
-              {window.t
-                ? window.t(
-                    "files.delete.confirm",
-                    { name: deleteTarget.name },
-                    `Are you sure you want to delete ${deleteTarget.name}?`
-                  )
-                : `Are you sure you want to delete ${deleteTarget.name}?`}
-            </div>
-            <div className="files-modal-foot">
-              <button
-                className="btn ghost"
-                onClick={() => setDeleteTarget(null)}
-              >
-                {window.t ? window.t("files.delete.cancel", null, "Cancel") : "Cancel"}
-              </button>
-              <button
-                className="btn danger"
-                onClick={handleDeleteExecute}
-              >
-                {window.t ? window.t("files.delete.delete", null, "Delete") : "Delete"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <FileTreeDeleteModal
+          target={deleteTarget}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={handleDeleteExecute}
+        />
       )}
 
       {/* Toast Notification */}
