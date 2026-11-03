@@ -105,6 +105,45 @@ fn resolve_program(program: &str, path_var: Option<&OsStr>) -> PathBuf {
         .unwrap_or_else(|| p.to_path_buf())
 }
 
+/// Longest prefix of `editor` (cut at a whitespace boundary) that is an
+/// existing absolute path, plus the remaining text split into arguments.
+/// Lets an unquoted `C:\Program Files\X\x.exe -g` work without quotes.
+/// Absolute-only so a stray relative file named `code` never shadows PATH.
+fn longest_existing_prefix(editor: &str) -> Option<(String, Vec<String>)> {
+    editor
+        .char_indices()
+        .filter(|&(i, c)| {
+            c.is_whitespace()
+                && editor[..i]
+                    .chars()
+                    .next_back()
+                    .is_some_and(|p| !p.is_whitespace())
+        })
+        .map(|(i, _)| i)
+        .chain(std::iter::once(editor.len()))
+        .rev()
+        .find_map(|end| {
+            let prefix = &editor[..end];
+            let p = Path::new(prefix);
+            (p.is_absolute() && p.exists())
+                .then(|| (prefix.to_owned(), split_command_line(&editor[end..])))
+        })
+}
+
+/// Split a trimmed editor command into `(program, args)`; `None` when empty.
+fn split_program_and_args(editor: &str) -> Option<(String, Vec<String>)> {
+    if !editor.starts_with('"') {
+        if let Some(found) = longest_existing_prefix(editor) {
+            return Some(found);
+        }
+    }
+    let mut parts = split_command_line(editor);
+    if parts.is_empty() {
+        return None;
+    }
+    Some((parts.remove(0), parts))
+}
+
 /// Turn the configured `editor` string and a target `file` into a launch plan.
 pub fn plan_launch(editor: &str, file: &str, path_var: Option<&OsStr>) -> Result<Launch, String> {
     let editor = editor.trim();
@@ -115,25 +154,24 @@ pub fn plan_launch(editor: &str, file: &str, path_var: Option<&OsStr>) -> Result
         return Err(format!("Not a file: {file}"));
     }
 
-    // A whole string that is a real path (e.g. unquoted `C:\Program Files\...`)
-    // is the program itself; never split it on spaces.
-    let (program, args) = if Path::new(editor).exists() {
-        (editor.to_owned(), Vec::new())
-    } else {
-        let mut parts = split_command_line(editor);
-        if parts.is_empty() {
-            return Err("No external editor configured".to_owned());
-        }
-        (parts.remove(0), parts)
+    let Some((program, args)) = split_program_and_args(editor) else {
+        return Err("No external editor configured".to_owned());
     };
     if program.is_empty() {
         return Err("External editor command is empty".to_owned());
     }
 
     if is_app_bundle(Path::new(&program)) {
+        // The file travels as `open`'s document argument; extra user args are
+        // forwarded after `--args` (ignored by macOS if the app is running).
+        let mut open_args = vec!["-a".to_owned(), program, file.to_owned()];
+        if !args.is_empty() {
+            open_args.push("--args".to_owned());
+            open_args.extend(args.iter().map(|a| a.replace(FILE_PLACEHOLDER, file)));
+        }
         return Ok(Launch {
             program: PathBuf::from("open"),
-            args: vec!["-a".to_owned(), program, file.to_owned()],
+            args: open_args,
         });
     }
     Ok(Launch {
@@ -231,6 +269,41 @@ mod tests {
     }
 
     #[test]
+    fn plan_unquoted_spaced_path_followed_by_args() {
+        let dir = temp_dir("unquoted dir");
+        let editor = dir.join("my editor");
+        let file = dir.join("a.txt");
+        fs::write(&editor, "x").unwrap();
+        fs::write(&file, "x").unwrap();
+        let cmd = format!("{} -g --wait", editor.display());
+        let plan = plan_launch(&cmd, file.to_str().unwrap(), None).unwrap();
+        assert_eq!(plan.program, editor);
+        assert_eq!(plan.args, vec!["-g", "--wait", file.to_str().unwrap()]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn relative_existing_prefix_is_not_a_program() {
+        // `Cargo.toml` exists relative to the test cwd (the crate root) but
+        // must be treated as a plain token, not shadow PATH lookup.
+        assert!(Path::new("Cargo.toml").exists());
+        assert_eq!(longest_existing_prefix("Cargo.toml -g"), None);
+        assert_eq!(
+            split_program_and_args("Cargo.toml -g"),
+            Some(("Cargo.toml".to_owned(), vec!["-g".to_owned()]))
+        );
+    }
+
+    #[test]
+    fn quoted_input_skips_prefix_probe() {
+        assert_eq!(
+            split_program_and_args(r#""a b" -x"#),
+            Some(("a b".to_owned(), vec!["-x".to_owned()]))
+        );
+        assert_eq!(split_program_and_args(""), None);
+    }
+
+    #[test]
     fn resolve_searches_path_var_with_extensions() {
         let dir = temp_dir("path");
         let bin = dir.join("fake-ed.cmd");
@@ -244,6 +317,53 @@ mod tests {
         assert_eq!(
             resolve_program("missing-ed", Some(&var)),
             PathBuf::from("missing-ed")
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    fn app_fixture(tag: &str) -> (PathBuf, PathBuf, PathBuf) {
+        let dir = temp_dir(tag);
+        let app = dir.join("Fake Editor.app");
+        fs::create_dir_all(&app).unwrap();
+        let file = dir.join("a.txt");
+        fs::write(&file, "x").unwrap();
+        (dir, app, file)
+    }
+
+    #[test]
+    fn app_bundle_forwards_extra_args_after_args_flag() {
+        let (dir, app, file) = app_fixture("app-args");
+        let cmd = format!("\"{}\" -n", app.display());
+        let plan = plan_launch(&cmd, file.to_str().unwrap(), None).unwrap();
+        assert_eq!(plan.program, PathBuf::from("open"));
+        assert_eq!(
+            plan.args,
+            vec![
+                "-a",
+                app.to_str().unwrap(),
+                file.to_str().unwrap(),
+                "--args",
+                "-n"
+            ]
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn app_bundle_replaces_file_placeholder_in_forwarded_args() {
+        let (dir, app, file) = app_fixture("app-placeholder");
+        let f = file.to_str().unwrap();
+        let cmd = format!("\"{}\" --open={{file}}", app.display());
+        let plan = plan_launch(&cmd, f, None).unwrap();
+        assert_eq!(
+            plan.args,
+            vec![
+                "-a".to_owned(),
+                app.to_str().unwrap().to_owned(),
+                f.to_owned(),
+                "--args".to_owned(),
+                format!("--open={f}")
+            ]
         );
         let _ = fs::remove_dir_all(&dir);
     }
