@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.10] - 2026-11-09
+
 ### Fixed
 
 - **Markdown links no longer navigate the app**: clicking a link in chat (e.g. `[路由配置说明.md](路由配置说明.md)`) used to load the WebView's own URL and reset the window to a fresh conversation. A capture-phase handler (`src/app/link-handler.js` + pure `link-target.js`, also loaded by the Quick Bar; covers left and middle click) now routes links: `http`/`https`/`mailto` open in the system browser; `file://`, absolute and project-relative paths go to the new `open_link_path` command (`src-tauri/src/link_open.rs`). Documents and media (`.md`, `.pdf`, images, …) open with the OS default app; code, scripts, executables and unknown types open in the configured external editor, or are revealed in the file manager when none is set, so a link can never run a file. `open_url_external` now only accepts `http`, `https` and `mailto`. When an external editor is configured, text/markup/config links (`.toml`, `.json`, `.yaml`, `.html`, `.md`, `.txt`, …) open in it too (PDF, images, audio/video and Office files still use the OS default app); if the default app fails to launch the link falls back to the editor or the file manager. A missing file or failed open now shows a short toast (`link.fail.*`, `src/app/link-toast.js`) instead of doing nothing.
