@@ -10,6 +10,7 @@ mod file_watcher;
 mod files;
 mod git;
 mod git_watcher;
+mod link_open;
 mod main_window;
 mod models_config;
 mod quick_bar;
@@ -191,9 +192,10 @@ fn stop_file_watch(watch_id: String, watcher: State<'_, FileWatcherState>) {
 /// Uses the `open` crate (`ShellExecute` on Windows, `xdg-open` on Linux, `open` on macOS).
 /// `window.open(url, "_blank")` creates a Tauri webview instead — this is the correct
 /// path for OAuth flows and any external URL that must open in the user's real browser.
+/// Only `http`, `https` and `mailto` are accepted (see `link_open::open_url`).
 #[tauri::command]
 fn open_url_external(url: String) -> Result<(), String> {
-    open::that(&url).map_err(|e| e.to_string())
+    link_open::open_url(&url)
 }
 
 /// Copy an omp session file to a new branched sub-directory so a forked tab
@@ -326,7 +328,9 @@ fn warm_up_overlays_and_start_default(app: &tauri::AppHandle) {
 // `generate_context!()` embeds the whole config + frontend assets in one
 // closure; its stack frame grew past clippy's limit once plugin config
 // (updater) was added. It runs exactly once at startup, so this is benign.
-#[allow(clippy::large_stack_frames)]
+// `too_many_lines`: the `generate_handler!` command list is one flat table
+// that must live in this builder chain.
+#[allow(clippy::large_stack_frames, clippy::too_many_lines)]
 pub fn run() {
     agent::ensure_gui_path();
     tauri::Builder::default()
@@ -397,6 +401,7 @@ pub fn run() {
             files::delete_file_or_dir,
             files::open_path_default,
             files::reveal_in_explorer,
+            link_open::open_link_path,
             external_editor::open_with_editor,
             external_editor::pick_editor_executable,
             review::review_check_environment,

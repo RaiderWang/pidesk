@@ -71,6 +71,7 @@ function QuickBarApp() {
 
     listen("quickbar://delta", (ev) => {
       setResult(ev.payload ?? EMPTY_RESULT);
+      window.LinkHandler?.setCwd(ev.payload?.cwd);
       setStreaming(true);
     }).then(u => unsubs.push(u));
 
