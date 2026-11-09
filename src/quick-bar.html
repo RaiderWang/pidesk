@@ -15,6 +15,8 @@
   <link rel="stylesheet" href="highlight-theme.css" />
   <!-- Quick Bar styles -->
   <link rel="stylesheet" href="quick-bar/quick-bar.css" />
+  <!-- Failed-link toast (kept inside the 24px transparent gutter's card area) -->
+  <link rel="stylesheet" href="design/layout/link-toast.css" />
 
   <style>
     /* The Quick Bar window is transparent + undecorated, so html/body
@@ -32,6 +34,7 @@
       box-sizing: border-box;
       padding: var(--qb-gutter);
     }
+    .link-toast { bottom: 36px; max-width: calc(100vw - 96px); }
   </style>
 
   <script>
@@ -64,6 +67,12 @@
 
   <!-- Shortcut utility -->
   <script src="design/tweaks/shortcut-util.js"></script>
+
+  <!-- Markdown links in the result pane open externally instead of
+       navigating the overlay webview. -->
+  <script src="app/link-target.js"></script>
+  <script src="app/link-toast.js"></script>
+  <script src="app/link-handler.js"></script>
 
   <!-- Quick Bar component + boot -->
   <script type="text/babel" src="quick-bar/use-auto-height.jsx"></script>

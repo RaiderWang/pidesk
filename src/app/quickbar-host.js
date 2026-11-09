@@ -10,7 +10,8 @@
 //   quickbar://appearance-request {}              — request current tweaks
 //
 // Events emitted (main → quick-bar):
-//   quickbar://delta   { html, markdown }  — rendered + raw result so far
+//   quickbar://delta   { html, markdown, cwd } — rendered + raw result so far;
+//                                          cwd resolves relative file links
 //   quickbar://done    null                — streaming finished
 //   quickbar://appearance { theme, accent, density, fontSize, monoChat }
 //                                          — pushed on tweakchange + request
@@ -99,7 +100,12 @@
     // flashing stale content from the session's existing history.
     if (!_sawStreaming) return;
 
-    const payload = projectLastAssistant(snap.messages, _baselineLen ?? 0);
+    // `cwd` lets the Quick Bar resolve relative file links against the
+    // session the reply came from ("" = standalone → default workspace).
+    const payload = {
+      ...projectLastAssistant(snap.messages, _baselineLen ?? 0),
+      cwd: BRIDGE()?.getCwd?.() || "",
+    };
     emitTo("quick-bar", "quickbar://delta", payload);
 
     const activity = snap.isStreaming ? "streaming" : "idle";
