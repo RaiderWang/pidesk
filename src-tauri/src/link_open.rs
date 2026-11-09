@@ -9,14 +9,25 @@
 //! revealed in the file manager.
 
 use std::fs;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
-/// Types that are safe to hand to the OS default handler (double-click).
-const OPEN_EXTENSIONS: &[&str] = &[
-    "md", "markdown", "mdx", "txt", "log", "pdf", "json", "jsonc", "yaml", "yml", "toml", "xml",
-    "csv", "tsv", "html", "htm", "rtf", "png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "svg",
-    "avif", "tif", "tiff", "mp3", "wav", "flac", "ogg", "m4a", "mp4", "mov", "webm", "mkv", "avi",
-    "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp",
+/// Error prefix the frontend matches to show a "file not found" message.
+const NOT_FOUND_PREFIX: &str = "not found: ";
+
+/// Media / office documents: safe for the OS default handler, always opened
+/// there (an editor is no use for them).
+const MEDIA_EXTENSIONS: &[&str] = &[
+    "pdf", "rtf", "png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "avif", "tif", "tiff", "mp3",
+    "wav", "flac", "ogg", "m4a", "mp4", "mov", "webm", "mkv", "avi", "doc", "docx", "xls", "xlsx",
+    "ppt", "pptx", "odt", "ods", "odp",
+];
+
+/// Text / markup / config files: safe to open by default, but the
+/// configured external editor is preferred when there is one.
+const TEXT_EXTENSIONS: &[&str] = &[
+    "md", "markdown", "mdx", "txt", "log", "csv", "tsv", "json", "jsonc", "yaml", "yml", "toml",
+    "xml", "html", "htm", "svg",
 ];
 
 /// Directory extensions that are really launchable bundles (macOS) — never opened.
@@ -61,10 +72,12 @@ fn decide_action(file_name: &str, is_dir: bool, has_editor: bool) -> Action {
             Action::Open
         };
     }
-    if ext.is_some_and(|e| OPEN_EXTENSIONS.contains(&e)) {
+    if ext.is_some_and(|e| MEDIA_EXTENSIONS.contains(&e)) {
         Action::Open
     } else if has_editor {
         Action::Editor
+    } else if ext.is_some_and(|e| TEXT_EXTENSIONS.contains(&e)) {
+        Action::Open
     } else {
         Action::Reveal
     }
@@ -102,7 +115,15 @@ pub fn open_url(url: &str) -> Result<(), String> {
 /// Resolve `path` (symlinks included, so the decision is made on the real
 /// target) and pick how to open it.
 fn plan(path: &str, has_editor: bool) -> Result<(PathBuf, Action), String> {
-    let real = fs::canonicalize(path).map_err(|e| format!("Cannot open {path}: {e}"))?;
+    // The "not found:" prefix is a contract with `describeFailure` in
+    // `src/app/link-toast.js`.
+    let real = fs::canonicalize(path).map_err(|e| {
+        if e.kind() == ErrorKind::NotFound {
+            format!("{NOT_FOUND_PREFIX}{path}")
+        } else {
+            format!("Cannot open {path}: {e}")
+        }
+    })?;
     let real = strip_verbatim(real);
     let name = real
         .file_name()
@@ -122,18 +143,25 @@ fn reveal(path: &Path) -> Result<(), String> {
 pub fn open_link_path(path: String, editor: Option<String>) -> Result<(), String> {
     let editor = editor.as_deref().map(str::trim).filter(|e| !e.is_empty());
     let (real, action) = plan(&path, editor.is_some())?;
-    match (action, editor) {
-        (Action::Open, _) => open::that(&real).map_err(|e| format!("Failed to open {path}: {e}")),
-        (Action::Editor, Some(editor)) => {
-            // A mistyped editor command must not leave the click dead.
+    match action {
+        // No handler registered / launch failed: degrade, never go dead.
+        Action::Open => open::that(&real).or_else(|_| edit_or_reveal(&real, editor)),
+        Action::Editor => edit_or_reveal(&real, editor),
+        Action::Reveal => reveal(&real),
+    }
+}
+
+/// Open in the external editor; a missing/mistyped editor falls back to
+/// revealing the file so the click is never dead.
+fn edit_or_reveal(real: &Path, editor: Option<&str>) -> Result<(), String> {
+    editor
+        .map_or(Err(String::new()), |editor| {
             crate::external_editor::open_with_editor(
                 editor.to_owned(),
                 real.to_string_lossy().into_owned(),
             )
-            .or_else(|_| reveal(&real))
-        }
-        _ => reveal(&real),
-    }
+        })
+        .or_else(|_| reveal(real))
 }
 
 #[cfg(test)]
@@ -151,17 +179,28 @@ mod tests {
     }
 
     #[test]
-    fn documents_open_with_default_app() {
+    fn media_always_opens_with_default_app() {
+        for n in ["x.pdf", "p.PNG", "a.docx", "clip.mp4", "s.XLSX"] {
+            assert_eq!(decide_action(n, false, false), Action::Open, "{n}");
+            assert_eq!(decide_action(n, false, true), Action::Open, "{n}");
+        }
+    }
+
+    #[test]
+    fn text_files_prefer_the_editor_when_configured() {
         for n in [
+            "Cargo.toml",
+            "index.html",
             "a.md",
             "README.MD",
-            "x.pdf",
-            "p.PNG",
             "d.json",
+            "x.mdx",
+            "ci.yml",
+            "notes.txt",
             "路由配置说明.md",
         ] {
             assert_eq!(decide_action(n, false, false), Action::Open, "{n}");
-            assert_eq!(decide_action(n, false, true), Action::Open, "{n}");
+            assert_eq!(decide_action(n, false, true), Action::Editor, "{n}");
         }
     }
 
@@ -183,6 +222,7 @@ mod tests {
         }
         // A document with trailing dots is still recognised as a document.
         assert_eq!(decide_action("notes.md.", false, false), Action::Open);
+        assert_eq!(decide_action("notes.md.", false, true), Action::Editor);
     }
 
     #[test]
@@ -250,10 +290,10 @@ mod tests {
             Action::Editor
         );
         assert_eq!(plan(dir.to_str().unwrap(), false).unwrap().1, Action::Open);
-        assert!(plan(dir.join("missing.md").to_str().unwrap(), false).is_err());
-        assert!(
-            open_link_path(dir.join("missing.md").to_string_lossy().into_owned(), None).is_err()
-        );
+        let missing = dir.join("missing.md").to_string_lossy().into_owned();
+        let err = plan(&missing, false).unwrap_err();
+        assert_eq!(err, format!("not found: {missing}"));
+        assert_eq!(open_link_path(missing, None), Err(err));
 
         let _ = fs::remove_dir_all(&dir);
     }

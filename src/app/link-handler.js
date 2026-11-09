@@ -10,7 +10,8 @@
      path     -> invoke("open_link_path", { path, editor })
 
    preventDefault() runs synchronously on the first line — never after an
-   await. Loaded by index.html and quick-bar.html (needs link-target.js).
+   await. Loaded by index.html and quick-bar.html (needs link-target.js;
+   link-toast.js for failure messages). Failures surface via LinkToast.
    ═════════════════════════════════════════════════════════════════════ */
 
 (function (root, factory) {
@@ -23,8 +24,8 @@
   "use strict";
 
   /**
-   * deps: { classify, invoke, getCwd(), getEditor() } — all synchronous
-   * except `invoke`. Returns the DOM event listener.
+   * deps: { classify, invoke, getCwd(), getEditor(), onError?(target, err) }
+   * — all synchronous except `invoke`. Returns the DOM event listener.
    */
   function createHandler(deps) {
     return function onLinkEvent(e) {
@@ -48,7 +49,10 @@
           editor: deps.getEditor() || null,
         });
       }
-      call?.catch?.((err) => console.warn("[link] open failed:", target, err));
+      call?.catch?.((err) => {
+        console.warn("[link] open failed:", target, err);
+        deps.onError?.(target, err);
+      });
     };
   }
 
@@ -66,6 +70,11 @@
       invoke: (cmd, args) => tauriInvoke(cmd, args) ?? Promise.reject(new Error("no tauri")),
       getCwd: () => (overrideCwd ?? win.OMP_BRIDGE?.getCwd?.()) || defaultCwd,
       getEditor: () => win.loadTweaksFromStorage?.()?.externalEditor || "",
+      onError: (target, err) => {
+        const toast = win.LinkToast;
+        const t = win.t ?? ((_key, _params, fallback) => fallback);
+        toast?.show(toast.describeFailure(target, err, t));
+      },
     });
     document.addEventListener("click", handler, true);
     document.addEventListener("auxclick", handler, true);

@@ -23,16 +23,23 @@ function fakeEvent({ type = 'click', button = 0, href, inMarkdown = true }) {
   };
 }
 
-function setup({ cwd = '/proj', editor = '' } = {}) {
+function setup({ cwd = '/proj', editor = '', failWith = null } = {}) {
   const calls = [];
+  const errors = [];
   const handler = createHandler({
     classify,
-    invoke: (cmd, args) => { calls.push([cmd, args]); return Promise.resolve(); },
+    invoke: (cmd, args) => {
+      calls.push([cmd, args]);
+      return failWith ? Promise.reject(failWith) : Promise.resolve();
+    },
     getCwd: () => cwd,
     getEditor: () => editor,
+    onError: (target, err) => errors.push([target, err]),
   });
-  return { handler, calls };
+  return { handler, calls, errors };
 }
+
+const flush = () => new Promise((r) => setTimeout(r, 0));
 
 describe('link handler', () => {
   it('opens http links externally and cancels navigation', () => {
@@ -78,6 +85,21 @@ describe('link handler', () => {
     handler(right);
     assert.equal(right.prevented, true);
     assert.equal(calls.length, 1);
+  });
+
+  it('reports open failures through onError with the classified target', async () => {
+    const { handler, errors } = setup({ failWith: 'not found: /proj/gone.md' });
+    handler(fakeEvent({ href: 'gone.md' }));
+    await flush();
+    assert.deepEqual(errors, [[{ kind: 'path', path: '/proj/gone.md' }, 'not found: /proj/gone.md']]);
+  });
+
+  it('stays silent when nothing is opened or the open succeeds', async () => {
+    const { handler, errors } = setup();
+    handler(fakeEvent({ href: '#top' }));
+    handler(fakeEvent({ href: 'a.md' }));
+    await flush();
+    assert.equal(errors.length, 0);
   });
 
   it('ignores links outside Markdown content', () => {
