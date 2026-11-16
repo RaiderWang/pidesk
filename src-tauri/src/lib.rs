@@ -13,6 +13,7 @@ mod git_watcher;
 mod link_open;
 mod main_window;
 mod models_config;
+mod models_diagnostics;
 mod quick_bar;
 mod review;
 mod saved_sessions;
@@ -330,7 +331,12 @@ fn warm_up_overlays_and_start_default(app: &tauri::AppHandle) {
 // (updater) was added. It runs exactly once at startup, so this is benign.
 // `too_many_lines`: the `generate_handler!` command list is one flat table
 // that must live in this builder chain.
-#[allow(clippy::large_stack_frames, clippy::too_many_lines)]
+#[allow(
+    unknown_lints,
+    clippy::large_stack_frames,
+    clippy::large_unopt_stack_frames,
+    clippy::too_many_lines
+)]
 pub fn run() {
     agent::ensure_gui_path();
     tauri::Builder::default()
@@ -371,6 +377,7 @@ pub fn run() {
             models_config::write_models_config,
             models_config::open_models_file,
             models_config::open_models_folder,
+            models_diagnostics::check_models_config,
             copy_session_file,
             delete_saved_session,
             save_html_export,

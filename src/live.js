@@ -77,6 +77,7 @@
     hubTaskId:  null,       // active task tool's toolCallId
     hubHistory: [],         // last 3 completed task results [{taskId, agents, time}]
     agentError: null,       // startup/runtime error reason if omp is not running
+    modelsConfigWarning: null, // global: why omp ignored models.yml (schema error), or null
     toolLogs:   {},         // toolCallId -> { id, tool, target, title, command, status, startMs, durationMs, lines }
     hasPendingAsyncWork: false, // omp 18.4+: background jobs or subagents still pending
     isSettled:           true,  // omp 18.4+: true when agent is completely idle with no pending async work
@@ -298,6 +299,7 @@
       hubTaskId:       state.hubTaskId,
       hubHistory:      state.hubHistory,
       agentError:      state.agentError,
+      modelsConfigWarning: state.modelsConfigWarning,
       agentStarting,
       toolLogs:        state.toolLogs,
       hasPendingAsyncWork: state.hasPendingAsyncWork,
@@ -804,6 +806,7 @@
         _syncCurrentModel();
         notify();
         console.log(`[live] models loaded (${state.models.length} total) for session '${activeSessionId}'`);
+        _checkModelsConfig(rpcModels, customData);
       }).catch(() => {
         state.models = rpcModels;
         _syncCurrentModel();
@@ -1708,6 +1711,30 @@
     return merged;
   }
 
+  // omp silently drops every custom provider when models.yml fails its schema
+  // validation, while PiDesk still lists those models from the file. When
+  // custom models are missing from omp's list, ask `omp models` why (it prints
+  // the validation error; RPC mode does not) and surface it.
+  let _configCheckKey = null;   // missing-set already diagnosed (skips re-running the CLI)
+  let _configCheckBusy = false;
+  function _checkModelsConfig(rpcModels, customData) {
+    const check = window.ModelsConfigCheck;
+    if (!window.__TAURI__ || !check) return;
+    const key = check.missingKey(check.missingCustomModels(rpcModels, customData?.customModels));
+    if (!key) {
+      _configCheckKey = null;
+      if (state.modelsConfigWarning) { state.modelsConfigWarning = null; notify(); }
+      return;
+    }
+    if (key === _configCheckKey || _configCheckBusy) return;
+    _configCheckBusy = true;
+    window.__TAURI__.core.invoke("check_models_config").then(msg => {
+      _configCheckKey = key;
+      state.modelsConfigWarning = (typeof msg === "string" && msg.trim()) || null;
+      notify();
+    }).catch(() => {}).finally(() => { _configCheckBusy = false; });
+  }
+
   function _initFetch() {
     _send({ type: "get_state" });
     _send({ type: "get_messages" });
@@ -2092,7 +2119,14 @@
     setPeer(id)   { window.PeerSessionBridge.pin(id, activeSessionId); },
     clearPeer()   { window.PeerSessionBridge.unpin(); },
 
+    /** Hide the models.yml warning banner until the missing-model set changes. */
+    dismissModelsConfigWarning() {
+      state.modelsConfigWarning = null;
+      notify();
+    },
+
     async refreshModels() {
+      _configCheckKey = null; // models.yml changed: diagnose again on the next model list
       if (await _needsRestart(activeSessionId)) {
         const entry = sessionRegistry.get(activeSessionId);
         const cwd = entry?.path ?? "";
@@ -2577,6 +2611,7 @@
         hubTaskId:       state.hubTaskId,
         hubHistory:      state.hubHistory,
         agentError:      state.agentError,
+        modelsConfigWarning: state.modelsConfigWarning,
         agentStarting,
         toolLogs:        state.toolLogs,
         hasPendingAsyncWork: state.hasPendingAsyncWork,

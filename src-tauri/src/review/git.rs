@@ -94,8 +94,9 @@ pub fn run_capped(mut cmd: Command, max: usize) -> Result<Captured, String> {
         .map_err(|e| format!("Failed to wait for git: {e}"))?;
     let stderr = stderr_thread
         .and_then(|t| t.join().ok())
-        .map(|b| String::from_utf8_lossy(&b).trim().to_owned())
-        .unwrap_or_default();
+        .map_or_else(String::new, |b| {
+            String::from_utf8_lossy(&b).trim().to_owned()
+        });
     read.map_err(|e| format!("Failed to read git output: {e}"))?;
 
     Ok(Captured {

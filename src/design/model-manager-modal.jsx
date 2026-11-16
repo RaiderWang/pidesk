@@ -106,6 +106,16 @@ function ModelManagerModal({ open, onClose, onModelUpdated }) {
         showToast("YAML validation failed: " + check.error, "error");
         return;
       }
+      // omp drops every custom provider when a string field is not a string.
+      const schema = window.ModelsSchemaCheck?.check(check.parsed);
+      if (schema && !schema.ok) {
+        const [first] = schema.errors;
+        showToast(
+          window.t("models.schemaError", { path: first.path, got: first.got, count: schema.errors.length }),
+          "error",
+        );
+        return;
+      }
       setParsed(check.parsed);
     }
 

@@ -39,6 +39,8 @@ function useBridgeSnapshot(bridge, setters) {
       // Agent error — status and process errors
       setters.setAgentError?.(snap.agentError ?? null);
       setters.setAgentStarting?.(!!snap.agentStarting);
+      // models.yml rejected by omp (custom providers disabled)
+      setters.setModelsConfigWarning?.(snap.modelsConfigWarning ?? null);
       // Tool logs buffer
       setters.setToolLogs?.(snap.toolLogs ?? {});
       // Background async work & settlement (omp 18.4+)

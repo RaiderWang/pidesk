@@ -69,6 +69,7 @@ function loadScript(rel) {
 loadScript('model-names.js');
 loadScript('adapter.js');
 loadScript('design/yaml-util.js');
+loadScript('design/models-schema-check.js');
 loadScript('i18n.js');
 loadScript('app/chat-grouping.js');
 loadScript('app/notice-bubble.js');
@@ -86,6 +87,7 @@ loadScript('app/undo-message.js');
 loadScript('app/session-title.js');
 loadScript('app/model-prefs.js');
 loadScript('app/session-restart.js');
+loadScript('app/models-config-check.js');
 loadScript('app/updater.js');
 loadScript('app/appearance.js');
 
@@ -114,6 +116,10 @@ export const {
 
 // yaml-util.js exports a namespace object (window.YamlUtil)
 export const { parseModelsYaml, dumpModelsYaml, validateModelsYaml } = globalThis.YamlUtil;
+
+// design/models-schema-check.js, app/models-config-check.js namespace objects
+export const ModelsSchemaCheck = globalThis.ModelsSchemaCheck;
+export const ModelsConfigCheck = globalThis.ModelsConfigCheck;
 
 // i18n.js exports window.I18N and window.t
 export const { t, getLocale, setLocale } = globalThis.I18N;

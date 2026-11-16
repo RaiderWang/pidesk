@@ -40,11 +40,18 @@
     if (typeof val === "number") return String(val);
     const s = String(val);
     if (s === "") return "''";
+    // Number/bool/null-looking strings must stay quoted or they round-trip to another type.
+    if (/^-?\d+(\.\d+)?$/.test(s) || /^(true|false|null|~)$/.test(s)) return JSON.stringify(s);
     // If string contains colons, hashes, special chars, or starts with dash/quote, quote it
     if (/[:#\[\]{},>|%@`\*\?]|^\s|\s$|^[-?]/.test(s)) {
       return JSON.stringify(s);
     }
     return s;
+  }
+
+  /** Format a field omp's schema requires to be a string (coerces e.g. a parsed `123`). */
+  function formatStr(val) {
+    return formatScalar(typeof val === "string" ? val : String(val ?? ""));
   }
 
   /**
@@ -263,7 +270,7 @@
       lines.push(`  ${pKey}:`);
 
       if (prov.baseUrl !== undefined && prov.baseUrl !== "") {
-        lines.push(`    baseUrl: ${formatScalar(prov.baseUrl)}`);
+        lines.push(`    baseUrl: ${formatStr(prov.baseUrl)}`);
       }
 
       // Handle auth mode: oauth / none / apiKey
@@ -280,15 +287,15 @@
         }
       } else {
         if (prov.apiKey !== undefined && prov.apiKey !== null) {
-          lines.push(`    apiKey: ${formatScalar(prov.apiKey)}`);
+          lines.push(`    apiKey: ${formatStr(prov.apiKey)}`);
         }
         if (prov.auth && prov.auth !== "apiKey") {
-          lines.push(`    auth: ${formatScalar(prov.auth)}`);
+          lines.push(`    auth: ${formatStr(prov.auth)}`);
         }
       }
 
       if (prov.api !== undefined && prov.api !== "") {
-        lines.push(`    api: ${formatScalar(prov.api)}`);
+        lines.push(`    api: ${formatStr(prov.api)}`);
       }
 
       // Preserve any extra provider properties (compat, headers, modelOverrides, etc.)
@@ -320,9 +327,9 @@
       } else {
         lines.push("    models:");
         for (const m of models) {
-          lines.push(`      - id: ${formatScalar(m.id || "")}`);
+          lines.push(`      - id: ${formatStr(m.id || "")}`);
           if (m.name) {
-            lines.push(`        name: ${formatScalar(m.name)}`);
+            lines.push(`        name: ${formatStr(m.name)}`);
           }
           if (m.contextWindow !== undefined && m.contextWindow !== null && m.contextWindow !== "") {
             lines.push(`        contextWindow: ${m.contextWindow}`);

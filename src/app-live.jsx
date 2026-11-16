@@ -16,7 +16,7 @@
 
 const {
   Icon, ChatView, Composer, CommandPalette, ShortcutsHelp, WindowChrome, TabBar,
-  StatusBar, AmbientRail, SplitPeer, PlanKanban, PlanDockView, HistoryModal, ModelManagerModal, ModelRestartModal, ToolLogModal, AgentErrorBanner, useTweaks,
+  StatusBar, AmbientRail, SplitPeer, PlanKanban, PlanDockView, HistoryModal, ModelManagerModal, ModelRestartModal, ToolLogModal, AgentErrorBanner, ModelsConfigWarning, useTweaks,
   FileTreePanel, ActivityBar, DockPanel, useDockState, useViewportWidth,
   TweaksPanel, TweakSection, TweakRadio, TweakToggle, TweakColor, TweakSlider, TweakShortcut, TweakEditor,
   TWEAK_DEFAULTS, NULL_MODEL, EMPTY_PROJECT, NULL_PEER,
@@ -118,6 +118,7 @@ function App() {
   const [hubHistory, setHubHistory] = React.useState([]);
   const [agentError, setAgentError] = React.useState(null);
   const [agentStarting, setAgentStarting] = React.useState(false);
+  const [modelsConfigWarning, setModelsConfigWarning] = React.useState(null);
   const [hasPendingAsyncWork, setHasPendingAsyncWork] = React.useState(false);
   const [isSettled,           setIsSettled]           = React.useState(true);
 
@@ -174,7 +175,7 @@ function App() {
     setPeer, setPeerSessionId,
     setRunningTools, setRecentTools, setTurnStartMs,
     setHubMode, setHubAgents, setHubHistory,
-    setAgentError, setAgentStarting, setToolLogs,
+    setAgentError, setAgentStarting, setModelsConfigWarning, setToolLogs,
     setHasPendingAsyncWork, setIsSettled,
   });
   useThemeEffect(t);
@@ -497,6 +498,13 @@ function App() {
                   error={agentError}
                   onRetry={() => bridge?.retrySession?.(activeSessionId)}
                   onConfigureModels={() => setModelManagerOpen(true)}
+                />
+              )}
+              {modelsConfigWarning && !agentError && (
+                <ModelsConfigWarning
+                  detail={modelsConfigWarning}
+                  onOpenModels={() => setModelManagerOpen(true)}
+                  onDismiss={() => bridge?.dismissModelsConfigWarning?.()}
                 />
               )}
               <ChatView messages={messages}

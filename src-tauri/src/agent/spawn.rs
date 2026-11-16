@@ -87,7 +87,7 @@ pub fn ensure_gui_path() {
 }
 
 /// Candidate binary paths tried in order.
-fn omp_candidates() -> Vec<std::path::PathBuf> {
+pub fn omp_candidates() -> Vec<std::path::PathBuf> {
     ensure_gui_path();
     let mut list = Vec::new();
     if cfg!(windows) {

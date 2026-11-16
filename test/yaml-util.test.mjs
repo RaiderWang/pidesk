@@ -419,3 +419,45 @@ describe('modelsFingerprint', () => {
     assert.equal(modelsFingerprint(''), modelsFingerprint(null));
   });
 });
+
+// ── string-typed fields survive a round trip ───────────────────────────────
+// omp's schema rejects a non-string apiKey/id/name and then disables *every*
+// custom provider, so a "123" must never come back as the number 123.
+
+describe('string fields round-trip as strings', () => {
+  const yml = (apiKey, id = 'm1') =>
+    `providers:\n  p:\n    baseUrl: http://x/v1\n    apiKey: ${apiKey}\n    api: openai-completions\n    models:\n      - id: ${id}\n        name: ${id}\n        contextWindow: 1000000\n`;
+
+  it('keeps a quoted numeric apiKey quoted after re-dump', () => {
+    const out = dumpModelsYaml(parseModelsYaml(yml('"123"')));
+    assert.match(out, /apiKey: "123"/);
+    assert.equal(parseModelsYaml(out).providers.p.apiKey, '123');
+  });
+
+  it('heals an unquoted numeric apiKey on form save', () => {
+    const parsed = parseModelsYaml(yml('123'));
+    assert.equal(parsed.providers.p.apiKey, 123);
+    const out = dumpModelsYaml(parsed);
+    assert.match(out, /apiKey: "123"/);
+    assert.equal(typeof parseModelsYaml(out).providers.p.apiKey, 'string');
+  });
+
+  it('quotes boolean/null-looking and numeric model ids and names', () => {
+    const out = dumpModelsYaml({
+      providers: { p: { apiKey: 'k', models: [{ id: 'true', name: '1.5' }, { id: 42, name: 7 }] } },
+    });
+    assert.match(out, /- id: "true"\n\s+name: "1\.5"/);
+    assert.match(out, /- id: "42"\n\s+name: "7"/);
+  });
+
+  it('leaves real numeric fields unquoted', () => {
+    const out = dumpModelsYaml(parseModelsYaml(yml('sk-abc')));
+    assert.match(out, /contextWindow: 1000000/);
+    assert.match(out, /apiKey: sk-abc/);
+  });
+
+  it('still emits plain strings unquoted', () => {
+    const out = dumpModelsYaml(parseModelsYaml(yml('ARKCODE_API_KEY', 'deepseek-v4.1-flash')));
+    assert.match(out, /- id: deepseek-v4\.1-flash/);
+  });
+});

@@ -127,8 +127,7 @@ fn plan(path: &str, has_editor: bool) -> Result<(PathBuf, Action), String> {
     let real = strip_verbatim(real);
     let name = real
         .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_default();
+        .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
     let action = decide_action(&name, real.is_dir(), has_editor);
     Ok((real, action))
 }

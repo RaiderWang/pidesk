@@ -76,10 +76,10 @@ pub(super) fn spawn_stdout_reader(
         });
 
         if exit_reason.is_empty() {
-            let stderr_tail = stderr_lines
-                .lock()
-                .map(|lines| lines.join("\n").trim().to_string())
-                .unwrap_or_default();
+            let stderr_tail = stderr_lines.lock().map_or_else(
+                |_| String::new(),
+                |lines| lines.join("\n").trim().to_string(),
+            );
 
             let exit_status = removed
                 .and_then(|mut inner| inner.child.take())
