@@ -49,9 +49,27 @@
     return s;
   }
 
-  /** Format a field omp's schema requires to be a string (coerces e.g. a parsed `123`). */
+  // Plain scalars a YAML parser (1.1 or 1.2, any case) reads as a non-string.
+  // Quoting is always safe for a string-only field, so this errs on the wide side.
+  const NON_STRING_LITERAL = new RegExp(
+    "^(?:" +
+      "(?:true|false|null|yes|no|on|off|y|n|~)" + // bool / null / YAML 1.1 booleans
+      "|[-+]?(?:\\d[\\d_]*\\.?[\\d_]*|\\.\\d[\\d_]*)(?:e[-+]?\\d+)?" + // 12, +1, -1.5, .5, 1e5, 1_000
+      "|0[xob][0-9a-f_]+" + // 0x1F, 0o7, 0b1
+      "|[-+]?\\.(?:inf|nan)" + // .inf, -.inf, .nan
+      ")$",
+    "i",
+  );
+
+  /**
+   * Format a field omp's schema requires to be a string (coerces e.g. a parsed
+   * `123`). Only for string-only fields: extra props (compat, headers, …) keep
+   * `formatScalar`, where an unquoted `True` is a real boolean for omp.
+   */
   function formatStr(val) {
-    return formatScalar(typeof val === "string" ? val : String(val ?? ""));
+    const s = typeof val === "string" ? val : String(val ?? "");
+    if (s !== "" && NON_STRING_LITERAL.test(s)) return JSON.stringify(s);
+    return formatScalar(s);
   }
 
   /**
@@ -327,8 +345,8 @@
       } else {
         lines.push("    models:");
         for (const m of models) {
-          lines.push(`      - id: ${formatStr(m.id || "")}`);
-          if (m.name) {
+          lines.push(`      - id: ${formatStr(m.id ?? "")}`);
+          if (m.name !== undefined && m.name !== null && m.name !== "") {
             lines.push(`        name: ${formatStr(m.name)}`);
           }
           if (m.contextWindow !== undefined && m.contextWindow !== null && m.contextWindow !== "") {

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * test/models-schema-check.test.mjs
  *
  * ModelsSchemaCheck.check mirrors omp's "string field must be a string" schema

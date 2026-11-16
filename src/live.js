@@ -1715,24 +1715,27 @@
   // validation, while PiDesk still lists those models from the file. When
   // custom models are missing from omp's list, ask `omp models` why (it prints
   // the validation error; RPC mode does not) and surface it.
-  let _configCheckKey = null;   // missing-set already diagnosed (skips re-running the CLI)
-  let _configCheckBusy = false;
+  // The runner de-duplicates per missing-set and drops results superseded by a
+  // newer request or by `invalidate()` (models.yml saved while a run was in flight).
+  let _configCheckRunner = null;
+  function _modelsConfigRunner() {
+    if (!_configCheckRunner) {
+      _configCheckRunner = window.ModelsConfigCheck.createRunner(
+        () => window.__TAURI__.core.invoke("check_models_config"),
+        (msg) => {
+          if (state.modelsConfigWarning === msg) return;
+          state.modelsConfigWarning = msg;
+          notify();
+        },
+      );
+    }
+    return _configCheckRunner;
+  }
   function _checkModelsConfig(rpcModels, customData) {
     const check = window.ModelsConfigCheck;
-    if (!window.__TAURI__ || !check) return;
+    if (!window.__TAURI__ || !check?.createRunner) return;
     const key = check.missingKey(check.missingCustomModels(rpcModels, customData?.customModels));
-    if (!key) {
-      _configCheckKey = null;
-      if (state.modelsConfigWarning) { state.modelsConfigWarning = null; notify(); }
-      return;
-    }
-    if (key === _configCheckKey || _configCheckBusy) return;
-    _configCheckBusy = true;
-    window.__TAURI__.core.invoke("check_models_config").then(msg => {
-      _configCheckKey = key;
-      state.modelsConfigWarning = (typeof msg === "string" && msg.trim()) || null;
-      notify();
-    }).catch(() => {}).finally(() => { _configCheckBusy = false; });
+    _modelsConfigRunner().request(key);
   }
 
   function _initFetch() {
@@ -2126,7 +2129,7 @@
     },
 
     async refreshModels() {
-      _configCheckKey = null; // models.yml changed: diagnose again on the next model list
+      _configCheckRunner?.invalidate(); // models.yml changed: drop in-flight result, diagnose again
       if (await _needsRestart(activeSessionId)) {
         const entry = sessionRegistry.get(activeSessionId);
         const cwd = entry?.path ?? "";

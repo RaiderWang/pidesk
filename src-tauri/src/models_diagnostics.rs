@@ -77,12 +77,20 @@ fn run_omp_models(path: &Path) -> Option<String> {
 /// error from `models.yml`. `None` when the config is valid or omp could not
 /// be run (nothing trustworthy to report). Blocks for a few seconds, so the
 /// frontend only calls it once it already sees models missing from omp.
+///
+/// `async` + `spawn_blocking`: a sync command would run on the main thread and
+/// freeze the window while `omp models` is polled.
 #[tauri::command]
-pub fn check_models_config() -> Option<String> {
-    omp_candidates()
-        .into_iter()
-        .find_map(|path| run_omp_models(&path))
-        .and_then(|text| extract_validation_warning(&text))
+pub async fn check_models_config() -> Option<String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        omp_candidates()
+            .into_iter()
+            .find_map(|path| run_omp_models(&path))
+            .and_then(|text| extract_validation_warning(&text))
+    })
+    .await
+    .ok()
+    .flatten()
 }
 
 #[cfg(test)]

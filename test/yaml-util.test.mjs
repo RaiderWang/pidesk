@@ -460,4 +460,41 @@ describe('string fields round-trip as strings', () => {
     const out = dumpModelsYaml(parseModelsYaml(yml('ARKCODE_API_KEY', 'deepseek-v4.1-flash')));
     assert.match(out, /- id: deepseek-v4\.1-flash/);
   });
+
+  it('quotes every literal a YAML parser would read as a non-string', () => {
+    for (const lit of ['True', 'FALSE', 'Null', 'yes', 'No', 'ON', 'off', 'y', '1e5', '1E-3', '0x1F', '0o7', '+1', '-1.5', '.5', '1_000', '.inf', '-.INF', '.NaN']) {
+      const out = dumpModelsYaml({ providers: { p: { apiKey: lit, models: [] } } });
+      assert.ok(out.includes(`apiKey: ${JSON.stringify(lit)}`), `${lit} must be quoted, got: ${out}`);
+      assert.equal(parseModelsYaml(out).providers.p.apiKey, lit);
+    }
+  });
+
+  it('does not quote ordinary keys and ids that merely contain such characters', () => {
+    for (const lit of ['sk-123', 'deepseek-v4.1-flash', 'gpt-4o', 'key_1', 'one', 'e5', '1-2', 'yesterday']) {
+      const out = dumpModelsYaml({ providers: { p: { apiKey: lit, models: [] } } });
+      assert.ok(out.includes(`apiKey: ${lit}\n`), `${lit} should stay plain, got: ${out}`);
+    }
+  });
+
+  it('keeps falsy-looking model ids and names instead of dropping them', () => {
+    const out = dumpModelsYaml({
+      providers: { p: { apiKey: 'k', models: [{ id: 0, name: 0 }, { id: false, name: false }] } },
+    });
+    assert.match(out, /- id: "0"\n\s+name: "0"/);
+    assert.match(out, /- id: "false"\n\s+name: "false"/);
+  });
+
+  it('omits an empty or missing model name', () => {
+    const out = dumpModelsYaml({
+      providers: { p: { apiKey: 'k', models: [{ id: 'a', name: '' }, { id: 'b' }, { id: 'c', name: null }] } },
+    });
+    assert.ok(!out.includes('name:'), out);
+  });
+
+  it('leaves unquoted booleans in extra props alone (formatScalar is unchanged)', () => {
+    const src = 'providers:\n  p:\n    apiKey: k\n    flag: True\n    models:\n      - id: a\n        custom: Yes\n';
+    const out = dumpModelsYaml(parseModelsYaml(src));
+    assert.match(out, /\n    flag: True\n/);
+    assert.match(out, /\n        custom: Yes\n/);
+  });
 });
