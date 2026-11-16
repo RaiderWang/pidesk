@@ -391,3 +391,31 @@ providers:
     assert.deepEqual(r.parsed.providers.openai.apiKey, direct.providers.openai.apiKey);
   });
 });
+
+// -- modelsFingerprint --
+
+describe('modelsFingerprint', () => {
+  const { modelsFingerprint } = globalThis.YamlUtil;
+  const yml = (id, extra = '') =>
+    `providers:\n  p:\n    baseUrl: http://x/v1\n    api: openai-completions\n    models:\n      - id: ${id}\n        name: ${id}\n${extra}`;
+
+  it('is stable across re-dumping (formatting only)', () => {
+    const raw = yml('a');
+    assert.equal(modelsFingerprint(raw), modelsFingerprint(dumpModelsYaml(parseModelsYaml(raw))));
+  });
+
+  it('changes when a model id is renamed', () => {
+    assert.notEqual(modelsFingerprint(yml('a')), modelsFingerprint(yml('b')));
+  });
+
+  it('changes when a model setting is edited', () => {
+    assert.notEqual(
+      modelsFingerprint(yml('a')),
+      modelsFingerprint(yml('a', '        contextWindow: 1000\n')),
+    );
+  });
+
+  it('tolerates empty / nullish input', () => {
+    assert.equal(modelsFingerprint(''), modelsFingerprint(null));
+  });
+});

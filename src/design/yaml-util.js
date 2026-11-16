@@ -373,9 +373,23 @@
     }
   }
 
+  /**
+   * Formatting-insensitive identity of a models.yml: the form view re-dumps the
+   * file, so raw text can differ while the configuration is the same. Falls
+   * back to the trimmed text when it cannot be parsed.
+   */
+  function modelsFingerprint(raw) {
+    try {
+      return JSON.stringify(parseModelsYaml(raw || ""));
+    } catch {
+      return String(raw || "").trim();
+    }
+  }
+
   window.YamlUtil = {
     parseModelsYaml,
     dumpModelsYaml,
     validateModelsYaml,
+    modelsFingerprint,
   };
 })();

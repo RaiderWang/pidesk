@@ -116,6 +116,42 @@
     } catch {}
   }
 
+  // _savePrefs is a shallow merge and cannot delete keys; write the stripped
+  // object back to drop a dangling model (renamed/deleted in models.yml).
+  function _clearModelPrefs() {
+    try {
+      const prev = _loadPrefs();
+      const next = window.ModelPrefs ? window.ModelPrefs.stripModel(prev) : { ...prev };
+      if (!window.ModelPrefs) {
+        delete next.modelId; delete next.modelProvider; delete next.modelName;
+      }
+      localStorage.setItem(PREFS_KEY, JSON.stringify(next));
+    } catch {}
+  }
+
+  // Origin of each in-flight set_model ("restore" | "user"), oldest first.
+  // omp answers commands in order, so each set_model response shifts one entry.
+  // A failed "restore" is silent and self-heals; a failed "user" shows a notice.
+  const _pendingSetModel = [];
+
+  function _sendSetModel(provider, modelId, origin) {
+    _pendingSetModel.push(origin);
+    _send({ type: "set_model", provider, modelId });
+  }
+
+  // Push the current thinking level to the active model (or force "off" for
+  // an explicitly non-reasoning one). Shared by set_model success and the
+  // rollback after a failed preference restore.
+  function _pushThinkingLevel() {
+    if (!state.thinkingLevel || state.thinkingLevel === "off") return;
+    if (state.model?.reasoning === false) {
+      state.thinkingLevel = "off";
+      _savePrefs({ thinkingLevel: "off" });
+    } else {
+      _send({ type: "set_thinking_level", level: state.thinkingLevel });
+    }
+  }
+
   function _restorePrefs() {
     const prefs = _loadPrefs();
     if (!prefs || typeof prefs !== "object") return;
@@ -129,9 +165,16 @@
     // if omp's default model is non-reasoning (e.g. auto/best-free), pushing a thinking
     // level will cause omp to clamp/reset it to undefined. Instead, switch model first;
     // the set_model response handler re-pushes state.thinkingLevel to the new model.
-    const willChangeModel = Boolean(prefs.modelId && prefs.modelProvider && state.model?.id !== prefs.modelId);
+    // Same id under another provider is a different model; a model without a
+    // reported provider is compared by id only (no needless set_model).
+    const sameModel = state.model?.id === prefs.modelId
+      && (!state.model?.provider || state.model.provider === prefs.modelProvider);
+    const willChangeModel = Boolean(prefs.modelId && prefs.modelProvider && !sameModel);
     if (willChangeModel) {
-      _send({ type: "set_model", provider: prefs.modelProvider, modelId: prefs.modelId });
+      // No pre-check against state.models: it may still hold only the models.yml
+      // entries here (built-in/OAuth models arrive later). A stale model fails
+      // the set_model and is healed in _handleResponse.
+      _sendSetModel(prefs.modelProvider, prefs.modelId, "restore");
       // Optimistic local update to prevent the UI flashing omp's default model.
       state.model = _buildModelEntry({
         id: prefs.modelId,
@@ -139,7 +182,9 @@
         provider: prefs.modelProvider,
       });
       if (state.models.length > 0) {
-        state.models = state.models.map(m => ({ ...m, current: m.id === prefs.modelId }));
+        state.models = state.models.map(m => ({
+          ...m, current: m.id === prefs.modelId && (!m.provider || m.provider === prefs.modelProvider),
+        }));
       }
     } else if (prefs.thinkingLevel) {
       // Model unchanged — push thinking level directly to current model.
@@ -275,6 +320,7 @@
 
   // Reset all per-session volatile state (called before loading a new session)
   function _resetSessionVars() {
+    _pendingSetModel.length = 0;
     Object.assign(state, {
       messages:      [],
       isStreaming:   false,
@@ -483,7 +529,9 @@
   }
 
   // ── Session switching ─────────────────────────────────────────────────────
-  async function _switchToSession(id) {
+  // `fresh` skips the cached snapshot and starts from a blank state (so the
+  // saved model/thinking prefs are pushed to the new process), even if one exists.
+  async function _switchToSession(id, { fresh = false } = {}) {
     if (!window.__TAURI__) return;
 
     // Auto-clear peer if switching to the peer tab (redundant to monitor yourself)
@@ -495,6 +543,8 @@
 
     // Snapshot current session so we can restore it when switching back
     _saveCurrentSession();
+    // Listeners are torn down below; responses to in-flight set_model never arrive.
+    _pendingSetModel.length = 0;
 
     // Tear down old listeners
     for (const ul of activeListeners) { try { await ul(); } catch (_) {} }
@@ -505,7 +555,7 @@
     const waitSeq = ++_startWaitSeq;
 
     // Restore cached snapshot (preserves streaming messages) or start fresh
-    if (!_restoreSession(id)) {
+    if (fresh || !_restoreSession(id)) {
       _resetSessionVars();
       _sessionFresh = true;
     } else {
@@ -667,6 +717,20 @@
     if (!resp.success) {
       if (resp.command === "set_model") {
         console.warn("[live] set_model failed:", resp.error);
+        if (_pendingSetModel.shift() === "restore") {
+          // Saved model no longer exists (e.g. renamed in models.yml): forget it,
+          // fall back to what omp is actually running, no notice — not a user action.
+          _clearModelPrefs();
+          const rpcModel = state.rpcState?.model;
+          state.model = rpcModel ? _buildModelEntry(rpcModel) : null;
+          if (rpcModel) {
+            _syncCurrentModel();
+            state.models = state.models.map(m => ({ ...m, current: m.id === rpcModel.id }));
+          }
+          _pushThinkingLevel();
+          notify();
+          return;
+        }
         const errMsg = resp.error || "Failed to switch model";
         const failText = window.t
           ? window.t("agent.modelSwitchFailed", { error: errMsg })
@@ -773,20 +837,13 @@
       }
 
     } else if (command === "set_model") {
+      _pendingSetModel.shift();
       if (data) {
         state.model  = _buildModelEntry(data);
         state.models = state.models.map(m => ({ ...m, current: m.id === data.id }));
         _savePrefs({ modelId: data.id, modelProvider: data.provider, modelName: data.name });
         _syncCurrentModel();
-        const isExplicitlyNonReasoning = state.model?.reasoning === false;
-        if (state.thinkingLevel && state.thinkingLevel !== "off") {
-          if (isExplicitlyNonReasoning) {
-            state.thinkingLevel = "off";
-            _savePrefs({ thinkingLevel: "off" });
-          } else {
-            _send({ type: "set_thinking_level", level: state.thinkingLevel });
-          }
-        }
+        _pushThinkingLevel();
         _send({ type: "get_available_thinking_levels" });
         _send({ type: "get_state" });
         notify();
@@ -1793,7 +1850,7 @@
           .catch(() => {});
       }
       state.agentError = null;
-      _send({ type: "set_model", provider: model.provider, modelId: model.id });
+      _sendSetModel(model.provider, model.id, "user");
     },
     async retrySession(id = activeSessionId) {
       if (!window.__TAURI__ || !id) return;
@@ -1811,6 +1868,45 @@
         return;
       }
       await _switchToSession(id);
+    },
+    /**
+     * Respawn the active tab's omp so it re-reads models.yml (omp has no RPC
+     * for that), resuming the same session file to keep the history. Refuses
+     * while a turn / background work runs. Resolves { ok } or { ok:false, reason }.
+     */
+    async restartActiveSession() {
+      const id = activeSessionId;
+      const entry = sessionRegistry.get(id);
+      const plan = window.SessionRestart.plan({
+        hasSession:          Boolean(window.__TAURI__ && id),
+        isStreaming:         state.isStreaming,
+        hasPendingAsyncWork: state.hasPendingAsyncWork,
+        // Same chain as branch(): a just-resumed tab only has sessionPath until
+        // its first get_state fills in sessionFile.
+        sessionFile:         state.rpcState?.sessionFile || entry?.sessionFile || entry?.sessionPath,
+        messages:            state.messages,
+      });
+      if (!plan.ok) return plan;
+      const cwd = entry?.path ?? "";
+      state.agentError = null;
+      try {
+        await window.__TAURI__.core.invoke("start_session", {
+          sessionId: id, cwd, ...(plan.resume ? { resume: plan.resume } : {}),
+        });
+      } catch (err) {
+        const error = (err && typeof err === "string") ? err : (err?.message || String(err));
+        console.warn(`[live] restartActiveSession '${id}' failed:`, err);
+        state.agentError = error;
+        notify();
+        return { ok: false, reason: "start-failed", error };
+      }
+      // With --resume omp restores the session's own model and thinking level, and
+      // get_state reports them — pushing the global last-used prefs (_restorePrefs,
+      // i.e. a fresh switch) would clobber another tab's choice, so keep the snapshot.
+      // Without a session (still-empty tab) the new process is just a new session:
+      // start blank so the saved prefs are applied like for any new tab.
+      await _switchToSession(id, { fresh: !plan.resume });
+      return { ok: true };
     },
     cycleModel()       { _send({ type: "cycle_model" }); },
     cycleThinking() {
@@ -2017,6 +2113,11 @@
         }
       }
       const customData = await _loadCustomModelsFromConfig();
+      // A model renamed/deleted in models.yml must not be re-pushed to the next
+      // session. Judged on models.yml itself: the running omp still lists it.
+      if (window.ModelPrefs?.isStaleCustomModel(_loadPrefs(), customData)) {
+        _clearModelPrefs();
+      }
       if (customData.customModels.length > 0 || customData.customProviders.size > 0) {
         state.models = _mergeModels(state.models, customData);
       }

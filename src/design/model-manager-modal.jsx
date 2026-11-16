@@ -40,6 +40,8 @@ function ModelManagerModal({ open, onClose, onModelUpdated }) {
   const [editingModel, setEditingModel]   = React.useState(null);
   const [editingProv, setEditingProv]     = React.useState(null);
   const [confirmDel, setConfirmDel]       = React.useState(null);
+  // Fingerprint of the config as last loaded/saved: only a real change offers an agent restart.
+  const savedFingerprint = React.useRef(null);
 
   const showToast = (message, type = "success") => {
     setToast({ message, type });
@@ -53,6 +55,7 @@ function ModelManagerModal({ open, onClose, onModelUpdated }) {
       const res = await window.OMP_BRIDGE.readModelsConfig();
       setFilePath(res.path || "");
       setRawYaml(res.content || "");
+      savedFingerprint.current = YamlUtil.modelsFingerprint(res.content);
       const p = YamlUtil.parseModelsYaml(res.content || "");
       setParsed(p);
     } catch (err) {
@@ -111,7 +114,10 @@ function ModelManagerModal({ open, onClose, onModelUpdated }) {
       await window.OMP_BRIDGE?.writeModelsConfig(yamlToSave);
       showToast(window.t ? window.t("models.saveSuccess", null, "Models config saved!") : "Models config saved!");
       await window.OMP_BRIDGE?.refreshModels();
-      onModelUpdated?.();
+      const fingerprint = YamlUtil.modelsFingerprint(yamlToSave);
+      const changed = fingerprint !== savedFingerprint.current;
+      savedFingerprint.current = fingerprint;
+      onModelUpdated?.({ changed });
     } catch (err) {
       showToast("Save failed: " + (err.message || String(err)), "error");
     } finally {
