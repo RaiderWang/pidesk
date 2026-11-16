@@ -84,6 +84,8 @@ loadScript('app/dock-layout.js');
 loadScript('app/dock-state.js');
 loadScript('app/undo-message.js');
 loadScript('app/session-title.js');
+loadScript('app/model-prefs.js');
+loadScript('app/session-restart.js');
 loadScript('app/updater.js');
 loadScript('app/appearance.js');
 

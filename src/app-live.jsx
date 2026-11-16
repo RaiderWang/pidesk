@@ -16,7 +16,7 @@
 
 const {
   Icon, ChatView, Composer, CommandPalette, ShortcutsHelp, WindowChrome, TabBar,
-  StatusBar, AmbientRail, SplitPeer, PlanKanban, PlanDockView, HistoryModal, ModelManagerModal, ToolLogModal, AgentErrorBanner, useTweaks,
+  StatusBar, AmbientRail, SplitPeer, PlanKanban, PlanDockView, HistoryModal, ModelManagerModal, ModelRestartModal, ToolLogModal, AgentErrorBanner, useTweaks,
   FileTreePanel, ActivityBar, DockPanel, useDockState, useViewportWidth,
   TweaksPanel, TweakSection, TweakRadio, TweakToggle, TweakColor, TweakSlider, TweakShortcut, TweakEditor,
   TWEAK_DEFAULTS, NULL_MODEL, EMPTY_PROJECT, NULL_PEER,
@@ -40,6 +40,7 @@ function App() {
   const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const [modelManagerOpen, setModelManagerOpen] = React.useState(false);
+  const [modelRestartOpen, setModelRestartOpen] = React.useState(false);
   const [reviewOpen,  setReviewOpen]  = React.useState(false);
   const [reviewFocus, setReviewFocus] = React.useState("");
   const [activeLogTool, setActiveLogTool] = React.useState(null);
@@ -665,7 +666,18 @@ function App() {
         <ModelManagerModal
           open={modelManagerOpen}
           onClose={() => setModelManagerOpen(false)}
-          onModelUpdated={() => bridge?.refreshModels()}
+          onModelUpdated={({ changed } = {}) => {
+            // The modal already refreshed the model list; the running omp only
+            // reloads models.yml on start, so offer to respawn this tab's agent.
+            if (changed && bridge?.isConnected) setModelRestartOpen(true);
+          }}
+        />
+      )}
+
+      {modelRestartOpen && (
+        <ModelRestartModal
+          onConfirm={() => bridge.restartActiveSession()}
+          onClose={() => setModelRestartOpen(false)}
         />
       )}
 

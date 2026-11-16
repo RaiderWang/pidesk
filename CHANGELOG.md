@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Restart the agent after editing models**: omp only reads `models.yml` at startup and has no RPC to reload it, so an edited or renamed model could not be selected in the tab that was already open (only in a new tab). After saving a changed configuration in Manage Models, a confirmation now offers to respawn the current tab's agent with `--resume` on the same session file, keeping the conversation. It refuses while a turn or background task is running, and for a conversation with no session file (history would be lost). New `OMP_BRIDGE.restartActiveSession()`, pure decision in `src/app/session-restart.js`, dialog in `src/design/model-restart-modal.jsx`, config comparison via `YamlUtil.modelsFingerprint`. A restart with `--resume` leaves the model to omp (it restores the session's own model and thinking level); a still-empty tab restarts as a brand-new session, so the saved model/thinking preference is applied to it. A just-resumed tab can be restarted before its first `get_state` (falls back to the registry `sessionPath`).
+
+### Fixed
+
+- **Saved model preference no longer skipped across providers**: restoring the last-used model compared only the model id, so the same id under a different provider (e.g. direct vs. proxy) was treated as already selected. The provider is now compared too (a model omp reports without a provider is still matched by id alone).
+- **Renaming or deleting a model no longer causes a permanent "Model not found"**: the last-used model saved in `pidesk:prefs` was re-pushed to omp by every new session, so a custom model renamed in Manage Models (e.g. `deepseek-v4-flash` → `deepseek-v4.1-flash`) failed on every start, even after restarting. A failed automatic restore is now silent: it forgets the saved model (keeping the thinking level), falls back to the model omp is running and re-applies the thinking level. Saving models.yml also drops a saved model it no longer lists (`src/app/model-prefs.js`). Failed user-initiated switches still show the notice; `set_model` origins are tracked in order so the two never get mixed up.
+
 ## [0.4.10] - 2026-11-09
 
 ### Fixed
