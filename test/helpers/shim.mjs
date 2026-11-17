@@ -79,6 +79,7 @@ loadScript('design/tweaks/shortcut-util.js');
 loadScript('app/shortcuts.js');
 loadScript('app/fuzzy.js');
 loadScript('app/palette-query.js');
+loadScript('app/model-groups.js');
 loadScript('app/file-index.js');
 loadScript('app/plan-stats.js');
 loadScript('app/dock-layout.js');
@@ -138,6 +139,9 @@ export const AppShortcuts = globalThis.AppShortcuts;
 export const Fuzzy = globalThis.Fuzzy;
 export const PaletteQuery = globalThis.PaletteQuery;
 export const FileIndex = globalThis.FileIndex;
+
+// app/model-groups.js namespace object (window.ModelGroups)
+export const ModelGroups = globalThis.ModelGroups;
 
 // app/plan-stats.js namespace object (window.PlanStats)
 export const PlanStats = globalThis.PlanStats;

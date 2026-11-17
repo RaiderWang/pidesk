@@ -42,24 +42,40 @@ function PaletteRow({ entry, cursor, onRun, onHover }) {
  * Keyboard cursor over `count` rows. `resetKey` puts the cursor back on the
  * first row (e.g. when the query changes). Returns handlers to wire onto the
  * search input; `onRun(index)` fires on Enter.
+ *
+ * The cursor row is scrolled into view only after an arrow key or a reset —
+ * never because `count` changed (e.g. a group was collapsed) or the mouse
+ * moved the cursor, so the viewport does not jump while the user scrolls.
  */
 function usePaletteCursor(count, resetKey) {
   const [cursor, setCursor] = React.useState(0);
+  const [scrollTick, setScrollTick] = React.useState(0);
   const bodyRef = React.useRef(null);
-  React.useEffect(() => { setCursor(0); }, [resetKey]);
+  React.useEffect(() => {
+    setCursor(0);
+    setScrollTick((n) => n + 1);
+  }, [resetKey]);
   const clamped = count > 0 ? Math.min(cursor, count - 1) : 0;
 
   React.useEffect(() => {
     bodyRef.current?.querySelector('[data-cursor="true"]')?.scrollIntoView({ block: "nearest" });
-  }, [clamped, count]);
+  }, [scrollTick]);
+
+  // Always re-scroll on an arrow key, even at the first/last row: it brings a
+  // cursor row that was scrolled out of view (mouse wheel) back into view.
+  const moveTo = (next) => {
+    if (count === 0) return;
+    setCursor(next);
+    setScrollTick((n) => n + 1);
+  };
 
   const onKeyDown = (e, onRun) => {
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setCursor((c) => Math.min(c + 1, Math.max(count - 1, 0)));
+      moveTo(Math.min(clamped + 1, Math.max(count - 1, 0)));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setCursor((c) => Math.max(c - 1, 0));
+      moveTo(Math.max(clamped - 1, 0));
     } else if (e.key === "Enter" && count > 0 && !e.nativeEvent?.isComposing) {
       e.preventDefault();
       onRun(clamped);
