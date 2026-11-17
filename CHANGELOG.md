@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.11] - 2026-11-17
+
 ### Added
 
 - **Restart the agent after editing models**: omp only reads `models.yml` at startup and has no RPC to reload it, so an edited or renamed model could not be selected in the tab that was already open (only in a new tab). After saving a changed configuration in Manage Models, a confirmation now offers to respawn the current tab's agent with `--resume` on the same session file, keeping the conversation. It refuses while a turn or background task is running, and for a conversation with no session file (history would be lost). New `OMP_BRIDGE.restartActiveSession()`, pure decision in `src/app/session-restart.js`, dialog in `src/design/model-restart-modal.jsx`, config comparison via `YamlUtil.modelsFingerprint`. A restart with `--resume` leaves the model to omp (it restores the session's own model and thinking level); a still-empty tab restarts as a brand-new session, so the saved model/thinking preference is applied to it. A just-resumed tab can be restarted before its first `get_state` (falls back to the registry `sessionPath`).
