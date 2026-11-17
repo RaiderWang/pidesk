@@ -631,6 +631,7 @@ function App() {
         onPickLogin={handlePickLogin}
         loginProviders={loginProviders}
         currentModelId={model.id}
+        currentModelProvider={model.provider}
         models={models}
         onManageModels={() => setModelManagerOpen(true)}
         actions={paletteActions}

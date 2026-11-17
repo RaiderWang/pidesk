@@ -6,6 +6,21 @@
 .palette-hint { color: var(--fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
 .palette-prefixes { margin-left: auto; color: var(--fg-4); }
 
+/* Collapsible provider group header (switch-model view) */
+.palette-group-toggle {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%;
+  padding: 5px 12px;
+  border: 0; border-radius: 8px;
+  background: transparent;
+  font-size: var(--d-text-xs);
+  color: var(--fg-3);
+  text-align: left;
+}
+.palette-group-toggle:hover { background: var(--bg-hover); color: var(--fg-2); }
+.palette-group-name { color: var(--accent); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.palette-group-count { color: var(--fg-4); }
+
 /* Shortcuts list (palette "?" mode and the help overlay) */
 .shortcut-group { padding: 6px 4px 10px; }
 .shortcut-row {

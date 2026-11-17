@@ -15,7 +15,7 @@ const {
 
 function CommandPalette({
   open, onClose, initialView = "commands",
-  onPick, onPickModel, currentModelId, onPickLogin, loginProviders, onManageModels, models: propModels,
+  onPick, onPickModel, currentModelId, currentModelProvider, onPickLogin, loginProviders, onManageModels, models: propModels,
   actions, sessions, activeSessionId, onSelectTab, onResumeSaved, projectPath, systemShortcuts,
 }) {
   const t = window.t;
@@ -32,7 +32,8 @@ function CommandPalette({
   const models = (propModels && propModels.length > 0)
     ? propModels
     : (window.OMP_BRIDGE?.models?.length > 0 ? window.OMP_BRIDGE.models : window.OMP_DATA.models) || [];
-  const currentModelName = models.find((m) => m.id === currentModelId)?.name ?? "–";
+  const currentModel = { id: currentModelId, provider: currentModelProvider };
+  const currentModelName = models.find((m) => window.ModelGroups.isCurrentModel(m, currentModel))?.name ?? "–";
 
   const mode = window.PaletteQuery.parsePaletteQuery(q).mode;
   const { items, filesLoading } = _CP_useItems({
@@ -78,7 +79,7 @@ function CommandPalette({
 
   let body;
   if (view === "models") {
-    body = <_CP_ModelsView models={models} currentModelId={currentModelId} onPickModel={onPickModel}
+    body = <_CP_ModelsView models={models} currentModelId={currentModelId} currentModelProvider={currentModelProvider} onPickModel={onPickModel}
       onClose={onClose} onBack={goBack} onManageModels={onManageModels} />;
   } else if (view === "login") {
     body = <_CP_LoginView loginProviders={loginProviders} onPickLogin={onPickLogin} onClose={onClose} onBack={goBack} />;
