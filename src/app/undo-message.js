@@ -21,6 +21,7 @@
 
   const FRAMING_LOCALES = ["en", "zh-CN"];
   const FRAMING_MARK = "\u0000";
+  const LEGACY_TOOL_NAME = /\btodo\b/g;
 
   function contentBlocks(content) {
     if (typeof content === "string") return [{ type: "text", text: content }];
@@ -132,8 +133,12 @@
       if (at <= 0) continue;
       const prefix = tpl.slice(0, at);
       const suffix = tpl.slice(at + FRAMING_MARK.length);
-      if (src.startsWith(prefix) && src.endsWith(suffix) && src.length >= prefix.length + suffix.length) {
-        return { text: src.slice(prefix.length, src.length - suffix.length), stripped: true };
+      // Sessions saved before the framing named the tool `todo` said `todo_write`.
+      const legacy = s => s.replace(LEGACY_TOOL_NAME, "todo_write");
+      for (const [pre, suf] of [[prefix, suffix], [legacy(prefix), legacy(suffix)]]) {
+        if (src.startsWith(pre) && src.endsWith(suf) && src.length >= pre.length + suf.length) {
+          return { text: src.slice(pre.length, src.length - suf.length), stripped: true };
+        }
       }
     }
     return { text: src, stripped: false };

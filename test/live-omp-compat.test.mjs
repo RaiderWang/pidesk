@@ -579,3 +579,42 @@ providers:
 });
 
 
+
+describe('OMP 19 — cost_cap prompt_result', () => {
+  it('passes error.code through and keeps the card on the previous assistant bubble', () => {
+    const state = bridge.getState();
+    state.messages = [
+      { kind: 'assistant', time: '00:00', blocks: [], streaming: false, model: 'm' },
+    ];
+    bridge._handleEvent({
+      type: 'prompt_result',
+      id: 'cmd_cost_cap',
+      agentInvoked: false,
+      status: 'error',
+      error: { message: 'Session cost cap reached', retryable: false, code: 'cost_cap' },
+      sessionSettled: true,
+    });
+    const msgs = bridge.getState().messages;
+    assert.equal(msgs.length, 1, 'existing behavior: attaches to the last assistant bubble');
+    assert.equal(msgs[0].error.code, 'cost_cap');
+    assert.equal(msgs[0].error.retryable, false);
+  });
+
+  it('errors without a code stay codeless (regular provider errors)', () => {
+    const state = bridge.getState();
+    state.messages = [];
+    bridge._handleEvent({
+      type: 'prompt_result', id: 'cmd_plain', agentInvoked: true, status: 'error',
+      error: { message: 'boom', provider: 'openai', retryable: true },
+      sessionSettled: true,
+    });
+    const last = bridge.getState().messages.at(-1);
+    assert.equal(last.error.code, undefined);
+  });
+
+  it('chat.error.costCap exists in en and zh-CN', () => {
+    const t = globalThis.t;
+    assert.equal(t('chat.error.costCap', null, undefined, 'en'), 'Cost cap reached');
+    assert.equal(t('chat.error.costCap', null, undefined, 'zh-CN'), '已达费用上限');
+  });
+});

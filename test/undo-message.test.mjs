@@ -207,6 +207,22 @@ describe('UndoMessage.stripPlanFraming', () => {
     assert.equal(r.text, '做一个东西');
   });
 
+  it('still strips framing saved before the tool was renamed todo_write -> todo', () => {
+    for (const [loc, intent] of [['en', 'build a thing'], ['zh-CN', '做一个东西']]) {
+      const current = t('plan.intentFraming', { intent }, undefined, loc);
+      const legacy = current.replace(/\btodo\b/, 'todo_write');
+      assert.notEqual(legacy, current, `${loc} template should name the todo tool`);
+      const r = UndoMessage.stripPlanFraming(legacy, t);
+      assert.equal(r.stripped, true, loc);
+      assert.equal(r.text, intent, loc);
+    }
+  });
+
+  it('does not rewrite a user\'s own "todo" word inside the intent', () => {
+    const wrapped = t('plan.intentFraming', { intent: 'add a todo list' }, undefined, 'en');
+    assert.equal(UndoMessage.stripPlanFraming(wrapped, t).text, 'add a todo list');
+  });
+
   it('leaves unrelated text untouched', () => {
     assert.deepEqual(UndoMessage.stripPlanFraming('just a normal message', t), {
       text: 'just a normal message',

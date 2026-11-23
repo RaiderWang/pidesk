@@ -6,27 +6,7 @@
 
 const { Icon, YamlUtil, Modal } = window;
 
-const BUILTIN_OAUTH_PROVIDERS = new Set([
-  "openai-codex",
-  "anthropic",
-  "github-copilot",
-  "google-antigravity",
-  "google-gemini-cli",
-  "cursor",
-  "devin",
-  "kimi-code",
-  "zai",
-  "zai-coding-plan",
-  "zhipu-coding-plan",
-  "alibaba-coding-plan",
-  "minimax-code",
-  "minimax-code-cn",
-  "qwen-portal",
-  "gitlab-duo",
-  "perplexity",
-  "xai-oauth",
-  "openrouter",
-]);
+// OAuth provider knowledge lives in app/oauth-providers.js (window.OAuthProviders).
 
 function ModelManagerModal({ open, onClose, onModelUpdated }) {
   const [tab, setTab]                     = React.useState("form"); // "form" | "yaml"
@@ -346,7 +326,7 @@ function ModelManagerModal({ open, onClose, onModelUpdated }) {
                             no-auth
                           </span>
                         ) : null}
-                        {BUILTIN_OAUTH_PROVIDERS.has(pKey.toLowerCase()) && prov.auth !== "oauth" && prov.apiKey ? (
+                        {window.OAuthProviders.isOAuth(pKey) && prov.auth !== "oauth" && prov.apiKey ? (
                           <span className="chip mono" title="API Key shadows OAuth login token in omp" style={{ fontSize: "var(--d-text-xs)", color: "var(--amber)", borderColor: "var(--amber)" }}>
                             ⚠️ shadows oauth
                           </span>
@@ -688,17 +668,17 @@ function EditProviderModal({ item, onClose, onSave }) {
   const [baseUrl, setBaseUrl] = React.useState(item.provider?.baseUrl || "");
   const [apiKey, setApiKey]   = React.useState(item.provider?.apiKey || "");
   const initialAuth = item.provider?.auth
-    || (item.provider?.apiKey ? "apiKey" : (BUILTIN_OAUTH_PROVIDERS.has((item.key || "").toLowerCase()) ? "oauth" : "apiKey"));
+    || (item.provider?.apiKey ? "apiKey" : (window.OAuthProviders.isOAuth(item.key) ? "oauth" : "apiKey"));
   const [auth, setAuth]       = React.useState(initialAuth);
   const [api, setApi]         = React.useState(item.provider?.api || "openai-completions");
   const [err, setErr]         = React.useState("");
 
-  const isKnownOAuth = BUILTIN_OAUTH_PROVIDERS.has(key.trim().toLowerCase());
+  const isKnownOAuth = window.OAuthProviders.isOAuth(key);
 
   const handleKeyChange = (val) => {
     setKey(val);
     const trimmed = val.trim().toLowerCase();
-    if (item.isNew && BUILTIN_OAUTH_PROVIDERS.has(trimmed) && !apiKey.trim()) {
+    if (item.isNew && window.OAuthProviders.isOAuth(trimmed) && !apiKey.trim()) {
       setAuth("oauth");
       setBaseUrl("");
     }

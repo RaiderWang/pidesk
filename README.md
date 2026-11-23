@@ -68,7 +68,7 @@ Enforce a disciplined *draft-before-write* workflow for complex tasks:
 - **Draft & Iterate**: First prompt is framed into a planning phase where the agent drafts architecture without touching files.
 - **Inline Paragraph Annotations**: Click on any paragraph of the agent's proposed plan to leave targeted feedback.
 - **Approval Transition**: Approving the plan submits all feedback and seamlessly kicks off execution.
-- **Real-Time Kanban Tracking**: Watch the agent automatically populate and advance tasks across Backlog, In Progress, and Done boards via `todo_write`.
+- **Real-Time Kanban Tracking**: Watch the agent automatically populate and advance tasks across Backlog, In Progress, and Done boards via `todo`.
 
 ![Plan Mode and Kanban](screenshots/plan-kanban.png)
 
