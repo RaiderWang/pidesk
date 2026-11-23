@@ -326,6 +326,27 @@ describe('known-key spot-checks', () => {
     setLocale('en');
   });
 
+  it('ask bubble keys resolve in en and zh-CN with {n} interpolation', () => {
+    const keys = ['otherPlaceholder', 'submit', 'cancel', 'cancelHint', 'done', 'selectedCount',
+      'inputPlaceholder', 'editorPlaceholder', 'clearOther', 'otherChecked', 'editorHint',
+      'secretHidden', 'skipEmpty'];
+    setLocale('en');
+    assert.equal(t('ask.submit'), 'Submit');
+    assert.equal(t('ask.selectedCount', { n: 2 }), '2 selected');
+    const en = keys.map(k => t(`ask.${k}`));
+    setLocale('zh-CN');
+    assert.equal(t('ask.submit'), '提交');
+    assert.equal(t('ask.selectedCount', { n: 2 }), '已选 2 项');
+    assert.equal(t('ask.editorHint'), 'Ctrl/Cmd+Enter 提交');
+    const zh = keys.map(k => t(`ask.${k}`));
+    setLocale('en');
+    keys.forEach((k, i) => {
+      assert.notEqual(en[i], `ask.${k}`, `en ask.${k} defined`);
+      assert.notEqual(zh[i], `ask.${k}`, `zh ask.${k} defined`);
+      assert.notEqual(zh[i], en[i], `zh ask.${k} is translated`);
+    });
+  });
+
   it('thinking mode and model reasoning keys resolve in en and zh-CN', () => {
     setLocale('en');
     assert.equal(t('composer.thinkingUnsupported'), 'Thinking mode is not supported by current model');

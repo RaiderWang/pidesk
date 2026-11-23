@@ -245,7 +245,9 @@ function App() {
 
   const handleAbort      = () => { bridge?.abort(); setStreaming(false); setPlanActive(false); };
   const handlePickModel  = m  => { setModelState(m); bridge?.setModel(m); };
-  const handleAskAnswer  = React.useCallback((id, value) => { bridge?.answerAsk(id, value); }, [bridge]); // bridge = window.OMP_BRIDGE, assigned once before React renders — stable ref
+  // payload: { value } | { custom } | { clearOther } | { text } (see app/ask-answer.js)
+  const handleAskAnswer  = React.useCallback((id, payload) => { bridge?.answerAsk(id, payload); }, [bridge]); // bridge = window.OMP_BRIDGE, assigned once before React renders — stable ref
+  const handleAskCancel  = React.useCallback((id) => { bridge?.cancelAsk(id); }, [bridge]);
   const handlePickLogin = async (provider) => {
     if (!bridge) return;
     try {
@@ -512,6 +514,7 @@ function App() {
                 annotations={planAnnotations}
                 onAnnotate={handleAnnotate}
                 onAskAnswer={handleAskAnswer}
+                onAskCancel={handleAskCancel}
                 hoveredMsgIdx={hoveredMsgIdx}
                 onBranch={handleBranch}
                 onUndo={requestUndo}

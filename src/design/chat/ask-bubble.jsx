@@ -1,35 +1,18 @@
 /* chat/ask-bubble.jsx — interactive ask-tool bubble.
-   Rendered when the agent emits an extension_ui_request with method="select".
-   Shows the question title, clickable option chips, and a free-text input.
-   Stays interactive until the user answers or the agent cancels the request. */
+   Rendered for extension_ui_request frames of the ask tool: `select`
+   (ask-select.jsx) and `input` / `editor` (ask-text-input.jsx).
+   Stays interactive until the user answers or the agent cancels the request.
+   Tolerates bubbles without the newer fields (`mode` defaults to "select"). */
 
-const { Icon: _AskIcon } = window;
+const { Icon: _AskIcon, AskSelectBody: _AskB_Select, AskTextBody: _AskB_Text } = window;
 
-// Label used by omp for the multi-select terminator — show it distinctly.
-const DONE_LABEL_PREFIX = "Done selecting";
-
-function isDoneOption(opt) {
-  return opt.includes(DONE_LABEL_PREFIX);
-}
-
-function AskBubble({ msg, idx, highlighted, onAnswer }) {
-  const [custom, setCustom] = React.useState("");
-  const done = msg.answered || msg.cancelled;
-
-  const submit = (value) => {
-    if (done) return;
-    onAnswer(msg.id, value);
-  };
-
-  const handleKey = (e) => {
-    if (e.key === "Enter" && custom.trim()) {
-      e.preventDefault();
-      submit(custom.trim());
-    }
-  };
+function AskBubble({ msg, idx, highlighted, onAnswer, onCancel }) {
+  const st = msg.state ?? (msg.cancelled ? "cancelled" : msg.answered ? "answered" : "open");
+  const text = msg.mode === "input" || msg.mode === "editor";
+  const tt = (key, fallback) => (window.t ? window.t(key, null, fallback) : fallback);
 
   return (
-    <div className={`row ask fade-up${highlighted ? " mm-hot" : ""}`} data-msg-idx={idx}>
+    <div className={`row ask fade-up${highlighted ? " mm-hot" : ""}${st === "pending" ? " ask-pending" : ""}`} data-msg-idx={idx}>
       <div className="ass-rail">
         <div className="ass-glyph ask-glyph">
           <_AskIcon name="circle" size={11} color="var(--amber)" />
@@ -38,70 +21,25 @@ function AskBubble({ msg, idx, highlighted, onAnswer }) {
       </div>
       <div className="ass-body">
         <div className="ass-meta">
-          <span className="mono" style={{ color: "var(--amber)" }}>{window.t ? window.t("chat.ask", null, "Ask") : "Ask"}</span>
+          <span className="mono" style={{ color: "var(--amber)" }}>{tt("chat.ask", "Ask")}</span>
           <span className="chip muted">{msg.time}</span>
-          {msg.answered && (
+          {st === "answered" && (
             <span className="chip" style={{ color: "var(--accent)", borderColor: "color-mix(in oklab, var(--accent) 30%, var(--line))" }}>
-              {window.t ? window.t("chat.answered", null, "answered") : "answered"}
+              {tt("chat.answered", "answered")}
             </span>
           )}
-          {msg.cancelled && (
+          {st === "cancelled" && (
             <span className="chip" style={{ color: "var(--fg-4)", borderColor: "var(--line-bright)" }}>
-              {window.t ? window.t("chat.cancelled", null, "cancelled") : "cancelled"}
+              {tt("chat.cancelled", "cancelled")}
             </span>
           )}
         </div>
 
         <div className="ask-question">{msg.title}</div>
 
-        {msg.options.length > 0 && (
-          <div className="ask-options">
-            {msg.options.map((opt, i) => {
-              const isSelected = msg.answered && msg.answer === opt;
-              const isDimmed   = done && !isSelected;
-              const isDone     = isDoneOption(opt);
-              return (
-                <button
-                  key={i}
-                  className={[
-                    "ask-opt",
-                    isSelected ? "selected" : "",
-                    isDimmed   ? "dimmed"   : "",
-                    isDone     ? "done-opt" : "",
-                  ].filter(Boolean).join(" ")}
-                  disabled={done}
-                  onClick={() => submit(opt)}
-                >
-                  {isSelected && <_AskIcon name="check" size={10} color="var(--accent)" />}
-                  {opt}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Free-text input — skips the "Other (type your own)" round-trip:
-            typing here sends the text directly as the select response value. */}
-        <div className="ask-other">
-          <input
-            className="ask-other-input"
-            type="text"
-            placeholder="Or type your own answer…"
-            value={custom}
-            disabled={done}
-            onChange={e => setCustom(e.target.value)}
-            onKeyDown={handleKey}
-          />
-          {!done && custom.trim() && (
-            <button className="ask-submit" onClick={() => submit(custom.trim())}>
-              Submit
-            </button>
-          )}
-          {/* Show custom answer inline when the user typed rather than clicked */}
-          {done && msg.answer && !msg.options.includes(msg.answer) && (
-            <span className="ask-custom-echo">{msg.answer}</span>
-          )}
-        </div>
+        {text
+          ? <_AskB_Text msg={msg} onAnswer={onAnswer} onCancel={onCancel} />
+          : <_AskB_Select msg={msg} onAnswer={onAnswer} />}
       </div>
     </div>
   );

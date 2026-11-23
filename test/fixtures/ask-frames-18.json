@@ -1,0 +1,32 @@
+{
+  "_source": "Derived from omp 18.4.3 src/tools/ask.ts + src/modes/rpc/rpc-mode.ts (requestRpcSelect L564-598, requestRpcEditor L600-661). RPC select frames carry only title/options/optionDetails/timeout; selection state is NOT forwarded. Glyph and field sets verified against live capture 2026-11-23 (test/fixtures/captured/ask-18.4.3-*.jsonl): Done row is U+F00C + space; idea multi-question asks also carry optionDetails and have NO Done row for multi-select (allowForward).",
+  "scenarios": {
+    "singleSelect": {
+      "frames": [
+        { "type": "extension_ui_request", "id": "18-s1", "method": "select", "title": "Which framework?", "options": ["React", "Vue", "Other (type your own)"] }
+      ]
+    },
+    "singleOther": {
+      "frames": [
+        { "type": "extension_ui_request", "id": "18-o1", "method": "select", "title": "Which framework?", "options": ["React", "Vue", "Other (type your own)"] },
+        { "type": "extension_ui_request", "id": "18-o2", "method": "editor", "title": "Which framework?", "promptStyle": true }
+      ]
+    },
+    "multiRounds": {
+      "round1": { "type": "extension_ui_request", "id": "18-m1", "method": "select", "title": "Pick features", "options": ["Auth", "Billing", "Search", "Other (type your own)"] },
+      "round2": { "type": "extension_ui_request", "id": "18-m2", "method": "select", "title": "(1 selected) Pick features", "options": ["Auth", "Billing", "Search", "\uf00c Done selecting", "Other (type your own)"] },
+      "round3": { "type": "extension_ui_request", "id": "18-m3", "method": "select", "title": "(2 selected) Pick features", "options": ["Auth", "Billing", "Search", "\uf00c Done selecting", "Other (type your own)"] }
+    },
+    "multiOther": {
+      "frames": [
+        { "type": "extension_ui_request", "id": "18-mo1", "method": "select", "title": "(1 selected) Pick features", "options": ["Auth", "Billing", "Search", "\uf00c Done selecting", "Other (type your own)"] },
+        { "type": "extension_ui_request", "id": "18-mo2", "method": "editor", "title": "(1 selected) Pick features", "promptStyle": true }
+      ]
+    },
+    "progressTitle": {
+      "frames": [
+        { "type": "extension_ui_request", "id": "18-p1", "method": "select", "title": "Which framework? (1/3)", "options": ["React", "Vue", "Other (type your own)"] }
+      ]
+    }
+  }
+}
