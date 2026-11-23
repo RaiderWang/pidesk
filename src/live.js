@@ -418,12 +418,14 @@
           };
           changed = true;
         }
-        if (m.kind === "compact" && m.pending) {
+        // Compact cards use `status: "pending"` (not a `pending` flag). A
+        // normal turn_end must not touch one — the compact response / end event
+        // resolves it — only an abort or process exit settles it.
+        if (aborted && m.kind === "compact" && m.status === "pending") {
           updated = {
             ...updated,
-            pending: false,
-            error: aborted,
-            errorReason: aborted ? "aborted" : m.errorReason,
+            status: "error",
+            errorReason: window.t ? window.t("chat.aborted") : "aborted",
           };
           changed = true;
         }
@@ -628,6 +630,7 @@
       const reason = (ev?.payload && String(ev.payload).trim()) || "";
       console.warn(`[live] session '${id}' omp process exited${reason ? ": " + reason : ""}`);
       _setAgentFailure(reason);
+      _settleInFlightActions({ aborted: true }); // e.g. a pending compact card
       _finalizeAsks({ aborted: true });
       loginInFlight.delete(id); // the login died with the process
       notify();
@@ -1488,6 +1491,33 @@
       return;
     }
 
+    // omp 19 manual-compaction lifecycle. Only cards for compactions PiDesk
+    // did not start are created/resolved here; the Compact button's own
+    // card is resolved by the RPC `compact` response.
+    if (type === "manual_compaction_start" && window.CompactionEvents) {
+      const r = window.CompactionEvents.onStart(state.messages, {
+        id: "ext-cmpct-" + (_nextCmdId++),
+        time: timeNow(),
+        contextTokens: state.rpcState?.contextUsage?.tokens ?? null,
+      });
+      if (r.changed) { state.messages = r.messages; notify(); }
+      return;
+    }
+    if (type === "manual_compaction_end" && window.CompactionEvents) {
+      const r = window.CompactionEvents.onEnd(state.messages, ev, {
+        abortedText: window.t ? window.t("chat.aborted") : "aborted",
+      });
+      if (r.changed) {
+        state.messages = r.messages;
+        if (r.completedId) {
+          _compactBackfillId = r.completedId;
+          _send({ type: "get_state" });
+        }
+        notify();
+      }
+      return;
+    }
+
     if (type === "agent_start" || type === "agent_end") {
       _send({ type: "get_state" });
     }
@@ -1529,6 +1559,8 @@
       model: err.model,
       httpStatus: err.httpStatus,
       retryable: Boolean(err.retryable),
+      // omp 19: "cost_cap" = session.maxCost reached (no provider involved).
+      code: typeof err.code === "string" ? err.code : undefined,
     };
     if (lastAsst) {
       lastAsst.error = errObj;

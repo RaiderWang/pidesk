@@ -60,6 +60,14 @@ describe('SessionTitle.cleanSessionTitle', () => {
     assert.equal(cleaned, '优化数据库查询');
   });
 
+  it('strips legacy (todo_write) Plan framing from saved sessions', () => {
+    for (const [loc, intent] of [['en', 'Optimize sqlite queries'], ['zh-CN', '优化数据库查询']]) {
+      const legacy = t('plan.intentFraming', { intent }, undefined, loc).replace(/\btodo\b/, 'todo_write');
+      const cleaned = SessionTitle.cleanSessionTitle(legacy, '', { undoMessage: UndoMessage, t });
+      assert.equal(cleaned, intent, loc);
+    }
+  });
+
   it('caps string length to maxLength (default 100 characters)', () => {
     const longText = 'A'.repeat(150);
     const cleaned = SessionTitle.cleanSessionTitle(longText);

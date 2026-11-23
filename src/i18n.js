@@ -358,8 +358,8 @@
       "plan.agentIdle": "agent idle · waiting for next instruction",
       "plan.close": "close (esc)",
       "plan.empty": "no plan yet. think out loud below.",
-      "plan.intentFraming": "Please draft a plan for the following task. Write it in Markdown with clear sections: overview, approach, key steps, and risks. Also use your todo_write tool to create the planned tasks so they appear in the task kanban for review. Do not start implementing yet — draft only for my review.\n\n---\n\n{intent}",
-      "plan.approvalPrompt": "Plan approved. Please proceed to execute it. Use your todo_write tool to track tasks as you go.",
+      "plan.intentFraming": "Please draft a plan for the following task. Write it in Markdown with clear sections: overview, approach, key steps, and risks. Also use your todo tool to create the planned tasks so they appear in the task kanban for review. Do not start implementing yet — draft only for my review.\n\n---\n\n{intent}",
+      "plan.approvalPrompt": "Plan approved. Please proceed to execute it. Use your todo tool to track tasks as you go.",
       "plan.filter.all": "All",
       "plan.filter.live": "Live",
       "plan.filter.pending": "Queued",
@@ -516,6 +516,7 @@
       // Agent & Chat status
       "agent.backgroundPending": "background work…",
       "chat.error.providerError": "Provider Error",
+      "chat.error.costCap": "Cost cap reached",
       "chat.error.retryable": "Retryable",
 
       // Review Drawer
@@ -914,8 +915,8 @@
       "plan.agentIdle": "智能体空闲 · 等待后续指令",
       "plan.close": "关闭 (Esc)",
       "plan.empty": "暂无规划任务，可在下方输入需求。",
-      "plan.intentFraming": "请为以下任务起草一份规划。使用 Markdown 编写，包含以下部分：概述、实现方案、关键步骤和风险点。同时请使用 todo_write 工具创建规划中的任务清单以便在看板中审阅。暂不开始实施具体代码——仅起草规划与任务供我审阅。\n\n---\n\n{intent}",
-      "plan.approvalPrompt": "规划已批准，请开始执行。执行过程中请使用 todo_write 工具跟踪任务进度。",
+      "plan.intentFraming": "请为以下任务起草一份规划。使用 Markdown 编写，包含以下部分：概述、实现方案、关键步骤和风险点。同时请使用 todo 工具创建规划中的任务清单以便在看板中审阅。暂不开始实施具体代码——仅起草规划与任务供我审阅。\n\n---\n\n{intent}",
+      "plan.approvalPrompt": "规划已批准，请开始执行。执行过程中请使用 todo 工具跟踪任务进度。",
       "plan.filter.all": "全部",
       "plan.filter.live": "执行中",
       "plan.filter.pending": "排队中",
@@ -1072,6 +1073,7 @@
       // Agent & Chat status
       "agent.backgroundPending": "后台任务进行中…",
       "chat.error.providerError": "模型服务异常",
+      "chat.error.costCap": "已达费用上限",
       "chat.error.retryable": "可重试",
 
       // Review Drawer

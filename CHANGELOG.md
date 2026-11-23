@@ -6,12 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Cost-cap errors have their own title**: omp 19 reports `prompt_result.error.code === "cost_cap"` when the session's `--max-cost` is reached. The error card now says "Cost cap reached" / "已达费用上限" instead of "Provider Error" (`chat.error.costCap`).
+- **Compactions started outside PiDesk show a card**: omp 19's `manual_compaction_start`/`manual_compaction_end` events (extension `ctx.compact()`, `/compact`) now create and resolve a compact card, refresh the context gauge and back-fill `tokensAfter`. Cards for the Compact button are still resolved only by the RPC response. Pure reducers in `src/app/compaction-events.js`.
+
 ### Changed
+
+- **OAuth provider list in Manage Models covers omp 19**: the hard-coded set moved to `src/app/oauth-providers.js` and now includes the omp 19 OAuth providers (`antigravity-cli`, `kiro`, `mistral`, `snowflake`, …). It stays a static, exact list: omp's `get_login_providers` is not used because it also lists ~70 API-key providers (`deepseek`, `ollama`, …) and reports `authenticated` for keys that merely come from `models.yml` or an env var.
+- **Plan prompts name the real tool**: the plan-mode prompts told the model to use `todo_write`; omp's tool is `todo`. Plans already saved with the old wording still get their framing stripped for session titles and Undo.
 
 - **Tool card titles keep their `intent` text on omp 19**: omp 19.0.0 turned tool-call intent tracing off for RPC hosts, so cards fell back to `tool · target`. PiDesk now starts omp with `PI_INTENT_TRACING=1` (slightly more tool-argument tokens). A non-empty `PI_INTENT_TRACING` already set in your environment (e.g. `0` to turn it off) is left untouched; an empty value is treated as unset. In omp's settings registry the env var outranks `tools.intentTracing` in `settings.json` (only a runtime override beats it), so a `false` there no longer takes effect under PiDesk — set `PI_INTENT_TRACING=0` in your environment to turn tracing off.
 
 ### Fixed
 
+- **Pending compact cards no longer stick forever**: the abort/process-exit cleanup looked for a `pending` flag that compact cards never had (they use `status: "pending"`), so a compaction interrupted by an abort or an omp crash stayed "compacting…" and blocked Undo. Such cards now end as aborted; a normal turn end leaves them alone.
 - **No more blank assistant bubbles**: a turn where the model only calls tools (no text, thinking or plan) left a header-only assistant row (sparkle rail, model name, time) in the timeline. The placeholder is now dropped when the message ends, or when an interrupted turn is settled; failed turns are kept and show the provider `errorMessage`. `message_end` frames for user/toolResult messages no longer close the in-flight assistant bubble. Pure predicate in `src/app/empty-bubble.js`. Known trade-off: the placeholder still flashes while the tool call streams in.
 
 - **`ask` tool works with both omp 18.4.3 and 19.0.1**: omp 19 no longer accepts a non-offered text as a `select` answer (it aborted the whole turn), asks "Other" follow-ups as `input` instead of `editor`, and re-sends every multi-select round with `checkedIndices`. PiDesk now detects all of this from the frame itself (no version checks):

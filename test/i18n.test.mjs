@@ -91,6 +91,16 @@ describe('t — parameter substitution', () => {
     assert.ok(result.includes('Build a thing'), `intent not substituted in: ${result}`);
   });
 
+  it('plan prompts name omp\'s real `todo` tool (never `todo_write`) in every locale', () => {
+    for (const loc of ['en', 'zh-CN']) {
+      for (const key of ['plan.intentFraming', 'plan.approvalPrompt']) {
+        const s = t(key, { intent: 'x' }, undefined, loc);
+        assert.ok(/\btodo\b/.test(s), `${key} (${loc}) should mention todo: ${s}`);
+        assert.ok(!s.includes('todo_write'), `${key} (${loc}) still says todo_write`);
+      }
+    }
+  });
+
   it('leaves unrelated placeholders unchanged when params are partial', () => {
     // Only substitute {n}, leave any other {x} as-is
     const result = t('history.time.minutesAgo', { n: 2 });

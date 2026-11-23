@@ -187,14 +187,16 @@ function AssistantBubble({ msg, idx, highlighted, annotable, annotations, onAnno
             <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
               <_ChatIcon name="warn" size={12} color="var(--rose)" />
               <span style={{ fontWeight: 600, color: "var(--rose)" }}>
-                {window.t ? window.t("chat.error.providerError", null, "Provider Error") : "Provider Error"}
+                {msg.error.code === "cost_cap"
+                  ? (window.t ? window.t("chat.error.costCap", null, "Cost cap reached") : "Cost cap reached")
+                  : (window.t ? window.t("chat.error.providerError", null, "Provider Error") : "Provider Error")}
               </span>
               {(msg.error.provider || msg.error.httpStatus) && (
                 <span className="chip muted mono" style={{ fontSize: "11px" }}>
                   {[msg.error.provider, msg.error.httpStatus].filter(Boolean).join(" · ")}
                 </span>
               )}
-              {msg.error.retryable && (
+              {msg.error.retryable && msg.error.code !== "cost_cap" && (
                 <span className="chip" style={{
                   fontSize: "11px",
                   color: "var(--amber)",

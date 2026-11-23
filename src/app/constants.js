@@ -34,12 +34,12 @@
   const INTENT_FRAMING = (intent) =>
     window.t
       ? window.t("plan.intentFraming", { intent: intent.trim() })
-      : `Please draft a plan for the following task. Write it in Markdown with clear sections: overview, approach, key steps, and risks. Also use your todo_write tool to create the planned tasks so they appear in the task kanban for review. Do not start implementing yet — draft only for my review.\n\n---\n\n${intent.trim()}`;
+      : `Please draft a plan for the following task. Write it in Markdown with clear sections: overview, approach, key steps, and risks. Also use your todo tool to create the planned tasks so they appear in the task kanban for review. Do not start implementing yet — draft only for my review.\n\n---\n\n${intent.trim()}`;
 
   const APPROVAL_PROMPT = () =>
     window.t
       ? window.t("plan.approvalPrompt")
-      : "Plan approved. Please proceed to execute it. Use your todo_write tool to track tasks as you go.";
+      : "Plan approved. Please proceed to execute it. Use your todo tool to track tasks as you go.";
 
   Object.assign(window, {
     TWEAK_DEFAULTS,

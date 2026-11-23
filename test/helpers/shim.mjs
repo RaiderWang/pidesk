@@ -90,6 +90,8 @@ loadScript('app/dock-state.js');
 loadScript('app/undo-message.js');
 loadScript('app/session-title.js');
 loadScript('app/model-prefs.js');
+loadScript('app/oauth-providers.js');
+loadScript('app/compaction-events.js');
 loadScript('app/session-restart.js');
 loadScript('app/models-config-check.js');
 loadScript('app/updater.js');
@@ -162,6 +164,10 @@ export const Updater = globalThis.Updater;
 // app/undo-message.js, session-title.js exports
 export const UndoMessage = globalThis.UndoMessage;
 export const SessionTitle = globalThis.SessionTitle;
+
+// app/oauth-providers.js, compaction-events.js namespace objects
+export const OAuthProviders = globalThis.OAuthProviders;
+export const CompactionEvents = globalThis.CompactionEvents;
 
 // app/appearance.js exports
 export const {
