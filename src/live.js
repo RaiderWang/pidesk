@@ -429,7 +429,14 @@
         }
         return updated;
       });
-      if (changed) {
+      // An interrupted tool-only turn leaves a content-less placeholder bubble
+      // (no message_end ever arrived); drop it. Bubbles with a thought stay.
+      const kept = window.EmptyBubble
+        ? settled.filter(m => !(m.completed && window.EmptyBubble.isContentless(m)))
+        : settled;
+      if (kept.length !== settled.length) {
+        state.messages = kept; // activeToolCards is cleared below
+      } else if (changed) {
         state.messages = settled;
       }
     }
@@ -1234,6 +1241,9 @@
 
     if (type === "message_end") {
       const msg = ev.message;
+      // user / toolResult messages end too (e.g. steer mid-stream); they must
+      // not close the in-flight assistant bubble.
+      if (msg?.role && msg.role !== "assistant") return;
       const usage = msg?.usage;
       const tokens = usage ? ((usage.input ?? 0) + (usage.output ?? 0)) : null;
       if (streamingBubble && msg) {
@@ -1258,7 +1268,27 @@
           tokensOut: usage?.output ?? null,
         };
         const eidx = state.messages.findLastIndex(m => m.streaming === true);
-        if (eidx !== -1) {
+        // Tool-call-only turn: nothing to show, so drop the placeholder instead
+        // of leaving a header-only bubble. A failed turn is kept (and given its
+        // errorMessage) so the later prompt_result error lands on this bubble
+        // rather than on an older assistant message.
+        // Also covers a turn that failed after streaming some text: its error
+        // is shown even if no prompt_result ever follows.
+        const errMsg = typeof msg.errorMessage === "string" ? msg.errorMessage.trim() : "";
+        const failed = msg.stopReason === "error" || Boolean(errMsg);
+        if (errMsg && !completed.error) {
+          completed.error = {
+            message: errMsg, provider: msg.provider, model: msg.model, retryable: false,
+          };
+        }
+        if (!failed && window.EmptyBubble?.isContentless(completed)) {
+          // Never fall back to dropping the last message: with no streaming
+          // entry the list is out of sync with `streamingBubble`, leave it be.
+          if (eidx !== -1) {
+            state.messages = state.messages.filter((_, i) => i !== eidx);
+            _reindexActiveToolCards();
+          }
+        } else if (eidx !== -1) {
           const msgs = [...state.messages];
           msgs[eidx] = completed;
           state.messages = msgs;
@@ -1269,7 +1299,13 @@
       } else if (streamingBubble) {
         const completed2 = { ...streamingBubble, streaming: false, tokens };
         const eidx2 = state.messages.findLastIndex(m => m.streaming === true);
-        if (eidx2 !== -1) {
+        if (window.EmptyBubble?.isContentless(completed2)) {
+          // Same collapse as above (no message payload, so no failure info).
+          if (eidx2 !== -1) {
+            state.messages = state.messages.filter((_, i) => i !== eidx2);
+            _reindexActiveToolCards();
+          }
+        } else if (eidx2 !== -1) {
           const msgs = [...state.messages];
           msgs[eidx2] = completed2;
           state.messages = msgs;

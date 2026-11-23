@@ -73,6 +73,7 @@ loadScript('design/models-schema-check.js');
 loadScript('i18n.js');
 loadScript('app/chat-grouping.js');
 loadScript('app/notice-bubble.js');
+loadScript('app/empty-bubble.js');
 loadScript('app/ask-model.js');
 loadScript('app/ask-answer.js');
 loadScript('app/welcome-state.js');
@@ -129,6 +130,9 @@ export const { t, getLocale, setLocale } = globalThis.I18N;
 
 // app/chat-grouping.js exports a namespace object (window.ChatGrouping)
 export const ChatGrouping = globalThis.ChatGrouping;
+
+// app/empty-bubble.js namespace object (window.EmptyBubble)
+export const EmptyBubble = globalThis.EmptyBubble;
 
 // app/welcome-state.js namespace object (window.WelcomeState)
 export const WelcomeState = globalThis.WelcomeState;
