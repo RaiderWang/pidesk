@@ -1,0 +1,7 @@
+{"meta":{"omp":"18.4.3","scenario":"other","prompt":"Call the ask tool exactly once with ONE single-choice question \"Pick a colour\" and options \"Red\", \"Green\", \"Blue\". Do not use any other tool. After I answer, reply with one short sentence.","answers":["other:Teal"],"startedAt":"2026-11-23T01:59:31.972Z"}}
+{"dir":"in","frame":{"type":"extension_ui_request","id":"15d8d5ab1d6fd8cb","method":"select","title":"Pick a colour","options":["Red","Green","Blue","Other (type your own)"]}}
+{"dir":"out","frame":{"type":"extension_ui_response","id":"15d8d5ab1d6fd8cb","value":"Other (type your own)"}}
+{"dir":"in","frame":{"type":"tool_execution_start","toolCallId":"call_00_76Ka8ogmK3T3b0CUPBVZ6394","toolName":"ask","args":{"questions":[{"id":"colour","question":"Pick a colour","options":[{"label":"Red"},{"label":"Green"},{"label":"Blue"}]}]}}}
+{"dir":"in","frame":{"type":"extension_ui_request","id":"15d8d5ab1e2fd8cc","method":"editor","title":"Pick a colour","promptStyle":true}}
+{"dir":"out","frame":{"type":"extension_ui_response","id":"15d8d5ab1e2fd8cc","value":"Teal"}}
+{"dir":"in","frame":{"type":"tool_execution_end","toolCallId":"call_00_76Ka8ogmK3T3b0CUPBVZ6394","toolName":"ask","isError":false}}

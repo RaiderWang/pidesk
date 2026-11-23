@@ -83,7 +83,7 @@ const CompactRow = React.memo(function CompactRow({ msg }) {
   );
 });
 
-function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, onAskAnswer, onBranch, onUndo, canUndo = true, undoBlockReason = null, onOpenKanban, groupTools = true, locale, systemShortcuts }) {
+function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, onAskAnswer, onAskCancel, onBranch, onUndo, canUndo = true, undoBlockReason = null, onOpenKanban, groupTools = true, locale, systemShortcuts }) {
   const scrollRef    = React.useRef(null);
   const atBottomRef  = React.useRef(true);   // assume start at bottom
   const prevCountRef = React.useRef(0);
@@ -189,7 +189,7 @@ function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, 
           if (m.kind === "user")    return <_CV_UserBubble_M    key={m._id ?? i} idx={i} highlighted={hl} msg={m} onUndo={onUndo} canUndo={canUndo} undoBlockReason={undoBlockReason} />;
           if (m.kind === "compact") return <CompactRow          key={m._id ?? i} msg={m} />;
           if (m.kind === "tool")    return <_CV_ToolCard_M      key={m._id ?? i} idx={i} highlighted={hl} msg={m} />;
-          if (m.kind === "ask")     return <_CV_AskBubble_M     key={m._id ?? i} idx={i} highlighted={hl} msg={m} onAnswer={onAskAnswer} />;
+          if (m.kind === "ask")     return <_CV_AskBubble_M     key={m._id ?? i} idx={i} highlighted={hl} msg={m} locale={locale} onAnswer={onAskAnswer} onCancel={onAskCancel} />;
           return <_CV_AssistantBubble_M key={m._id ?? i} idx={i} highlighted={hl} msg={m}
             annotable={i === lastAsstIdx}
             annotations={annotations}

@@ -85,7 +85,22 @@
 
   let streamingBubble = null;
   let activeToolCards = new Map();    // toolCallId → message index
-  let pendingAskBubble = null;   // buffered until tool_execution_start so order is [tool_card, ask_bubble]
+  let askHandshake = null;       // { askId, text }: "Other" free text awaiting its input/editor follow-up (see app/ask-answer.js)
+  // sessionId → Set of tokens, one per OMP_BRIDGE.login() in flight (their input prompts stay window.prompt).
+  // Tokens (not a counter): a late release of a login from a dead process must not cancel a newer login's claim.
+  const loginInFlight = new Map();
+  function _loginBegin(sid) {
+    const token = Symbol("login");
+    const set = loginInFlight.get(sid) ?? new Set();
+    set.add(token);
+    loginInFlight.set(sid, set);
+    return () => {
+      const cur = loginInFlight.get(sid);
+      if (!cur) return;
+      cur.delete(token);
+      if (cur.size === 0) loginInFlight.delete(sid);
+    };
+  }
   let tpsSamples      = Array(30).fill(0);
   let turnStartTime   = null;
   let activityLog     = [];           // [{ts, toolName}], pruned to 60s
@@ -352,7 +367,7 @@
       isSettled:           true,
     });
     streamingBubble = null;
-    pendingAskBubble = null;
+    askHandshake = null;
     activeToolCards = new Map();
     tpsSamples      = Array(30).fill(0);
     turnStartTime   = null;
@@ -447,7 +462,25 @@
       state.hubTaskId = null;
     }
 
+    _finalizeAsks({ aborted });
     activeToolCards.clear();
+  }
+
+  // ── ask tool bubbles (pure logic in app/ask-model.js + app/ask-answer.js) ──
+  // The ask ended (tool end / abort / exit): drop the handshake and settle any
+  // bubble still waiting — 18.x never sends `cancel` on a timeout.
+  // `aborted`: abort / process exit / tool error — a click still in flight never got a result.
+  function _finalizeAsks({ aborted = false } = {}) {
+    askHandshake = null;
+    const next = window.AskModel.finalize(state.messages, { aborted });
+    if (next !== state.messages) state.messages = next;
+  }
+
+  function _pushAskBubble(bubble) {
+    // select/input may arrive before tool_execution_start; the card hoists past orphans then.
+    bubble.orphan = !window.AskModel.hasRunningAskCard(state.messages);
+    state.messages = window.AskModel.addBubble(state.messages, bubble).messages;
+    notify();
   }
 
   // ── Session snapshot helpers ──────────────────────────────────────────────
@@ -545,6 +578,9 @@
 
     // Snapshot current session so we can restore it when switching back
     _saveCurrentSession();
+    // Frames for this session stop arriving once its listeners are torn down,
+    // so an armed "Other" handshake can never be consumed — never carry it over.
+    askHandshake = null;
     // Listeners are torn down below; responses to in-flight set_model never arrive.
     _pendingSetModel.length = 0;
 
@@ -585,6 +621,8 @@
       const reason = (ev?.payload && String(ev.payload).trim()) || "";
       console.warn(`[live] session '${id}' omp process exited${reason ? ": " + reason : ""}`);
       _setAgentFailure(reason);
+      _finalizeAsks({ aborted: true });
+      loginInFlight.delete(id); // the login died with the process
       notify();
     });
     activeListeners = [ulLine, ulExit];
@@ -1007,52 +1045,50 @@
         }
         return;
       }
-      // Code / text prompt (e.g. OAuth manual-code flows).
-      if (ev.method === "input") {
-        const value = window.prompt(ev.title ?? ev.placeholder ?? "Enter value:");
-        if (value !== null) {
-          _send({ type: "extension_ui_response", id: ev.id, value });
-        } else {
-          _send({ type: "extension_ui_response", id: ev.id, cancelled: true });
+      // Free text / code prompts: an "Other" follow-up (auto-answered), an OAuth/login
+      // prompt (blocking window.prompt, as before) or an inline field of an ask form.
+      if (ev.method === "input" || ev.method === "editor") {
+        const reply = window.AskAnswer.resolveHandshake(askHandshake, ev);
+        if (reply) {
+          askHandshake = null;
+          _send({ type: "extension_ui_response", id: ev.id, ...reply });
+          return;
         }
+        if (ev.method === "input" && loginInFlight.has(activeSessionId)) {
+          const value = window.prompt(ev.title ?? ev.placeholder ?? "Enter value:");
+          if (value !== null) {
+            _send({ type: "extension_ui_response", id: ev.id, value });
+          } else {
+            _send({ type: "extension_ui_response", id: ev.id, cancelled: true });
+          }
+          return;
+        }
+        const t = timeNow();
+        _pushAskBubble(ev.method === "input"
+          ? window.AskModel.buildFromInput(ev, t)
+          : window.AskModel.buildFromEditor(ev, t));
         return;
       }
-      // Agent asks the user to pick from a list.
-      // Buffered in pendingAskBubble instead of pushed immediately — omp emits
-      // extension_ui_request.select BEFORE tool_execution_start, so pushing now
-      // would place the ask bubble above the tool card. tool_execution_start
-      // flushes it so the order is always [tool_card, ask_bubble].
+      // Agent asks the user to pick from a list. Pushed immediately (every round of a
+      // multi-select is a new select); tool_execution_start hoists the ask card above it.
       if (ev.method === "select") {
-        const OTHER_OPT = "Other (type your own)";
-        pendingAskBubble = {
-          kind: "ask",
-          id: ev.id,
-          time: timeNow(),
-          title: ev.title,
-          options: (ev.options ?? []).filter(o => o !== OTHER_OPT),
-          answered: false,
-          cancelled: false,
-          answer: null,
-        };
+        // A select means the server did NOT enter input/editor: any armed handshake is stale.
+        askHandshake = null;
+        _pushAskBubble(window.AskModel.buildFromSelect(ev, timeNow()));
         return;
       }
       // Agent cancelled a pending UI request (e.g. turn aborted while waiting for input).
       if (ev.method === "cancel") {
-        // If the ask was cancelled before tool_execution_start flushed it, just drop it.
-        if (pendingAskBubble && pendingAskBubble.id === ev.targetId) {
-          pendingAskBubble = null;
-          return;
+        askHandshake = null;
+        const next = window.AskModel.cancelById(state.messages, ev.targetId);
+        if (next !== state.messages) {
+          state.messages = next;
+          notify();
         }
-        state.messages = state.messages.map(m =>
-          m.kind === "ask" && m.id === ev.targetId && !m.answered
-            ? { ...m, cancelled: true }
-            : m
-        );
-        notify();
         return;
       }
       // Dialogs we cannot show — cancel them so the server doesn't hang.
-      const NEEDS_RESPONSE = ["confirm", "editor"];
+      const NEEDS_RESPONSE = ["confirm"];
       if (NEEDS_RESPONSE.includes(ev.method)) {
         _send({ type: "extension_ui_response", id: ev.id, cancelled: true });
       }
@@ -1278,11 +1314,14 @@
           lines: typeof args.command === "string" ? [`$ ${args.command}`] : [],
         },
       };
-      // Flush any pending ask bubble AFTER the tool card so chat order is
-      // [tool_card, ask_bubble] — omp emits select before tool_execution_start.
-      if (pendingAskBubble) {
-        state.messages = [...state.messages, pendingAskBubble];
-        pendingAskBubble = null;
+      // omp may emit an ask's select/input before tool_execution_start: put the ask
+      // card ahead of those orphan bubbles so chat order is [tool_card, ask_bubble].
+      if (toolName === "ask") {
+        const hoisted = window.AskModel.hoistToolCard(state.messages, idx);
+        if (hoisted.changed) {
+          state.messages = hoisted.messages;
+          _reindexActiveToolCards();
+        }
       }
 
       activityLog.push({ ts: now, toolName: ev.toolName ?? "" });
@@ -1404,6 +1443,9 @@
       }
       // Ephemeral tool card: remove finished card from chat messages array
       state.messages = state.messages.filter(m => m !== card && m._toolCallId !== ev.toolCallId);
+      // Only the ask tool owns ask bubbles; another tool ending must not disturb an in-flight handshake.
+      // (`toolName` may be absent on the end frame, so the card is consulted too.)
+      if (finishedTool === "ask" || card?.tool === "ask") _finalizeAsks({ aborted: Boolean(ev.isError) });
       activeToolCards.delete(ev.toolCallId);
       _reindexActiveToolCards();
       notify();
@@ -1559,6 +1601,8 @@
     if (!state.isStreaming) {
       state.turnStartMs  = null;
       state.runningTools = [];
+      // Idle agent ⇒ no ask can still be waiting (e.g. the answer/tool end was lost across a tab switch).
+      _finalizeAsks({ aborted: false });
       if (state.messages.some(m => m.kind === "tool")) {
         state.messages = state.messages.filter(m => m.kind !== "tool");
         activeToolCards.clear();
@@ -1840,7 +1884,7 @@
     applyRpcState:    _applyRpcState,
     getActiveSessionId: () => activeSessionId,
     sessionSnapshots,
-    clearVolatile: () => { streamingBubble = null; pendingAskBubble = null; },
+    clearVolatile: () => { streamingBubble = null; askHandshake = null; },
     reindexToolCards: () => _reindexActiveToolCards(),
     defaultPlanMeta: () => ({ ...DEFAULT_DATA.planMeta }),
   });
@@ -2178,24 +2222,34 @@
      * @param {string} providerId
      */
     login(providerId) {
-      return _sendWithResponse({ type: "login", providerId }, 300000);
+      // While a login is in flight its `input` prompts (OAuth codes, risk
+      // confirmation) stay blocking window.prompt dialogs. Keyed per session.
+      const release = _loginBegin(activeSessionId);
+      return _sendWithResponse({ type: "login", providerId }, 300000).finally(release);
     },
 
     /**
-     * Respond to a pending ask bubble (extension_ui_request method=select).
-     * Marks the message as answered in state so it survives subsequent notify() calls,
-     * then sends the extension_ui_response to omp.
-     * @param {string} id     The extension_ui_request id.
-     * @param {string} value  The chosen option text or custom typed answer.
+     * Respond to a pending ask bubble (select / input / editor request).
+     * The logic lives in app/ask-answer.js: it decides which frames to send
+     * (e.g. the two-step "Other" handshake) and how the bubble changes.
+     * @param {string} id  The extension_ui_request id the bubble currently answers.
+     * @param {string|object} payload  `{ value }` | `{ custom }` | `{ clearOther: true }`
+     *   | `{ text }` | `{ cancelled: true }`. A bare string is treated as `{ value }`.
      */
-    answerAsk(id, value) {
-      state.messages = state.messages.map(m =>
-        m.kind === "ask" && m.id === id && !m.answered && !m.cancelled
-          ? { ...m, answered: true, answer: value }
-          : m
-      );
+    answerAsk(id, payload) {
+      const p = typeof payload === "string" ? { value: payload } : payload;
+      const plan = window.AskAnswer.planAnswer(window.AskModel.findOpen(state.messages, id), p);
+      if (!plan) return;
+      state.messages = window.AskModel.patchOpen(state.messages, id, plan.patch);
+      // Armed before the frame goes out so the follow-up request can never beat it.
+      if (plan.handshake) askHandshake = plan.handshake;
       notify();
-      _send({ type: "extension_ui_response", id, value });
+      for (const frame of plan.frames) _send({ type: "extension_ui_response", id, ...frame });
+    },
+
+    /** Cancel a pending ask bubble (the server aborts the ask — and the turn). */
+    cancelAsk(id) {
+      window.OMP_BRIDGE.answerAsk(id, { cancelled: true });
     },
 
     /**
@@ -2554,6 +2608,7 @@
     /** Close a tab and kill its omp process. */
     async closeSession(id) {
       _startQueues.delete(id);
+      loginInFlight.delete(id);
       if (window.__TAURI__) {
         window.__TAURI__.core.invoke("stop_session",   { sessionId: id }).catch(() => {});
         window.__TAURI__.core.invoke("stop_git_watch", { sessionId: id }).catch(() => {});

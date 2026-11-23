@@ -1,0 +1,40 @@
+{
+  "_source": "Constructed from omp 19.0.1 src/tools/ask.ts (askChoice L212-L317, askText L324-L356) + src/modes/rpc/rpc-mode.ts (select L1073-L1083, input L1088-L1106, editor L1256-L1259). Re-verify against a live capture after upgrading.",
+  "scenarios": {
+    "singleSelect": {
+      "frames": [
+        { "type": "extension_ui_request", "id": "19-s1", "method": "select", "title": "Which framework?", "options": ["React", "Vue", "Other (type your own)"], "initialIndex": 0, "selectionMarker": "radio", "markableCount": 3 }
+      ]
+    },
+    "singleSelectNoOther": {
+      "frames": [
+        { "type": "extension_ui_request", "id": "19-sn1", "method": "select", "title": "Which framework?", "options": ["React", "Vue"], "initialIndex": 0, "selectionMarker": "radio", "markableCount": 2 }
+      ]
+    },
+    "singleOther": {
+      "frames": [
+        { "type": "extension_ui_request", "id": "19-o1", "method": "select", "title": "ctx line\n\nWhich framework?", "options": ["React", "Vue", "Other (type your own)"], "selectionMarker": "radio", "markableCount": 3 },
+        { "type": "extension_ui_request", "id": "19-o2", "method": "input", "title": "ctx line\n\nWhich framework?" }
+      ]
+    },
+    "multiRounds": {
+      "round1": { "type": "extension_ui_request", "id": "19-m1", "method": "select", "title": "ctx line\n\nPick features", "options": ["Auth", "Billing", "Search", "Other (type your own)"], "initialIndex": 0, "selectionMarker": "checkbox", "checkedIndices": [], "markableCount": 4 },
+      "round2": { "type": "extension_ui_request", "id": "19-m2", "method": "select", "title": "ctx line\n\n(1 selected) Pick features", "options": ["Auth", "Billing", "Search", "Other (type your own)", "✔ Done selecting"], "initialIndex": 0, "selectionMarker": "checkbox", "checkedIndices": [0], "markableCount": 4 },
+      "round3Other": { "type": "extension_ui_request", "id": "19-m3", "method": "select", "title": "ctx line\n\n(2 selected) Pick features", "options": ["Auth", "Billing", "Search", "Other (type your own)", "✔ Done selecting"], "initialIndex": 3, "selectionMarker": "checkbox", "checkedIndices": [0, 3], "markableCount": 4 },
+      "round4Cleared": { "type": "extension_ui_request", "id": "19-m4", "method": "select", "title": "ctx line\n\n(1 selected) Pick features", "options": ["Auth", "Billing", "Search", "Other (type your own)", "✔ Done selecting"], "initialIndex": 3, "selectionMarker": "checkbox", "checkedIndices": [0], "markableCount": 4 },
+      "otherInput": { "type": "extension_ui_request", "id": "19-mi", "method": "input", "title": "ctx line\n\nPick features" }
+    },
+    "multiRequiredEmpty": {
+      "frames": [
+        { "type": "extension_ui_request", "id": "19-mr1", "method": "select", "title": "Pick features", "options": ["Auth", "Billing"], "selectionMarker": "checkbox", "checkedIndices": [], "markableCount": 2 }
+      ]
+    },
+    "text": {
+      "input": { "type": "extension_ui_request", "id": "19-t1", "method": "input", "title": "Project name?", "placeholder": "my-app" },
+      "secret": { "type": "extension_ui_request", "id": "19-t2", "method": "input", "title": "API token?", "secret": true },
+      "editorMultiline": { "type": "extension_ui_request", "id": "19-t3", "method": "editor", "title": "Describe the change", "prefill": "line1\nline2" },
+      "editorPromptStyle": { "type": "extension_ui_request", "id": "19-t4", "method": "editor", "title": "Port?", "prefill": "8080", "promptStyle": true },
+      "reask": { "type": "extension_ui_request", "id": "19-t5", "method": "input", "title": "Project name? (must not be empty)" }
+    }
+  }
+}

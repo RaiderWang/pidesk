@@ -1,0 +1,163 @@
+/* ask.css — ask-tool bubble (chat/ask-bubble.jsx, ask-select.jsx, ask-text-input.jsx).
+   Split out of chat.css; loaded right after it via _index.css. */
+
+/* ── Ask bubble ─────────────────────────────────────────────────────── */
+.ask-glyph {
+  background: color-mix(in oklab, var(--amber) 12%, var(--bg-elevated));
+  border-color: color-mix(in oklab, var(--amber) 40%, var(--line));
+}
+
+.ask-question {
+  font-size: var(--d-text);
+  color: var(--fg);
+  line-height: 1.5;
+  margin-bottom: 10px;
+  font-weight: 500;
+  /* 19.x prefixes the form context (several paragraphs) to the question. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ask-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.ask-opt {
+  appearance: none;
+  border: 1px solid var(--line-bright);
+  background: var(--bg-elevated);
+  color: var(--fg-2);
+  font-family: var(--font-sans);
+  font-size: var(--d-text-sm);
+  padding: 5px 12px;
+  border-radius: var(--r-pill);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: border-color 120ms, color 120ms, background 120ms;
+}
+.ask-opt:hover:not(:disabled) {
+  border-color: var(--amber);
+  color: var(--amber);
+  background: color-mix(in oklab, var(--amber) 8%, var(--bg-elevated));
+}
+.ask-opt.done-opt { border-style: dashed; }
+.ask-opt.selected {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.ask-opt.dimmed { opacity: 0.3; }
+.ask-opt:disabled { cursor: default; }
+/* Done not offered yet (18.x round 1 / nothing ticked): visibly inert, but not while a click is in flight. */
+.row.ask:not(.ask-pending) .ask-opt.done-opt:disabled { opacity: 0.35; }
+
+.ask-other {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.ask-other-input {
+  flex: 1;
+  appearance: none;
+  border: 1px solid var(--line-bright);
+  background: var(--bg-input);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: var(--d-text-sm);
+  padding: 6px 10px;
+  border-radius: var(--r-2);
+  outline: none;
+  transition: border-color 120ms;
+}
+.ask-other-input:focus {
+  border-color: color-mix(in oklab, var(--amber) 50%, var(--line));
+}
+.ask-other-input:disabled { opacity: 0.35; cursor: default; }
+
+.ask-submit {
+  appearance: none;
+  border: 1px solid color-mix(in oklab, var(--amber) 40%, var(--line));
+  background: color-mix(in oklab, var(--amber) 8%, transparent);
+  color: var(--amber);
+  font-family: var(--font-sans);
+  font-size: var(--d-text-sm);
+  padding: 5px 12px;
+  border-radius: var(--r-pill);
+  cursor: pointer;
+  transition: background 120ms;
+}
+.ask-submit:hover { background: color-mix(in oklab, var(--amber) 15%, transparent); }
+
+/* Custom free-text echo shown after answering with typed text */
+.ask-custom-echo {
+  font-size: var(--d-text-sm);
+  color: var(--accent);
+  padding: 5px 0;
+}
+
+/* ── Multi-select / pending / text-field additions ─────────────────── */
+.row.ask.ask-pending .ask-opt:disabled { cursor: progress; }
+.ask-opt[aria-pressed="true"] { font-weight: 500; }
+.ask-count {
+  margin-left: 4px;
+  font-size: var(--d-text-sm);
+  color: var(--fg-3);
+}
+
+.ask-other-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 5px 12px;
+  border: 1px solid color-mix(in oklab, var(--accent) 30%, var(--line));
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--d-text-sm);
+}
+.ask-other-label { flex: none; }
+.ask-other-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ask-text {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+.ask-text-field { width: 100%; box-sizing: border-box; }
+textarea.ask-text-field {
+  resize: vertical;
+  min-height: 84px;
+  line-height: 1.5;
+  font-family: var(--font-mono, var(--font-sans));
+}
+.ask-text-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ask-submit.ask-cancel {
+  border-color: var(--line-bright);
+  background: transparent;
+  color: var(--fg-3);
+}
+.ask-submit.ask-cancel:hover { color: var(--fg); background: var(--bg-elevated); }
+.ask-hint {
+  font-size: var(--d-text-sm);
+  color: var(--fg-4);
+}
+.ask-pre { white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -1,0 +1,9 @@
+{"meta":{"omp":"18.4.3","scenario":"multi","prompt":"Call the ask tool exactly once with ONE multi-select question (multi: true) \"Pick features\" and options \"Auth\", \"Billing\", \"Search\". Do not use any other tool. After I answer, reply with one short sentence.","answers":["opt:0","opt:2","done"],"startedAt":"2026-11-23T01:59:24.533Z"}}
+{"dir":"in","frame":{"type":"extension_ui_request","id":"15d8d5a139a4a81a","method":"select","title":"Pick features","options":["Auth","Billing","Search","Other (type your own)"]}}
+{"dir":"out","frame":{"type":"extension_ui_response","id":"15d8d5a139a4a81a","value":"Auth"}}
+{"dir":"in","frame":{"type":"tool_execution_start","toolCallId":"call_00_ET_X6ZAnz66F2ZeWj5NcPXr2856","toolName":"ask","args":{"questions":[{"id":"features","question":"Pick features","options":[{"label":"Auth"},{"label":"Billing"},{"label":"Search"}],"multi":true}]}}}
+{"dir":"in","frame":{"type":"extension_ui_request","id":"15d8d5a13aa4a81b","method":"select","title":"(1 selected) Pick features","options":["Auth","Billing","Search"," Done selecting","Other (type your own)"]}}
+{"dir":"out","frame":{"type":"extension_ui_response","id":"15d8d5a13aa4a81b","value":"Search"}}
+{"dir":"in","frame":{"type":"extension_ui_request","id":"15d8d5a13ae4a81c","method":"select","title":"(2 selected) Pick features","options":["Auth","Billing","Search"," Done selecting","Other (type your own)"]}}
+{"dir":"out","frame":{"type":"extension_ui_response","id":"15d8d5a13ae4a81c","value":" Done selecting"}}
+{"dir":"in","frame":{"type":"tool_execution_end","toolCallId":"call_00_ET_X6ZAnz66F2ZeWj5NcPXr2856","toolName":"ask","isError":false}}
