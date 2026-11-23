@@ -6,7 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Tool card titles keep their `intent` text on omp 19**: omp 19.0.0 turned tool-call intent tracing off for RPC hosts, so cards fell back to `tool · target`. PiDesk now starts omp with `PI_INTENT_TRACING=1` (slightly more tool-argument tokens). A non-empty `PI_INTENT_TRACING` already set in your environment (e.g. `0` to turn it off) is left untouched; an empty value is treated as unset. In omp's settings registry the env var outranks `tools.intentTracing` in `settings.json` (only a runtime override beats it), so a `false` there no longer takes effect under PiDesk — set `PI_INTENT_TRACING=0` in your environment to turn tracing off.
+
 ### Fixed
+
+- **No more blank assistant bubbles**: a turn where the model only calls tools (no text, thinking or plan) left a header-only assistant row (sparkle rail, model name, time) in the timeline. The placeholder is now dropped when the message ends, or when an interrupted turn is settled; failed turns are kept and show the provider `errorMessage`. `message_end` frames for user/toolResult messages no longer close the in-flight assistant bubble. Pure predicate in `src/app/empty-bubble.js`. Known trade-off: the placeholder still flashes while the tool call streams in.
 
 - **`ask` tool works with both omp 18.4.3 and 19.0.1**: omp 19 no longer accepts a non-offered text as a `select` answer (it aborted the whole turn), asks "Other" follow-ups as `input` instead of `editor`, and re-sends every multi-select round with `checkedIndices`. PiDesk now detects all of this from the frame itself (no version checks):
   - Free text goes through a two-step handshake: the "Other (type your own)" row is sent first and the typed text answers the follow-up `input`/`editor` request. The free-text box only appears when the server offered an Other row. The handshake is dropped on any new `select`, `cancel`, when the ask ends, on abort/exit and on tab switch, so a stale answer can never fill the next form field.

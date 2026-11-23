@@ -206,15 +206,34 @@ fn probe_rpc_ui() -> Option<bool> {
 
 // ── session spawn ─────────────────────────────────────────────────────────────
 
+/// Env var omp reads for tool-call `intent` tracing (`tools.intentTracing`).
+const INTENT_TRACING_ENV: &str = "PI_INTENT_TRACING";
+
+/// omp >= 19.0.0 turns intent tracing off for RPC hosts, which drops
+/// `tool_execution_start.intent` (the tool card title). Default it on, but
+/// respect any non-empty value the user already set (e.g. `0`); an empty
+/// string is treated as unset.
+fn should_inject_intent_tracing(existing: Option<&std::ffi::OsStr>) -> bool {
+    existing.is_none_or(std::ffi::OsStr::is_empty)
+}
+
 /// Spawn omp for a live session using the best available RPC mode.
 /// If `resume` is specified, `--resume <path_or_id>` is passed to resume an existing session.
 /// `cwd` is the already-resolved working directory (see `AgentBridge::start_session`).
 pub(super) fn spawn_omp(cwd: &std::path::Path, resume: Option<&str>) -> Result<Child, String> {
     let mode = rpc_mode();
     let mut last_err = String::from("no candidates tried");
-    for path in omp_candidates() {
+    // `omp_candidates()` repairs the process env first (Windows installer
+    // relaunch), so the user's own `PI_INTENT_TRACING` is read only after it.
+    let candidates = omp_candidates();
+    let inject_intent =
+        should_inject_intent_tracing(std::env::var_os(INTENT_TRACING_ENV).as_deref());
+    for path in candidates {
         let mut cmd = Command::new(&path);
         cmd.args(["--mode", mode]);
+        if inject_intent {
+            cmd.env(INTENT_TRACING_ENV, "1");
+        }
         if let Some(r) = resume {
             if !r.is_empty() {
                 cmd.args(["--resume", r]);
@@ -246,7 +265,22 @@ pub(super) fn spawn_omp(cwd: &std::path::Path, resume: Option<&str>) -> Result<C
 
 #[cfg(test)]
 mod tests {
-    use super::{help_text_supports_rpc_ui, probe_verdict, resolve_probe};
+    use super::{
+        help_text_supports_rpc_ui, probe_verdict, resolve_probe, should_inject_intent_tracing,
+    };
+    use std::ffi::OsStr;
+
+    #[test]
+    fn intent_tracing_injected_when_unset_or_empty() {
+        assert!(should_inject_intent_tracing(None));
+        assert!(should_inject_intent_tracing(Some(OsStr::new(""))));
+    }
+
+    #[test]
+    fn intent_tracing_respects_user_value() {
+        assert!(!should_inject_intent_tracing(Some(OsStr::new("0"))));
+        assert!(!should_inject_intent_tracing(Some(OsStr::new("1"))));
+    }
 
     #[test]
     fn verdict_trusts_rpc_ui_text_regardless_of_exit_code() {
