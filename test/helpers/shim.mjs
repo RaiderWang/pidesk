@@ -89,6 +89,7 @@ loadScript('app/dock-layout.js');
 loadScript('app/dock-state.js');
 loadScript('app/undo-message.js');
 loadScript('app/session-title.js');
+loadScript('app/stick-scroll.js');
 loadScript('app/model-prefs.js');
 loadScript('app/oauth-providers.js');
 loadScript('app/compaction-events.js');
@@ -164,6 +165,9 @@ export const Updater = globalThis.Updater;
 // app/undo-message.js, session-title.js exports
 export const UndoMessage = globalThis.UndoMessage;
 export const SessionTitle = globalThis.SessionTitle;
+
+// app/stick-scroll.js namespace object (window.StickScroll)
+export const StickScroll = globalThis.StickScroll;
 
 // app/oauth-providers.js, compaction-events.js namespace objects
 export const OAuthProviders = globalThis.OAuthProviders;

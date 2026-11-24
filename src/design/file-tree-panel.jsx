@@ -220,9 +220,8 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge, width, onWidthC
   // Delete modal state
   const [deleteTarget, setDeleteTarget] = React.useState(null);
 
-  // Toast notification state
-  const [toastMessage, setToastMessage] = React.useState(null);
-  const toastTimeoutRef = React.useRef(null);
+  // Toast notification (see file-tree-toast.jsx)
+  const { toast, showToast } = window.useFileTreeToast();
 
   // Auto-refresh and watching state
   const [isRefreshing, setIsRefreshing] = React.useState(false);
@@ -233,14 +232,6 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge, width, onWidthC
   const renamingRef = React.useRef(renamingPath);
   renamingRef.current = renamingPath;
 
-  const showToast = React.useCallback((msg) => {
-    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-    setToastMessage(msg);
-    toastTimeoutRef.current = setTimeout(() => {
-      setToastMessage(null);
-    }, 2400);
-  }, []);
-
   // Fetch directory contents
   const loadDirectory = React.useCallback(
     async (path) => {
@@ -249,7 +240,10 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge, width, onWidthC
         return await bridge.listDirectory(path);
       } catch (err) {
         console.error("Failed to list directory:", path, err);
-        showToast(window.t ? window.t("files.error.load", null, "Failed to load directory") : "Failed to load directory");
+        showToast(
+          window.t ? window.t("files.error.load", null, "Failed to load directory") : "Failed to load directory",
+          "error"
+        );
         return [];
       }
     },
@@ -348,7 +342,8 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge, width, onWidthC
                 showToast(
                   window.t
                     ? window.t("files.error.load", null, "Failed to load directory")
-                    : "Failed to load directory"
+                    : "Failed to load directory",
+                  "error"
                 );
               }
             }
@@ -501,7 +496,8 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge, width, onWidthC
       showToast(
         window.t
           ? window.t("files.error.rename", { error: errMsg }, `Failed to rename: ${errMsg}`)
-          : `Failed to rename: ${errMsg}`
+          : `Failed to rename: ${errMsg}`,
+        "error"
       );
     }
   };
@@ -533,7 +529,8 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge, width, onWidthC
       showToast(
         window.t
           ? window.t("files.error.delete", { error: errMsg }, `Failed to delete: ${errMsg}`)
-          : `Failed to delete: ${errMsg}`
+          : `Failed to delete: ${errMsg}`,
+        "error"
       );
     }
   };
@@ -606,7 +603,8 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge, width, onWidthC
       showToast(
         window.t
           ? window.t("files.error.openEditor", { error: errMsg }, `Failed to open in editor: ${errMsg}`)
-          : `Failed to open in editor: ${errMsg}`
+          : `Failed to open in editor: ${errMsg}`,
+        "error"
       );
     }
   };
@@ -824,12 +822,7 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge, width, onWidthC
       )}
 
       {/* Toast Notification */}
-      {toastMessage && (
-        <div className="files-toast">
-          <Icon name="check" size={11} color="var(--accent)" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
+      <window.FileTreeToast toast={toast} />
     </aside>
   );
 }

@@ -265,6 +265,17 @@ describe('SessionTitle.nextTitle', () => {
     assert.equal(next, 'omp-desktop: Renamed from slash command');
   });
 
+  it('force: keeps the (n) suffix when omp reports the bare folder name', () => {
+    const numbered = { name: 'omp-desktop (2)', path: 'F:/Project/omp-desktop' };
+    assert.equal(SessionTitle.nextTitle(numbered, 'omp-desktop', { force: true }), null);
+    assert.equal(SessionTitle.nextTitle(numbered, '# omp-desktop', { force: true }), null);
+  });
+
+  it('force: a renamed tab can still be reset to the bare folder name', () => {
+    const renamed = { name: 'omp-desktop: Old task', path: 'F:/Project/omp-desktop', titleLocked: true };
+    assert.equal(SessionTitle.nextTitle(renamed, 'omp-desktop', { force: true }), 'omp-desktop');
+  });
+
   it('returns null if formatted title equals existing name', () => {
     const projectEntry = { name: 'omp-desktop', path: 'F:/Project/omp-desktop' };
     assert.equal(SessionTitle.nextTitle(projectEntry, 'omp-desktop'), null);

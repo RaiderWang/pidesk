@@ -179,29 +179,35 @@
    * - Strips file mentions and sanitizes text; returns null if cleaned text is empty.
    * - Formats with folder prefix when applicable.
    * - Returns null if the formatted title equals entry.name.
-   * - Returns null if formatted title doesn't add prompt info beyond the folder name.
+   * - Returns null if formatted title doesn't add prompt info beyond the folder name
+   *   (with force: only when entry.name is still the folder's initial name, e.g. "folder (2)").
    * - Returns the formatted title string otherwise.
    */
   function nextTitle(entry, raw, options = {}) {
     if (!entry || typeof raw !== "string" || !raw.trim()) return null;
     const force = Boolean(options.force);
     const isLocked = Boolean(entry.titleLocked || entry.userTitled);
+    const folder = folderName(entry.path);
 
     if (!force) {
       if (isLocked) return null;
       const trimmed = raw.trim();
       if (trimmed.startsWith("/")) return null;
-      const folder = folderName(entry.path);
       if (!isInitialSessionName(entry.name, folder)) return null;
     }
 
-    const folder = folderName(entry.path);
     const cleaned = cleanSessionTitle(raw, "", options);
     if (!cleaned) return null;
 
     const formatted = formatSessionTitle(cleaned, folder, { fallback: entry.name });
     if (!formatted || formatted === entry.name) return null;
-    if (!force && folder && formatted.toLowerCase() === folder.toLowerCase()) {
+    // A bare folder-name title adds no prompt info. Forced renames only skip it
+    // for unstarted folder-named tabs, so "omp-desktop (2)" keeps its suffix.
+    if (
+      folder &&
+      formatted.toLowerCase() === folder.toLowerCase() &&
+      (!force || initialNamePattern(folder).test((entry.name || "").trim()))
+    ) {
       return null;
     }
     return formatted;
