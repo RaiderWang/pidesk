@@ -16,7 +16,7 @@
 
 const {
   Icon, ChatView, Composer, CommandPalette, ShortcutsHelp, WindowChrome, TabBar,
-  StatusBar, AmbientRail, SplitPeer, PlanKanban, PlanDockView, HistoryModal, ModelManagerModal, ModelRestartModal, ToolLogModal, AgentErrorBanner, ModelsConfigWarning, useTweaks,
+  StatusBar, AmbientRail, SplitPeer, PlanKanban, PlanDockView, HistoryModal, ModelManagerModal, ModelRestartModal, ExportFormatModal, ToolLogModal, AgentErrorBanner, ModelsConfigWarning, useTweaks,
   FileTreePanel, ActivityBar, DockPanel, useDockState, useViewportWidth,
   TweaksPanel, TweakSection, TweakRadio, TweakToggle, TweakColor, TweakSlider, TweakShortcut, TweakEditor,
   TWEAK_DEFAULTS, NULL_MODEL, EMPTY_PROJECT, NULL_PEER,
@@ -41,6 +41,7 @@ function App() {
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const [modelManagerOpen, setModelManagerOpen] = React.useState(false);
   const [modelRestartOpen, setModelRestartOpen] = React.useState(false);
+  const [exportFormatOpen, setExportFormatOpen] = React.useState(false);
   const [reviewOpen,  setReviewOpen]  = React.useState(false);
   const [reviewFocus, setReviewFocus] = React.useState("");
   const [activeLogTool, setActiveLogTool] = React.useState(null);
@@ -269,7 +270,7 @@ function App() {
     if      (c.name === "plan")     { setPlanMode(true); setPlanActive(true); planStartedRef.current = false; }
     else if (c.name === "todo" || c.name === "kanban") { openDockTab("plan"); }
     else if (c.name === "compact")  { bridge?.compact(); }
-    else if (c.name === "export")   { bridge?.exportHtml(); }
+    else if (c.name === "export")   { setExportFormatOpen(true); }
     else if (c.name === "thinking") { cycleThinking(); }
     else if (c.name === "model")    { openBridge("models"); }
     else if (c.name === "login")    { openBridge("login"); }
@@ -372,7 +373,7 @@ function App() {
   // ── Global shortcuts + palette actions (shared handlers) ────────────────
   // Palette / help are the only shortcuts live over a dialog; never stack them
   // on top of another dialog (its keys would leak through to the one below).
-  const otherModalOpen = historyOpen || modelManagerOpen || planOpen || activeLogTool != null;
+  const otherModalOpen = historyOpen || modelManagerOpen || modelRestartOpen || exportFormatOpen || planOpen || activeLogTool != null;
   const togglePalette = () => {
     if (bridgeOpen) { setBridgeOpen(false); setBridgeView("commands"); }
     else if (!otherModalOpen && !shortcutsOpen) openBridge("commands");
@@ -690,6 +691,13 @@ function App() {
         <ModelRestartModal
           onConfirm={() => bridge.restartActiveSession()}
           onClose={() => setModelRestartOpen(false)}
+        />
+      )}
+
+      {exportFormatOpen && (
+        <ExportFormatModal
+          onPick={format => { setExportFormatOpen(false); bridge?.exportSession(format); }}
+          onClose={() => setExportFormatOpen(false)}
         />
       )}
 

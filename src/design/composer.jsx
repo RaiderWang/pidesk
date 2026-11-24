@@ -28,6 +28,11 @@ function renderCommandGlyph(icon, size = 11) {
   return isNamedIcon ? <Icon name={icon} size={size} /> : icon;
 }
 
+// Command hint: localized via cmd.<name>.hint, falling back to the registered English text.
+function _composerCmdHint(c) {
+  return window.t ? window.t(`cmd.${c.name}.hint`, null, c.hint) : c.hint;
+}
+
 // ── The composer (input + plan/steer modes + send) ────────────────────
 function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenModel, currentModel, thinking, onCycleThinking, isStreaming, onAbort, onApprove, annotationCount = 0, microcopy, screenshotShortcut: screenshotShortcutProp, agentError, availableThinkingLevels, projectPath }) {
   const [text, setText]             = React.useState("");
@@ -149,7 +154,7 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
   // Derive slash state inline — no useEffect, no stale flicker
   const slashQ = text.startsWith("/") ? text.slice(1).split(" ")[0].toLowerCase() : null;
   const filtered = slashQ !== null
-    ? cmds.filter(c => !slashQ || c.name.startsWith(slashQ) || c.name.includes(slashQ) || c.hint?.toLowerCase().includes(slashQ))
+    ? cmds.filter(c => !slashQ || c.name.startsWith(slashQ) || c.name.includes(slashQ) || _composerCmdHint(c)?.toLowerCase().includes(slashQ))
     : [];
   const showSlash = filtered.length > 0;
 
@@ -352,7 +357,7 @@ function Composer({ onSend, onPick, planMode, onTogglePlan, onOpenCmd, onOpenMod
               onMouseDown={(e) => { e.preventDefault(); execCmd(c); }}>
               <span className="slash-glyph">{renderCommandGlyph(c.icon, 11)}</span>
               <span className="mono" style={{ color: "var(--accent)" }}>/{c.name}</span>
-              <span style={{ color: "var(--fg-3)" }}>{c.hint}</span>
+              <span style={{ color: "var(--fg-3)" }}>{_composerCmdHint(c)}</span>
               <span className="chip muted" style={{ marginLeft: "auto" }}>{c.group}</span>
             </button>
           ))}

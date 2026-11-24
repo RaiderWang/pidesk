@@ -7,9 +7,10 @@
 //! overwrite confirmation stays authoritative.
 
 use base64::Engine;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
-const MAIN_WINDOW_LABEL: &str = "main";
+use crate::export_common;
+
 /// Upper bound on the base64 payload crossing the IPC boundary.
 const MAX_BASE64_LEN: usize = 64 * 1024 * 1024;
 const PNG_MAGIC: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
@@ -22,34 +23,10 @@ fn strip_data_url_prefix(s: &str) -> &str {
         .map_or(s, |(_, payload)| payload)
 }
 
-/// Suggested name for the dialog: last path component, filesystem-hostile
-/// characters replaced, `.png` appended when missing.
+/// Suggested name for the dialog: see `export_common::sanitize_filename`.
 fn sanitize_filename(name: &str) -> String {
-    let base = name.rsplit(['/', '\\']).next().unwrap_or_default();
-    let cleaned: String = base
-        .chars()
-        .map(|c| {
-            if c.is_control() || matches!(c, '<' | '>' | ':' | '"' | '|' | '?' | '*') {
-                '_'
-            } else {
-                c
-            }
-        })
-        .collect();
-    let trimmed = cleaned.trim_matches(|c: char| c == '.' || c.is_whitespace());
-    if trimmed.is_empty() {
-        return FALLBACK_NAME.to_owned();
-    }
-    let has_png_ext = trimmed
-        .rsplit_once('.')
-        .is_some_and(|(stem, ext)| !stem.is_empty() && ext.eq_ignore_ascii_case("png"));
-    if has_png_ext {
-        trimmed.to_owned()
-    } else {
-        format!("{trimmed}.png")
-    }
+    export_common::sanitize_filename(name, &["png"], FALLBACK_NAME)
 }
-
 /// Validate and decode the payload: bounded size, valid base64, non-empty,
 /// PNG signature. Guards against writing a corrupt file on a frontend bug.
 fn decode_png(base64_data: &str) -> Result<Vec<u8>, String> {
@@ -77,8 +54,6 @@ pub async fn save_image_to_disk(
     base64_data: String,
     default_filename: Option<String>,
 ) -> Result<Option<String>, String> {
-    use tauri_plugin_dialog::DialogExt;
-
     // Validate before bothering the user with a dialog; decoding a large
     // payload stays off the async worker.
     let bytes = tauri::async_runtime::spawn_blocking(move || decode_png(&base64_data))
@@ -86,31 +61,11 @@ pub async fn save_image_to_disk(
         .map_err(|e| format!("join error: {e}"))??;
 
     let name = sanitize_filename(default_filename.as_deref().unwrap_or(FALLBACK_NAME));
-    let mut builder = app
-        .dialog()
-        .file()
-        .set_title("Save Image")
-        .add_filter("PNG Image", &["png"])
-        .set_file_name(&name);
-    if let Some(win) = app.get_webview_window(MAIN_WINDOW_LABEL) {
-        builder = builder.set_parent(&win);
-    }
-
-    let (tx, rx) = std::sync::mpsc::channel();
-    builder.save_file(move |result| {
-        let _ = tx.send(result);
-    });
-    let picked = tauri::async_runtime::spawn_blocking(move || rx.recv())
-        .await
-        .map_err(|e| format!("join error: {e}"))?
-        .map_err(|e| format!("channel error: {e}"))?;
-    let Some(picked) = picked else {
+    let Some(dest) =
+        export_common::pick_save_path(&app, "Save Image", "PNG Image", &["png"], &name).await?
+    else {
         return Ok(None);
     };
-    let dest = picked
-        .into_path()
-        .map_err(|e| format!("invalid path: {e}"))?;
-
     let written = tauri::async_runtime::spawn_blocking(move || {
         std::fs::write(&dest, bytes)
             .map(|()| dest.to_string_lossy().into_owned())

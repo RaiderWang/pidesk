@@ -6,6 +6,8 @@ const { Icon: _UP_Icon, renderCommandGlyph: _UP_glyph } = window;
 
 const _UP_HISTORY_CAP = 300;
 const _UP_EMPTY = [];
+// Localized via `cmd.<name>.hint`; the registered English text is the fallback.
+const _UP_cmdHint = (c) => (window.t ? window.t(`cmd.${c.name}.hint`, null, c.hint) : c.hint);
 // Slash commands that mirror a registered keyboard shortcut.
 const _UP_COMMAND_SHORTCUT = { history: "history", models: "models", todo: "togglePlan", kanban: "togglePlan" };
 
@@ -32,7 +34,7 @@ function usePaletteItems({ open, mode, actions, sessions, activeSessionId, proje
       const sc = _UP_COMMAND_SHORTCUT[c.name];
       out.push({
         id: `cmd:${c.name}`, group: "commands", kind: "command", command: c,
-        label: `/${c.name}`, labelClass: "mono", labelColor: "var(--accent)", hint: c.hint,
+        label: `/${c.name}`, labelClass: "mono", labelColor: "var(--accent)", hint: _UP_cmdHint(c),
         keywords: [c.group].filter(Boolean),
         glyph: _UP_glyph(c.icon, 11),
         drill: c.name === "model" || c.name === "login",

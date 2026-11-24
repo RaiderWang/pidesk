@@ -5,6 +5,7 @@
 #![allow(clippy::needless_pass_by_value)]
 
 mod agent;
+mod export_common;
 mod external_editor;
 mod file_watcher;
 mod files;
@@ -20,6 +21,7 @@ mod review;
 mod saved_sessions;
 mod screenshot;
 mod session_copy;
+mod session_export;
 mod shortcut;
 mod tray;
 mod update;
@@ -227,58 +229,6 @@ fn delete_saved_session(path: String, app: tauri::AppHandle) -> Result<(), Strin
     saved_sessions::delete_saved_session(&path, &app)
 }
 
-/// Relocate an HTML export file that omp wrote to a user-chosen location
-/// via the native save dialog.
-///
-/// `source_path` is the path to the HTML file omp already wrote; a relative
-/// path is resolved against the "no project" workspace.
-/// Returns `true` when the file was copied, `false` when the user
-/// cancelled the dialog.  Same main-thread dispatch pattern as
-/// `open_project` — see that doc-comment for the threading rationale.
-#[tauri::command]
-async fn save_html_export(source_path: String, app: tauri::AppHandle) -> Result<bool, String> {
-    use tauri_plugin_dialog::DialogExt;
-
-    // omp writes relative export names into its own cwd; for "no project"
-    // sessions that is the dedicated workspace, not this process's CWD.
-    let resolved = agent::workspace::anchor_to_workspace(
-        std::path::Path::new(&source_path),
-        &agent::workspace::default_cwd(&app),
-    );
-    let src = resolved.as_path();
-    if !src.exists() {
-        return Err(format!("export file not found: {}", src.display()));
-    }
-    let default_name = src.file_name().map_or_else(
-        || "session-export.html".to_owned(),
-        |n| n.to_string_lossy().into_owned(),
-    );
-
-    let (tx, rx) = std::sync::mpsc::channel();
-    app.dialog()
-        .file()
-        .set_title("Export Session")
-        .add_filter("HTML", &["html"])
-        .set_file_name(&default_name)
-        .save_file(move |result| {
-            let _ = tx.send(result);
-        });
-    let picked = tauri::async_runtime::spawn_blocking(move || rx.recv())
-        .await
-        .map_err(|e| format!("join error: {e}"))?
-        .map_err(|e| format!("channel error: {e}"))?;
-    let Some(picked) = picked else {
-        return Ok(false);
-    };
-    let dest = picked
-        .into_path()
-        .map_err(|e| format!("invalid path: {e}"))?;
-    std::fs::copy(src, &dest).map_err(|e| format!("copy error: {e}"))?;
-    // Clean up the original file omp wrote in the project directory.
-    let _ = std::fs::remove_file(src);
-    Ok(true)
-}
-
 /// Get the application version from package metadata.
 #[tauri::command]
 fn get_app_version(app: tauri::AppHandle) -> String {
@@ -381,7 +331,6 @@ pub fn run() {
             models_diagnostics::check_models_config,
             copy_session_file,
             delete_saved_session,
-            save_html_export,
             get_app_version,
             update::check_update,
             update::install_update,
@@ -403,6 +352,8 @@ pub fn run() {
             screenshot::finish_annotated_capture,
             screenshot::save_screenshot_to_disk,
             image_export::save_image_to_disk,
+            session_export::save_markdown_export,
+            session_export::save_html_export,
             screenshot::cancel_region_capture,
             screenshot::get_screenshot_background,
             files::list_directory,

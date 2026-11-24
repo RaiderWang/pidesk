@@ -31,7 +31,7 @@
       { name: "login",    hint: "authenticate with a model provider",   icon: "⊙", group: "Agent"   },
       { name: "todo",     hint: "open the kanban surface",            icon: "▦", group: "View"    },
       { name: "review",   hint: "inspect code diff & launch review",  icon: "diff2", group: "Code" },
-      { name: "export",   hint: "export this session to HTML",        icon: "⇪", group: "View"    },
+      { name: "export",   hint: "export this session as Markdown or HTML", icon: "⇪", group: "View"    },
     ],
     models: [],
     activity: [],
@@ -584,6 +584,7 @@
     // An in-flight undo awaits RPC responses on the *current* listener; wait
     // for it so its responses (and composer restore) land in the right tab.
     await _undo.whenIdle();
+    await _export.whenIdle();
 
     // Snapshot current session so we can restore it when switching back
     _saveCurrentSession();
@@ -1957,6 +1958,17 @@
     defaultPlanMeta: () => ({ ...DEFAULT_DATA.planMeta }),
   });
 
+  // `/export` orchestration lives in export-bridge.js.
+  const _export = window.ExportBridge.create({
+    state,
+    notify,
+    sendWithResponse: _sendWithResponse,
+    getActiveSessionId: () => activeSessionId,
+    getSessionInfo: () => {
+      const entry = sessionRegistry.get(activeSessionId);
+      return { name: entry?.name || "", cwd: entry?.path || "" };
+    },
+  });
   // ── OMP_BRIDGE public API ─────────────────────────────────────────────────
   window.OMP_BRIDGE = {
     get isConnected() { return !!window.__TAURI__ && !!activeSessionId && !state.agentError; },
@@ -2186,49 +2198,8 @@
         warn("branch.fail.generic", { error: err?.message ?? String(err) });
       }
     },
-    exportHtml() {
-      (async () => {
-        try {
-          const data = await _sendWithResponse({ type: "export_html" }, 30000);
-
-          // omp writes the HTML file to disk itself and returns { path: "filename.html" }.
-          // Construct the full path from the session's cwd + returned filename.
-          const filename = data?.path ?? null;
-          if (!filename) {
-            state.messages = [
-              ...state.messages,
-              window.NoticeBubble.make("⚠️ **Export failed:** omp did not return an export file path.", timeNow()),
-            ];
-            notify();
-            return;
-          }
-
-          const activeEntry = sessionRegistry.get(activeSessionId);
-          const cwd = activeEntry?.path || "";
-          // If the path omp returned is already absolute, use it directly;
-          // otherwise join it with the session's working directory.
-          const isAbsolute = /^[A-Za-z]:[\\/]|^\//.test(filename);
-          const sourcePath = isAbsolute ? filename : (cwd ? `${cwd}/${filename}` : filename);
-
-          const saved = await window.__TAURI__.core.invoke("save_html_export", { sourcePath });
-          if (saved) {
-            state.messages = [
-              ...state.messages,
-              window.NoticeBubble.make("✅ Session exported to HTML.", timeNow()),
-            ];
-          }
-          notify();
-        } catch (err) {
-          console.warn("[live] exportHtml failed:", err);
-          state.messages = [
-            ...state.messages,
-            window.NoticeBubble.make(`⚠️ **Export failed:** ${err?.message ?? String(err)}`, timeNow()),
-          ];
-          notify();
-        }
-      })();
-    },
-
+    /** `/export`: `"markdown"` | `"html"` → `{ ok, path? | reason }` (see export-bridge.js). */
+    exportSession(format) { return _export.exportSession(format); },
     // ── Peer session (delegated to peer-session.js) ────────────────────────
     get peerSessionId() { return window.PeerSessionBridge.id; },
     setPeer(id)   { window.PeerSessionBridge.pin(id, activeSessionId); },

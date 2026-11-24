@@ -197,7 +197,7 @@
     { name: "kanban",    hint: "open task kanban · 任务看板 (Ctrl+J)",      icon: "plan", group: "View" },
     { name: "todo",      hint: "open task kanban · 任务看板 (Ctrl+J)",      icon: "plan", group: "View" },
     { name: "minimap",   hint: "toggle the session minimap",                icon: "▢", group: "View" },
-    { name: "export",    hint: "export this session to HTML",               icon: "⇪", group: "View" },
+    { name: "export",    hint: "export this session as Markdown or HTML",      icon: "⇪", group: "View" },
   ];
 
   // ── Available models
