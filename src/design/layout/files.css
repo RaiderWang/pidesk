@@ -340,8 +340,12 @@
   align-items: center;
   gap: 6px;
   pointer-events: none;
+  max-width: calc(100vw - 40px);
+  overflow-wrap: anywhere;
   animation: filesToastIn 150ms cubic-bezier(0.16, 1, 0.3, 1);
 }
+.files-toast--error { border-color: var(--rose); }
+.files-toast > svg { flex-shrink: 0; }
 
 @keyframes filesToastIn {
   from { opacity: 0; transform: translateY(6px); }

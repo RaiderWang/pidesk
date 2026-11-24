@@ -165,6 +165,21 @@ describe('live.js — session title integration', () => {
     assert.equal(targetSession.titleLocked, true);
   });
 
+  it('session_info_update with the bare folder name keeps the (n) suffix of an unstarted tab', async () => {
+    await bridge.openSession('/workspace/dup-repo');
+    const id2 = await bridge.openSession('/workspace/dup-repo');
+    await bridge.activateSession(id2);
+    assert.equal(getSession(id2).name, 'dup-repo (2)');
+
+    bridge._handleEvent({
+      type: 'session_info_update',
+      title: 'dup-repo',
+      sessionId: 'omp-session-dup',
+    });
+
+    assert.equal(getSession(id2).name, 'dup-repo (2)');
+  });
+
   it('slash commands and file-only mentions do not set or lock tab title', async () => {
     const id = await bridge.openSession('/workspace/planning-project');
     await bridge.activateSession(id);

@@ -6,7 +6,7 @@
  * Run: node --test test/open-recent-project.test.mjs
  */
 
-import { describe, it, after } from 'node:test';
+import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -31,6 +31,14 @@ const bridge = globalThis.OMP_BRIDGE;
 
 describe('live.js — openSession multiple tabs for the same project', () => {
   const projPath = 'C:\\Projects\\my-service';
+
+  // Single pass: closing the last tab makes closeSession auto-open a default
+  // session, so looping until empty would never terminate.
+  beforeEach(async () => {
+    for (const s of bridge.getSessions()) {
+      await bridge.closeSession(s.id);
+    }
+  });
 
   it('assigns folder name to first session and sequence numbers to subsequent sessions', async () => {
     // 1. Open first session for my-service
@@ -60,7 +68,7 @@ describe('live.js — openSession multiple tabs for the same project', () => {
     assert.equal(tab3.name, 'my-service (3)');
 
     // 4. Close session 2 (id2), next open should reuse (2)
-    bridge.closeSession(id2);
+    await bridge.closeSession(id2);
     const id4 = await bridge.openSession(projPath);
     sessions = bridge.getSessions();
     const tab4 = sessions.find(s => s.id === id4);
@@ -68,9 +76,9 @@ describe('live.js — openSession multiple tabs for the same project', () => {
     assert.equal(tab4.name, 'my-service (2)');
 
     // Clean up
-    bridge.closeSession(id1);
-    bridge.closeSession(id3);
-    bridge.closeSession(id4);
+    await bridge.closeSession(id1);
+    await bridge.closeSession(id3);
+    await bridge.closeSession(id4);
   });
 
   it('normalizes path slashes when calculating sequence numbers', async () => {
@@ -87,14 +95,7 @@ describe('live.js — openSession multiple tabs for the same project', () => {
     assert.equal(tabA.name, 'api-gateway');
     assert.equal(tabB.name, 'api-gateway (2)');
 
-    bridge.closeSession(idA);
-    bridge.closeSession(idB);
-  });
-
-  after(() => {
-    const sessions = bridge.getSessions();
-    for (const s of sessions) {
-      bridge.closeSession(s.id);
-    }
+    await bridge.closeSession(idA);
+    await bridge.closeSession(idB);
   });
 });

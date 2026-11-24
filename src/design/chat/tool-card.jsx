@@ -1,7 +1,7 @@
 /* chat/tool-card.jsx — Linear/Raycast-style card for one tool call,
    plus ScrubbableDiff (shown for `edit` tools with a parsed diff). */
 
-const { Icon: _TC_Icon, TOOL_META: _TC_TOOL_META, EvalCell: _TC_EvalCell } = window;
+const { Icon: _TC_Icon, TOOL_META: _TC_TOOL_META, EvalCell: _TC_EvalCell, BashOutput: _TC_BashOutput } = window;
 
 function ScrubbableDiff({ msg }) {
   const total = msg.diff.length;
@@ -100,12 +100,12 @@ function TaskAgentRow({ sa }) {
     : (sa.status === "failed" || sa.status === "aborted") ? (sa.error ?? sa.status)
     : sa.task;
 
-  // Auto-scroll the body div while the subagent is still running.
-  React.useEffect(() => {
-    if (isOpen && isRunning && bodyRef.current) {
-      bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
-    }
-  }, [lines.length, isOpen, isRunning]);
+  // Pin the body to the bottom while the subagent is running; pauses when the
+  // user scrolls up. Depend on the stream/output references (the last line can
+  // grow in place without changing `lines.length`); `lines` itself is a fresh
+  // array on every render when it comes from `sa.output.split`.
+  const onBodyScroll = window.useStickScroll(
+    bodyRef, [sa._stream, sa.output], { active: isOpen && isRunning });
 
   return (
     <div className={`ta-row ta-${sa.status}`}>
@@ -124,7 +124,7 @@ function TaskAgentRow({ sa }) {
         {hasBody && <_TC_Icon name={isOpen ? "chev" : "chevR"} size={10} color="var(--fg-4)" />}
       </button>
       {isOpen && hasBody && (
-        <div className="ta-body selectable" ref={bodyRef}>
+        <div className="ta-body selectable" ref={bodyRef} onScroll={onBodyScroll}>
           {lines.map((l, i) => <div key={i} className="ta-stream-line">{l || "\u00a0"}</div>)}
         </div>
       )}
@@ -251,11 +251,7 @@ function ToolCard({ msg, idx, highlighted }) {
             )}
 
             {msg.tool === "bash" && msg.output && (
-              <pre className="tool-bash mono selectable">
-                {msg.output.map((l, i) => (
-                  <div key={i} style={{ color: `var(--${l.color})` }}>{l.line}</div>
-                ))}
-              </pre>
+              <_TC_BashOutput output={msg.output} running={running} />
             )}
 
             {msg.tool === "eval" && msg.cells && (

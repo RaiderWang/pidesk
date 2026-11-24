@@ -15,6 +15,15 @@ function EvalCell({ cell }) {
     } catch (_) { return null; }
   }, [done, cell.code, lang]);
 
+  // Pin streaming code/output boxes to the bottom only while the cell is
+  // actually running. Finished cells and never-executed "pending" ones (after
+  // an earlier cell failed) read from the top.
+  const running = cell.status === "running";
+  const codeRef = React.useRef(null);
+  const outRef  = React.useRef(null);
+  const onCodeScroll = window.useStickScroll(codeRef, [cell.code], { active: running });
+  const onOutScroll  = window.useStickScroll(outRef,  [cell.output], { active: running });
+
   return (
     <div className={`eval-cell eval-${cell.status}`}>
       <div className="eval-cell-head mono">
@@ -29,10 +38,11 @@ function EvalCell({ cell }) {
         codeHtml
           ? <pre className="eval-code selectable"><code className={`hljs language-${lang}`}
               dangerouslySetInnerHTML={{ __html: codeHtml }} /></pre>
-          : <pre className="eval-code selectable mono">{cell.code.trimEnd()}</pre>
+          : <pre className="eval-code selectable mono" ref={codeRef} onScroll={onCodeScroll}>{cell.code.trimEnd()}</pre>
       )}
       {cell.output && (
-        <pre className={`eval-output selectable mono${cell.status === "error" ? " eval-error" : ""}`}>
+        <pre className={`eval-output selectable mono${cell.status === "error" ? " eval-error" : ""}`}
+          ref={outRef} onScroll={onOutScroll}>
           {cell.output.trimEnd()}
         </pre>
       )}
