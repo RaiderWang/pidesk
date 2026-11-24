@@ -144,6 +144,8 @@ The frontend calls these Rust commands via `invoke()`:
 | `finish_region_capture` | `(x: u32, y: u32, width: u32, height: u32, scaleFactor: f64) → Result<()>` | Crop raw frozen image on Rust side and emit `main://screenshot-result` or `quickbar://region-result` |
 | `finish_annotated_capture` | `(base64Data: String, width: u32, height: u32) → Result<()>` | Deliver frontend-composited annotated PNG to the active window |
 | `save_screenshot_to_disk` | `(base64Data: String, defaultFilename: Option<String>) → Result<Option<String>>` | Prompt native OS file save dialog (unpinning overlay & attaching parent) and write decoded image |
+| `save_markdown_export` | `(content: String, defaultName: Option<String>, title: Option<String>) → Result<Option<String>>` | `/export` → Markdown: validate (non-empty, ≤ 64 MiB) **before** showing a single-filter `.md` save dialog (parented to the main window), then write the picked path. Returns the saved path, `null` when cancelled. The frontend never supplies a destination |
+| `save_html_export` | `(sourcePath: String, defaultName: Option<String>, title: Option<String>) → Result<Option<String>>` | `/export` → HTML: `sourcePath` is the file omp wrote (relative paths anchor to the "no project" workspace; must be an existing `.html`/`.htm` file). Shows a single-filter save dialog, moves the file there and removes the original. Saving onto the source itself keeps it; cancelling deletes the generated file. Returns the saved path or `null` |
 | `cancel_region_capture` | `() → Result<()>` | Hide screenshot overlay and restore target window focus only if originally visible |
 | `review_check_environment` | `(cwd: String) → Result<GitEnvironmentStatus>` | Inspect whether git is installed and whether cwd is inside a valid git repository |
 | `review_list_branches` | `(cwd: String) → Result<Vec<String>>` | Enumerate local and remote git branches for base branch comparison |
@@ -173,8 +175,8 @@ The frontend communicates with `omp` exclusively through the Tauri IPC bridge. `
 | `cycle_model` | User clicks `/model` command |
 | `cycle_thinking_level` | User cycles thinking in composer / `/thinking` |
 | `compact` | User runs `/compact` |
-| `export_html` | User runs `/export` |
-| `get_entries` | Undo message — read the session entries (ids, parent chain, `leafId`) |
+| `export_html` | `/export` → HTML: omp writes the file, then `save_html_export` moves it to the user's chosen path |
+| `get_entries` | Undo message — read the session entries (ids, parent chain, `leafId`); also `/export` → Markdown (the transcript is built from these entries) |
 | `branch` | Undo message — roll back to before a user entry (`{ entryId }` → `{ text, cancelled }`) |
 | `get_session_stats` | After each `turn_end` |
 | `extension_ui_response` | Auto-cancel for interactive UI requests |
@@ -269,6 +271,17 @@ Flow (`undo-bridge.js`, wired from `live.js`): `get_entries` → `UndoMessage.re
 - **Known limitation.** If omp rewrites a prompt before persisting it (slash command / template / `@model` expansion), `message_start` echoes the expanded text and the UI shows an extra bubble; the tail check then fails safely (`undo.fail.locate`) for that message and everything before it. Fixing it needs optimistic-echo de-duplication in `live.js`.
 - Finished tool cards are ephemeral (removed from `state.messages` on `tool_execution_end`), so `countAffected().tools` is ~0 in live sessions and `toolLogs` are left untouched by undo.
 - Agent edits to files on disk are **not** reverted — the confirm dialog says so.
+
+### Export (`/export`)
+
+`/export` opens `design/export-format-modal.jsx` (Markdown / HTML); the pick calls `OMP_BRIDGE.exportSession(format)` (`export-bridge.js`, wired from `live.js` like `undo-bridge.js`).
+
+- **Format is chosen in-app, before the save dialog.** `rfd` 0.16 flattens all filters into one `setAllowedFileTypes` list on macOS (no format dropdown), `tauri-plugin-dialog`'s `save_file` does not report which filter was picked, and Linux GTK does not append an extension. So each format has its own single-filter command (`save_markdown_export`, `save_html_export`, shared helpers in `src-tauri/src/export_common.rs`); a result without any extension gets `.md` / `.html` (`complete_picked_path`), a user-typed extension is respected. If the completed name already exists the save is refused, because GTK only confirmed an overwrite of the extension-less name. The suggested name is the tab title with `/` and `\` flattened to `_` (the Rust sanitiser otherwise keeps only the part after the last separator).
+- **Markdown** = `get_entries` → `ExportMarkdown.toMarkdown(entries, leafId, labels)` (`app/export-markdown.js`). Never the UI list (head-trimmed, carries client notices). Only user and assistant text of the active branch (`leafId` back along `parentId`; unknown `leafId` → last entry; cycles terminate). Thinking, tool calls/results, `developer`/`fileMention` rows, compaction etc. are dropped; image-only user turns keep an image placeholder; assistant turns separated only by tool rows merge into one `# Assistant` section; plan-mode framing is stripped (`UndoMessage.stripPlanFraming`); role headings are `# ` with no `---` rules; a dangling code fence is closed so it cannot swallow the next heading. An export with nothing to say shows a notice and **never opens the dialog**.
+- **HTML** = omp `export_html` → `save_html_export`. The old command copied then deleted the source, which destroyed the export when you saved onto the same path, and left the generated file in the project directory when you cancelled; both are fixed (and the dialog is now parented to the main window, file I/O runs in `spawn_blocking`).
+- **Known limit.** `get_entries` is a single stdout line and `agent/reader.rs` drops lines over 16 MiB, so a huge (image-laden) session times out; the Markdown path then reports a timeout and suggests retrying or the HTML export. Undo shares this limit. `exportSession` fails fast when `state.agentError` is set (a dead omp never answers, and the pending RPC would hold the tab-switch gate for the whole 30 s); `_send` swallows send failures, so a process that dies *during* an export still times out.
+- The exported HTML loads its viewer from a CDN in release builds of omp (needs internet to render); Markdown does not.
+- **Tab switches wait for an in-flight export** (`_export.whenIdle()` in `_switchToSession`); notices are written only to the tab the export started in. Overlapping exports are ignored (`busy`).
 
 ### In-app updates
 

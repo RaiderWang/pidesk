@@ -13,7 +13,7 @@ import { join, dirname } from 'path';
 import './helpers/shim.mjs';
 
 const SRC = join(dirname(fileURLToPath(import.meta.url)), '../src');
-for (const rel of ['peer-session.js', 'app/undo-message.js', 'undo-bridge.js', 'live.js']) {
+for (const rel of ['peer-session.js', 'app/undo-message.js', 'undo-bridge.js', 'export-bridge.js', 'live.js']) {
   new Function(readFileSync(join(SRC, rel), 'utf-8'))();
 }
 const bridge = globalThis.OMP_BRIDGE;

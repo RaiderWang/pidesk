@@ -22,6 +22,7 @@ const loadScript = (rel) => new Function(readFileSync(join(SRC, rel), 'utf-8'))(
 loadScript('peer-session.js');
 loadScript('app/undo-message.js');
 loadScript('undo-bridge.js');
+loadScript('export-bridge.js');
 loadScript('live.js');
 
 const bridge = globalThis.OMP_BRIDGE;

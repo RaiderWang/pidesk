@@ -24,6 +24,7 @@ function loadScript(rel) {
 loadScript('peer-session.js');
 loadScript('app/undo-message.js');
 loadScript('undo-bridge.js');
+loadScript('export-bridge.js');
 loadScript('app/session-title.js');
 loadScript('live.js');
 

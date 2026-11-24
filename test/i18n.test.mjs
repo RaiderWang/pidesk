@@ -448,3 +448,36 @@ describe('known-key spot-checks', () => {
 
 
 
+
+describe('export keys', () => {
+  const KEYS = [
+    'cmd.export.hint',
+    'export.modal.title', 'export.modal.cancel',
+    'export.format.markdown', 'export.format.markdown.body',
+    'export.format.html', 'export.format.html.body',
+    'export.role.user', 'export.role.assistant', 'export.image',
+    'export.dialog.markdown', 'export.dialog.html',
+    'export.done.markdown', 'export.done.html',
+    'export.fail.empty', 'export.fail.noPath', 'export.fail.timeoutMd', 'export.fail.generic',
+  ];
+
+  it('every key exists in en and zh-CN, and zh-CN is actually translated', () => {
+    for (const key of KEYS) {
+      setLocale('en');
+      const en = t(key);
+      assert.notEqual(en, key, `en is missing ${key}`);
+      setLocale('zh-CN');
+      const zh = t(key);
+      assert.notEqual(zh, key, `zh-CN is missing ${key}`);
+      if (!/^Markdown|^HTML|^\[/.test(en)) assert.notEqual(zh, en, `zh-CN ${key} is untranslated`);
+    }
+    setLocale('en');
+  });
+
+  it('substitutes {error} in the generic failure', () => {
+    assert.match(t('export.fail.generic', { error: 'boom' }), /boom/);
+    setLocale('zh-CN');
+    assert.match(t('export.fail.generic', { error: 'boom' }), /boom/);
+    setLocale('en');
+  });
+});
