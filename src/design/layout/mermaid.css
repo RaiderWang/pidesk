@@ -16,6 +16,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  row-gap: 2px;
+  flex-wrap: wrap; /* four buttons can outgrow a narrow chat column */
   min-width: 0;
   padding: 4px 8px;
   background: var(--bg-elevated);
@@ -47,6 +49,8 @@
   gap: 2px;
   margin-left: auto;
   flex: none;
+  flex-wrap: wrap;   /* never wider than the card (it clips overflow) */
+  max-width: 100%;
 }
 .mermaid-btn {
   display: inline-flex;
@@ -63,6 +67,11 @@
 .mermaid-btn:hover {
   background: color-mix(in oklab, var(--accent) 14%, transparent);
 }
+.mermaid-btn:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+.mermaid-btn:disabled:hover { background: transparent; }
 
 .mermaid-svg {
   padding: 12px;
@@ -109,6 +118,9 @@
   background: var(--bg-surface);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
+/* Save sits left of the close button (32px wide at right:-16px, 8px gap). */
+.lightbox-close.lightbox-save { right: 24px; }
+.lightbox-close.lightbox-save:disabled { opacity: 0.55; cursor: progress; }
 .mermaid-lightbox-body svg {
   display: block;
   width: 100%;
