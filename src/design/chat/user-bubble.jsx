@@ -49,7 +49,9 @@ function UserBubble({ msg, idx, highlighted, onUndo, canUndo = true, undoBlockRe
         <div className="msg-actions">
           <button
             className="msg-act-btn"
-            title={copied ? "copied!" : (window.t ? window.t("action.copy", null, "copy as markdown") : "copy as markdown")}
+            title={copied
+              ? (window.t ? window.t("action.copied", null, "copied!") : "copied!")
+              : (window.t ? window.t("action.copy", null, "copy") : "copy")}
             onClick={handleCopy}
           >
             <window.Icon name={copied ? "check" : "copy"} size={12} />

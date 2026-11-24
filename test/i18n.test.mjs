@@ -304,6 +304,21 @@ describe('known-key spot-checks', () => {
     setLocale('en');
   });
 
+  it('message copy action keys resolve in en and zh-CN with distinct semantics', () => {
+    setLocale('en');
+    assert.equal(t('action.copy'), 'copy');
+    assert.equal(t('action.copyMarkdown'), 'copy as markdown');
+    assert.equal(t('action.copyPlain'), 'copy as plain text');
+    assert.equal(t('action.copied'), 'copied!');
+
+    setLocale('zh-CN');
+    assert.equal(t('action.copy'), '复制');
+    assert.equal(t('action.copyMarkdown'), '复制 Markdown');
+    assert.equal(t('action.copyPlain'), '复制纯文本');
+    assert.equal(t('action.copied'), '已复制!');
+    setLocale('en');
+  });
+
   it('history modal dynamic switch and open badge strings resolve in en and zh-CN', () => {
     setLocale('en');
     assert.equal(t('history.switch'), 'Switch');
