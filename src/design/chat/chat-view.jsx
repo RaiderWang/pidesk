@@ -160,6 +160,17 @@ function ChatView({ messages, planMode, annotations, onAnnotate, hoveredMsgIdx, 
     }
   }, [messages]);
 
+  // Async content (Mermaid diagrams) grew after render: follow it only if the
+  // user was already pinned near the bottom.
+  React.useEffect(() => {
+    const onResized = () => {
+      const el = scrollRef.current;
+      if (el && atBottomRef.current) el.scrollTop = el.scrollHeight;
+    };
+    window.addEventListener("pidesk:chat-resized", onResized);
+    return () => window.removeEventListener("pidesk:chat-resized", onResized);
+  }, []);
+
   // Only the last completed assistant message is annotatable in plan mode
   let lastAsstIdx = -1;
   if (planMode) {

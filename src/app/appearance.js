@@ -120,6 +120,10 @@
 
     // Font size
     if (opts.fontSize) root.style.fontSize = opts.fontSize + "%";
+
+    // Tell theme-sensitive widgets (e.g. Mermaid cards) the <html> classes /
+    // --accent are now final — `tweakchange` fires before this runs.
+    try { window.dispatchEvent(new Event("appearanceapplied")); } catch (_) {}
   }
 
   /**

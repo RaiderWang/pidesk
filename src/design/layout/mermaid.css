@@ -1,0 +1,119 @@
+/* Mermaid diagram cards (ui/mermaid-card.jsx) ─────────────────────────
+   Own header row (no floating buttons, so it never overlaps plan-mode
+   `.plan-block-add`). Wide diagrams keep natural size and scroll. */
+.md-content .mermaid-card {
+  margin: 0.6em 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+.md-content .mermaid-card.is-failed {
+  border-color: color-mix(in oklab, var(--rose) 35%, var(--line));
+}
+
+.mermaid-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 8px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--line-soft);
+  font-size: var(--d-text-xs);
+}
+/* `.selectable *` forces user-select:text on every child; keep the toolbar
+   from being highlighted on a fast double-click. */
+.md-content .mermaid-head,
+.md-content .mermaid-head * { user-select: none; }
+.mermaid-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  color: var(--fg-3);
+}
+.mermaid-note {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-3);
+}
+.mermaid-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  flex: none;
+}
+.mermaid-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+.mermaid-btn:hover {
+  background: color-mix(in oklab, var(--accent) 14%, transparent);
+}
+
+.mermaid-svg {
+  padding: 12px;
+  overflow-x: auto;
+}
+.mermaid-svg svg {
+  display: block;
+  max-width: none;   /* keep natural width; the card scrolls */
+  margin: 0 auto;
+}
+/* (0,3,0): layout.css loads before platform.css, whose `.md-content .code-block`
+   is (0,2,0) and would otherwise win. */
+.md-content .mermaid-card .mermaid-src {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+/* Beat `.md-content code:not(.hljs)` (inline-code chip) in platform.css. */
+.md-content .mermaid-src code:not(.hljs) {
+  display: block;
+  padding: 0.9em 1em;
+  overflow-x: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #abb2bf;
+  font-family: var(--font-mono);
+  font-size: 0.83em;
+  line-height: 1.55;
+  white-space: pre;
+}
+
+/* Spacing around split Markdown segments (platform.css zeroes the last <p>'s margin). */
+.md-segment + .mermaid-card,
+.mermaid-card + .md-segment { margin-top: 0.6em; }
+
+/* Expanded view reuses .lightbox-scrim / .lightbox-content (chat.css). */
+.mermaid-lightbox-body {
+  max-width: 90vw;
+  max-height: 85vh;
+  overflow: auto;
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--bg-surface);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+.mermaid-lightbox-body svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* Never smaller than the inline card's natural size: very wide charts
+     scroll horizontally instead of shrinking their text. */
+  min-width: var(--mm-natural, 0);
+}
