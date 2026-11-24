@@ -182,3 +182,52 @@ describe('render guards', () => {
     assert.equal(r.tooLarge, true);
   });
 });
+
+describe('renderForExport', () => {
+  it('renders with plain (non-foreignObject) labels, strict security', async () => {
+    const { M, stats } = setup();
+    try {
+      const r = await M.renderForExport('A-->B', aurora);
+      assert.equal(r.ok, true);
+      assert.match(r.svg, /width="100" height="50"/);
+      const cfg = stats.inits[0];
+      assert.equal(cfg.htmlLabels, false);
+      assert.equal(cfg.flowchart.htmlLabels, false);
+      assert.equal(cfg.securityLevel, 'strict');
+    } finally { teardown(); }
+  });
+
+  it('chat renders keep HTML labels (no top-level override)', async () => {
+    const { M, stats } = setup();
+    try {
+      await M.render('A-->B', aurora);
+      assert.equal(stats.inits[0].flowchart.htmlLabels, true);
+      assert.equal('htmlLabels' in stats.inits[0], false);
+    } finally { teardown(); }
+  });
+
+  it('shares the serial queue with render and never uses the cache', async () => {
+    const { M, stats } = setup();
+    try {
+      await Promise.all([M.render('A-->B', aurora), M.renderForExport('A-->B', aurora), M.render('C-->D', aurora)]);
+      assert.equal(stats.maxActive, 1);
+      assert.equal(stats.renders.length, 3); // export did not hit/seed the cache
+      await M.renderForExport('A-->B', aurora);
+      assert.equal(stats.renders.length, 4);
+      // a later chat render still gets HTML labels (config is per job)
+      await M.render('E-->F', aurora);
+      assert.equal(stats.inits.at(-1).flowchart.htmlLabels, true);
+    } finally { teardown(); }
+  });
+
+  it('reports failures and guards without poisoning the queue', async () => {
+    const { M } = setup();
+    try {
+      const bad = await M.renderForExport('BAD', aurora);
+      assert.equal(bad.ok, false);
+      assert.match(bad.error, /Parse error/);
+      assert.deepEqual(await M.renderForExport(' ', aurora), { ok: false, error: 'empty' });
+      assert.equal((await M.renderForExport('A-->B', aurora)).ok, true);
+    } finally { teardown(); }
+  });
+});

@@ -10,6 +10,7 @@ mod file_watcher;
 mod files;
 mod git;
 mod git_watcher;
+mod image_export;
 mod link_open;
 mod main_window;
 mod models_config;
@@ -401,6 +402,7 @@ pub fn run() {
             screenshot::finish_region_capture,
             screenshot::finish_annotated_capture,
             screenshot::save_screenshot_to_disk,
+            image_export::save_image_to_disk,
             screenshot::cancel_region_capture,
             screenshot::get_screenshot_background,
             files::list_directory,

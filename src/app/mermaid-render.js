@@ -12,6 +12,7 @@
      instead of appending an error SVG to <body>; leftovers are removed.
 
    API: render(code, { theme, accent }) → Promise<{ ok, svg } | { ok:false, error, tooLarge? }>
+        renderForExport(code, style) → same shape; plain-label svg for PNG export, uncached.
    Pure helpers (tested): remapIds, sizeSvg, createCache.
    UMD: module.exports in Node, window.MermaidRender in browser.
    ═════════════════════════════════════════════════════════════════════ */
@@ -119,10 +120,13 @@
     }
   }
 
-  async function renderJob(code, style) {
+  // `plainLabels` (export only): no <foreignObject> labels, so WebKit can
+  // rasterise the svg without tainting the canvas. Mermaid ≥ 11 reads the
+  // top-level `htmlLabels` (class/state/…) and `flowchart.htmlLabels`.
+  async function renderJob(code, style, plainLabels) {
     const mermaid = await load();
     const theme = root.MermaidTheme.variables(style.theme, style.accent);
-    mermaid.initialize({
+    const cfg = {
       startOnLoad: false,
       securityLevel: "strict",
       suppressErrorRendering: true,
@@ -130,8 +134,10 @@
       maxEdges: MAX_EDGES,
       theme: theme.theme,
       themeVariables: theme.themeVariables,
-      flowchart: { htmlLabels: true, useMaxWidth: false },
-    });
+      flowchart: { htmlLabels: !plainLabels, useMaxWidth: false },
+    };
+    if (plainLabels) cfg.htmlLabels = false;
+    mermaid.initialize(cfg);
     const id = nextId();
     try {
       const out = await mermaid.render(id, code);
@@ -163,5 +169,20 @@
     return job.then(finish, fail);
   }
 
-  return { render, remapIds, sizeSvg, createCache, _constants: { MAX_TEXT, MAX_EDGES } };
+  // Export-only render (plain SVG labels). Shares the serial queue with
+  // `render` (initialize() is global mutable state) but never touches the
+  // cache or in-flight map, so chat diagrams are unaffected.
+  function renderForExport(code, style) {
+    const src = String(code || "").trim();
+    if (!src) return Promise.resolve({ ok: false, error: "empty" });
+    if (src.length > MAX_TEXT) return Promise.resolve({ ok: false, error: "too large", tooLarge: true });
+    const job = queue.then(() => renderJob(src, style, true));
+    queue = job.catch(() => {});
+    return job.then(
+      (r) => ({ ok: true, svg: r.svg }),
+      (err) => ({ ok: false, error: String((err && err.message) || err) }),
+    );
+  }
+
+  return { render, renderForExport, remapIds, sizeSvg, createCache, _constants: { MAX_TEXT, MAX_EDGES } };
 });

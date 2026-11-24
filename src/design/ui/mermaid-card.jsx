@@ -5,7 +5,7 @@
    it. Rendering goes through MermaidRender (lazy, serialised, cached);
    a fence that is still streaming (`ready=false`) shows its source only. */
 
-const { Icon: _McIcon } = window;
+const { Icon: _McIcon, useMermaidSave: _mcUseSave, mermaidSaveLabel: _mcSaveLabel } = window;
 
 const _mcT = (key, fallback) => (window.t ? window.t(key, null, fallback) : fallback);
 
@@ -41,7 +41,7 @@ function useMermaidEnv() {
   return styleKey;
 }
 
-function MermaidLightbox({ svg, onClose }) {
+function MermaidLightbox({ svg, onClose, saver }) {
   const closeRef = React.useRef(onClose);
   closeRef.current = onClose;
   // Registered in ModalStack so global shortcuts (palette, history, …) stay
@@ -80,7 +80,19 @@ function MermaidLightbox({ svg, onClose }) {
           style={{ width, "--mm-natural": natural ? `${natural}px` : undefined }}
           dangerouslySetInnerHTML={{ __html: zoomSvg }}
         />
-        <button type="button" className="btn icon ghost lightbox-close" onClick={onClose} title={_mcT("mermaid.close", "Close")}>
+        {saver.canSave && (
+          <button
+            type="button"
+            className="btn icon ghost lightbox-close lightbox-save"
+            onClick={saver.save}
+            disabled={saver.status === "saving"}
+            title={_mcSaveLabel(saver.status)}
+            aria-label={_mcSaveLabel(saver.status)}
+          >
+            <_McIcon name={saver.status === "saved" ? "check" : "download"} size={14} />
+          </button>
+        )}
+        <button type="button" className="btn icon ghost lightbox-close" onClick={onClose} title={_mcT("mermaid.close", "Close")} aria-label={_mcT("mermaid.close", "Close")}>
           <_McIcon name="close" size={14} />
         </button>
       </div>
@@ -114,6 +126,7 @@ function MermaidCard({ code, ready }) {
   const svg = result && result.ok ? result.svg : null;
   const failed = result && !result.ok;
   const sourceView = showSource || !svg;
+  const saver = _mcUseSave(code, svg, styleKey);
 
   let note = null;
   if (!ready) note = _mcT("mermaid.pending", "Diagram is being generated…");
@@ -152,6 +165,17 @@ function MermaidCard({ code, ready }) {
             <_McIcon name={copied ? "check" : "copy"} size={11} />
             {copied ? _mcT("mermaid.copied", "Copied") : _mcT("mermaid.copySource", "Copy source")}
           </button>
+          {svg && !showSource && saver.canSave && (
+            <button
+              type="button"
+              className="mermaid-btn"
+              onClick={saver.save}
+              disabled={saver.status === "saving"}
+            >
+              <_McIcon name={saver.status === "saved" ? "check" : "download"} size={11} />
+              {_mcSaveLabel(saver.status)}
+            </button>
+          )}
           {svg && !showSource && (
             <button type="button" className="mermaid-btn" onClick={() => setExpanded(true)}>
               <_McIcon name="focus" size={11} /> {_mcT("mermaid.expand", "Expand")}
@@ -164,7 +188,7 @@ function MermaidCard({ code, ready }) {
       ) : (
         <div className="mermaid-svg" dangerouslySetInnerHTML={{ __html: svg }} />
       )}
-      {expanded && svg && <MermaidLightbox svg={svg} onClose={closeLightbox} />}
+      {expanded && svg && <MermaidLightbox svg={svg} onClose={closeLightbox} saver={saver} />}
     </div>
   );
 }
