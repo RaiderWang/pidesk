@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-24
+
 ### Added
 
 - **Mermaid diagrams render in chat**: a top-level ` ```mermaid ` fence (e.g. `flowchart LR` with subgraphs, CJK labels, `<br/>`) now becomes a diagram card with *View source*, *Copy source* and *Expand* (lightbox) actions in its own header row. `MarkdownContent` splits such messages via `marked.lexer` (`src/app/markdown-segments.js`) into HTML segments + `MermaidCard`s; messages without a mermaid fence keep the old single `marked.parse` path. A fence that is still streaming stays plain source until it closes (or the turn ends). Mermaid 11.17.2 is vendored as `src/mermaid.min.js` (single-file UMD, no CDN) and lazy-loaded on the first diagram. Renders are serialised, cached per theme + accent, get unique SVG ids (identical diagrams never clash), use `securityLevel: 'strict'` with `maxTextSize`/`maxEdges` caps, and never leak error SVGs into the page; syntax errors fall back to the source with a notice. All four themes are mapped to static hex palettes (`src/app/mermaid-theme.js`); `applyAppearance` now dispatches `appearanceapplied` so cards restyle after a theme/accent change. Wide diagrams keep their natural width and scroll horizontally; the chat re-pins to the bottom when a diagram finishes rendering. Mermaid inside lists/quotes, plan mode and the Quick Bar still show as a normal code block.
