@@ -129,18 +129,8 @@ function ThoughtBlock({ thought, streaming, lead }) {
 }
 
 function AssistantBubble({ msg, idx, highlighted, annotable, annotations, onAnnotate, onBranch, onOpenKanban }) {
-  const [copied, setCopied] = React.useState(false);
-
-  function handleCopy() {
-    const text = (msg.blocks || [])
-      .filter(b => b.type === "text")
-      .map(b => b.text)
-      .join("\n\n");
-    navigator.clipboard?.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    }).catch(() => {});
-  }
+  const copyText = window.getMessageText(msg);
+  const canBranch = Boolean(onBranch) && !msg.streaming && !msg.notice;
 
   return (
     <div className={`row assistant fade-up${highlighted ? " mm-hot" : ""}`} data-msg-idx={idx}>
@@ -211,24 +201,20 @@ function AssistantBubble({ msg, idx, highlighted, annotable, annotations, onAnno
             </div>
           </div>
         )}
-        <div className="msg-actions">
-          <button
-            className="msg-act-btn"
-            title={copied ? "copied!" : (window.t ? window.t("action.copy", null, "copy as markdown") : "copy as markdown")}
-            onClick={handleCopy}
-          >
-            <_ChatIcon name={copied ? "check" : "copy"} size={12} />
-          </button>
-          {onBranch && !msg.streaming && !msg.notice && (
-            <button
-              className="msg-act-btn"
-              title={window.t ? window.t("cmd.branch.fromHere", null, "branch from here") : "branch from here"}
-              onClick={() => onBranch(idx)}
-            >
-              <_ChatIcon name="branch" size={12} />
-            </button>
-          )}
-        </div>
+        {(copyText || canBranch) && (
+          <div className="msg-actions">
+            <window.MessageCopyActions text={copyText} />
+            {canBranch && (
+              <button
+                className="msg-act-btn"
+                title={window.t ? window.t("cmd.branch.fromHere", null, "branch from here") : "branch from here"}
+                onClick={() => onBranch(idx)}
+              >
+                <_ChatIcon name="branch" size={12} />
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
