@@ -4,7 +4,7 @@
    Maps a UI bubble to the omp session entry that backs it, so the Rust side
    can cut the session file at a stable entry id instead of a message count.
 
-   Why not a count: `state.messages` is head-trimmed (`_trimMessages`, 169
+   Why not a count: `state.messages` is head-trimmed (`runtime.trimMessages`, 169
    cap) and the file stores toolResult/developer rows as "message" events, so
    "Nth user/assistant bubble from the start" does not line up with the file.
    The newest bubbles always do — count from the end and verify every bubble

@@ -1,6 +1,7 @@
 /* live.js — Tauri IPC bridge + OMP_BRIDGE + OMP_DATA initialisation.
    Depends on: adapter.js and the live/* modules (defaults, prefs, tauri-api,
-   custom-models — they register on window._Live); all must load first.
+   custom-models, runtime, todo-phases, events-ui/tool/message — they register
+   on window._Live); all must load first.
    Exposes: window.OMP_DATA (for design components), window.OMP_BRIDGE (for app-live.jsx).
 
    Each tab owns one omp process (one session). Switching tabs switches the active
@@ -20,43 +21,6 @@
 
   window.OMP_DATA = JSON.parse(JSON.stringify(DEFAULT_DATA));
 
-  // ── Active session state ───────────────────────────────────────────────────
-  // These are the "current session's" live variables. _resetSessionVars() wipes
-  // them and _switchToSession() swaps them when the active tab changes.
-  const state = {
-    messages:       [],
-    isStreaming:    false,
-    model:          null,
-    thinkingLevel:  null,
-    availableThinkingLevels: null,
-    ctx:            { ...DEFAULT_DATA.ctx },
-    kanban:         [],
-    planMeta:       { ...DEFAULT_DATA.planMeta },
-    models:         [],
-    activity:       [],
-    sparkline:      Array(30).fill(0),
-    projects:       [],
-    rpcState:       null,
-    sessionCost:    null,
-    currentTps:     0,
-    runningTools:   [],   // [{id, tool, target, startMs}] — currently executing tools
-    recentTools:    [],   // [{id, tool, target, durationMs}] — last N completed tools (rolling trail)
-    turnStartMs:    null, // raw timestamp when current turn started (for elapsed display)
-    // ── Agent Hub — subagent tree / task tracking ──────────────────────
-    hubMode:    "compact",  // "compact" | "tree" | "summary"
-    hubAgents:  [],         // current task's subagent list (from tool_execution_update progress)
-    hubTaskId:  null,       // active task tool's toolCallId
-    hubHistory: [],         // last 3 completed task results [{taskId, agents, time}]
-    agentError: null,       // startup/runtime error reason if omp is not running
-    modelsConfigWarning: null, // global: why omp ignored models.yml (schema error), or null
-    toolLogs:   {},         // toolCallId -> { id, tool, target, title, command, status, startMs, durationMs, lines }
-    hasPendingAsyncWork: false, // omp 18.4+: background jobs or subagents still pending
-    isSettled:           true,  // omp 18.4+: true when agent is completely idle with no pending async work
-  };
-
-  let streamingBubble = null;
-  let activeToolCards = new Map();    // toolCallId → message index
-  let askHandshake = null;       // { askId, text }: "Other" free text awaiting its input/editor follow-up (see app/ask-answer.js)
   // sessionId → Set of tokens, one per OMP_BRIDGE.login() in flight (their input prompts stay window.prompt).
   // Tokens (not a counter): a late release of a login from a dead process must not cancel a newer login's claim.
   const loginInFlight = new Map();
@@ -72,17 +36,6 @@
       if (cur.size === 0) loginInFlight.delete(sid);
     };
   }
-  let tpsSamples      = Array(30).fill(0);
-  let turnStartTime   = null;
-  let activityLog     = [];           // [{ts, toolName}], pruned to 60s
-  let _compactBackfillId = null; // compact msg id awaiting tokensAfter back-fill
-  let _msgSeq = 0;  // monotonic counter — stable React keys for message bubbles
-  let _sessionSeq = 0; // monotonic counter — guarantees unique session IDs across rapid opens
-  function _genSessionId() {
-    return `session-${Date.now()}-${++_sessionSeq}`;
-  }
-  let _sessionFresh = false; // true after _resetSessionVars (new/restarted session, no snapshot)
-
   // ── User preference persistence ──────────────────────────────────────────
   // Saves the user's last model + thinking level across app restarts.
   // On a fresh session (no snapshot to restore from) the saved prefs are
@@ -159,27 +112,27 @@
     }
   }
 
-  // ── Minimap / message-history trim ───────────────────────────────────────
-  const MINIMAP_COLS = 13;
-  const MINIMAP_MAX  = MINIMAP_COLS * MINIMAP_COLS; // 169 — one full 13×13 grid
-
   // ── Session registry ───────────────────────────────────────────────────────
   // Tracks all open tabs. The tab list in the UI is derived from this.
   // { id, name, path, color, branch }
   const sessionRegistry = new Map();
   const sessionSnapshots = new Map(); // id -> saved state + volatile vars
   const gitListeners = new Map();  // session_id → Tauri unlisten fn for git://branch/{id}
+  const _startQueues = new Map();  // sessionId -> commands issued while omp was still starting
 
-  let activeSessionId  = null;
-  let activeListeners  = [];          // unlisten functions for current session
-  let agentStarting    = false;       // omp still starting (post-update grace period); not an error
-  let _startWaitSeq    = 0;           // bumps per tab switch so a stale startup wait stops
-  const _startQueues   = new Map();   // sessionId -> commands issued while omp was still starting
+  // ── Runtime (live/runtime.js) ──────────────────────────────────────────────
+  // `state` = the active session's UI state; `rt` = the re-assigned variables
+  // by lifecycle (rt.session travels with a tab, rt.conn is transport/active-tab
+  // bookkeeping, rt.seq are monotonic counters). reset/save/restore wipe, snapshot
+  // and re-apply the per-tab part when the active tab changes.
+  const runtime = window._Live.Runtime.create({
+    defaults: DEFAULT_DATA, sessionRegistry, sessionSnapshots, pendingSetModel: _pendingSetModel,
+  });
+  const { state, rt } = runtime;
 
   // ── ID-keyed response correlation ─────────────────────────────────────────
   // Used by _sendWithResponse to correlate commands that need a typed reply.
   const _pendingResponses = new Map(); // id → { resolve, reject }
-  let _nextCmdId = 1;
 
   /**
    * Send a command and return a Promise that resolves with the response data
@@ -189,11 +142,11 @@
    */
   function _sendWithResponse(cmd, timeout = 120000) {
     return new Promise((resolve, reject) => {
-      if (!window.__TAURI__ || !activeSessionId) {
+      if (!window.__TAURI__ || !rt.conn.activeSessionId) {
         reject(new Error("Not connected"));
         return;
       }
-      const id = `d${_nextCmdId++}`;
+      const id = `d${runtime.nextCmdId()}`;
       let timer;
       if (timeout > 0) {
         timer = setTimeout(() => {
@@ -212,65 +165,9 @@
   // ── Subscriber system ─────────────────────────────────────────────────────
   const subscribers = new Set();
 
-  // Drop the oldest row of messages once the 13×13 grid is full and the
-  // current turn is complete. Only called from notify() so the trim is
-  // always reflected in the same snapshot that React receives.
-  // Active tool-card indices are shifted so in-flight updates stay correct;
-  // completed cards are already removed from the map and are unaffected.
-  function _trimMessages() {
-    if (state.isStreaming) return;                  // wait for clean turn boundary
-    if (state.messages.length <= MINIMAP_MAX) return;
-    const drop = MINIMAP_COLS;                      // evict one full row (13)
-    state.messages = state.messages.slice(drop);
-    for (const [id, idx] of activeToolCards) {
-      const shifted = idx - drop;
-      if (shifted < 0) activeToolCards.delete(id); // guard: possible on abort (no tool_execution_end)
-      else activeToolCards.set(id, shifted);
-    }
-  }
-
   function notify() {
-    _trimMessages();
-    // Stamp stable IDs on any message that doesn't have one yet (new pushes,
-    // restored sessions, or messages from get_messages). O(N) but N ≤ 169 and
-    // is a no-op for already-stamped entries — essentially free.
-    for (const m of state.messages) {
-      if (!m._id) m._id = ++_msgSeq;
-    }
-    const snap = {
-      messages:        state.messages,
-      isStreaming:     state.isStreaming,
-      model:           state.model,
-      thinkingLevel:   state.thinkingLevel,
-      availableThinkingLevels: state.availableThinkingLevels,
-      ctx:             state.ctx,
-      kanban:          state.kanban,
-      planMeta:        state.planMeta,
-      models:          state.models,
-      activity:        state.activity,
-      sparkline:       state.sparkline,
-      // Tab list — derived from session registry, not per-session state
-      sessions:        [...sessionRegistry.values()],
-      activeSessionId,
-      // Peer — null when no session is pinned
-      peer:            window.PeerSessionBridge.build(),
-      peerSessionId:   window.PeerSessionBridge.id,
-      // Agent activity — running tools + turn clock for the status card
-      runningTools:    state.runningTools,
-      recentTools:     state.recentTools,
-      turnStartMs:     state.turnStartMs,
-      // Agent Hub — subagent tree / task tracking
-      hubMode:         state.hubMode,
-      hubAgents:       state.hubAgents,
-      hubTaskId:       state.hubTaskId,
-      hubHistory:      state.hubHistory,
-      agentError:      state.agentError,
-      modelsConfigWarning: state.modelsConfigWarning,
-      agentStarting,
-      toolLogs:        state.toolLogs,
-      hasPendingAsyncWork: state.hasPendingAsyncWork,
-      isSettled:           state.isSettled,
-    };
+    runtime.prepare(); // trim head + stamp message ids so the snapshot already reflects them
+    const snap = runtime.buildSnapshot();
     subscribers.forEach(cb => cb(snap));
 
     // Keep OMP_DATA in sync for design components that read it directly
@@ -286,66 +183,47 @@
   // Wire peer-session.js with the dependencies it needs from this IIFE.
   window.PeerSessionBridge.init({ notify, sessionRegistry });
 
-  // Reset all per-session volatile state (called before loading a new session)
-  function _resetSessionVars() {
-    _pendingSetModel.length = 0;
-    Object.assign(state, {
-      messages:      [],
-      isStreaming:   false,
-      model:         null,
-      thinkingLevel: null,
-      availableThinkingLevels: null,
-      ctx:           { ...DEFAULT_DATA.ctx },
-      kanban:        [],
-      planMeta:      { ...DEFAULT_DATA.planMeta },
-      models:        [],
-      activity:      [],
-      sparkline:     Array(30).fill(0),
-      projects:      [],
-      rpcState:      null,
-      sessionCost:   null,
-      currentTps:    0,
-      runningTools:  [],
-      recentTools:   [],
-      turnStartMs:   null,
-      hubMode:       "compact",
-      hubAgents:     [],
-      hubTaskId:     null,
-      hubHistory:    [],
-      agentError:    null,
-      toolLogs:      {},
-      hasPendingAsyncWork: false,
-      isSettled:           true,
-    });
-    streamingBubble = null;
-    askHandshake = null;
-    activeToolCards = new Map();
-    tpsSamples      = Array(30).fill(0);
-    turnStartTime   = null;
-    _compactBackfillId = null;
-    activityLog     = [];
+  // ── Event modules (live/events-*.js, live/todo-phases.js) ──────────────────
+  // Plain factories over the shared runtime; they never reach into each other —
+  // cross-module calls (finalizeAsks, settle, tab titles…) are injected here.
+  const _todo = window._Live.TodoPhases.create({ state, rt });
+  const _ui = window._Live.EventsUi.create({ state, rt, notify, send: _send, todo: _todo, loginInFlight });
+  const _toolEvents = window._Live.EventsTool.create({
+    state, rt, notify, todo: _todo,
+    finalizeAsks: _ui.finalizeAsks,
+    reindexToolCards: runtime.reindexToolCards,
+  });
+  const _messageEvents = window._Live.EventsMessage.create({
+    state, rt, notify, send: _send,
+    settleInFlightActions: _settleInFlightActions,
+    reindexToolCards: runtime.reindexToolCards,
+    refreshCtx: runtime.refreshCtx,
+    nextCmdId: runtime.nextCmdId,
+    savePrefs: _savePrefs,
+    setTabTitle: _setTabTitle,
+    updateTabTitleIfDefault: _updateTabTitleIfDefault,
+  });
+
+  // Wipe the per-tab state *and* the ask handshake (owned by events-ui, so
+  // runtime.reset() cannot reach it). Use this instead of runtime.reset().
+  function _resetSession() {
+    runtime.reset();
+    _ui.resetHandshake();
   }
 
-  function _reindexActiveToolCards(targetList = state.messages) {
-    activeToolCards = new Map();
-    for (let i = 0; i < targetList.length; i++) {
-      const m = targetList[i];
-      if (m.kind === "tool" && m.status === "running" && m._toolCallId) {
-        activeToolCards.set(m._toolCallId, i);
-      }
-    }
-  }
-
+  // Finish whatever was in flight (turn end / abort / process exit): streaming
+  // bubble, running tool cards + logs, hub agents, pending compact, open asks.
+  // Spans message/tool/hub/ask state, so it lives here rather than in a module.
   function _settleInFlightActions({ aborted = true } = {}) {
     const now = Date.now();
     state.isStreaming = false;
     state.turnStartMs = null;
     state.runningTools = [];
 
-    if (streamingBubble) {
-      streamingBubble.streaming = false;
-      streamingBubble.completed = true;
-      streamingBubble = null;
+    if (rt.session.streamingBubble) {
+      rt.session.streamingBubble.streaming = false;
+      rt.session.streamingBubble.completed = true;
+      rt.session.streamingBubble = null;
     }
 
     if (Array.isArray(state.messages) && state.messages.length > 0) {
@@ -422,105 +300,8 @@
       state.hubTaskId = null;
     }
 
-    _finalizeAsks({ aborted });
-    activeToolCards.clear();
-  }
-
-  // ── ask tool bubbles (pure logic in app/ask-model.js + app/ask-answer.js) ──
-  // The ask ended (tool end / abort / exit): drop the handshake and settle any
-  // bubble still waiting — 18.x never sends `cancel` on a timeout.
-  // `aborted`: abort / process exit / tool error — a click still in flight never got a result.
-  function _finalizeAsks({ aborted = false } = {}) {
-    askHandshake = null;
-    const next = window.AskModel.finalize(state.messages, { aborted });
-    if (next !== state.messages) state.messages = next;
-  }
-
-  function _pushAskBubble(bubble) {
-    // select/input may arrive before tool_execution_start; the card hoists past orphans then.
-    bubble.orphan = !window.AskModel.hasRunningAskCard(state.messages);
-    state.messages = window.AskModel.addBubble(state.messages, bubble).messages;
-    notify();
-  }
-
-  // ── Session snapshot helpers ──────────────────────────────────────────────
-  function _saveCurrentSession() {
-    if (!activeSessionId) return;
-    sessionSnapshots.set(activeSessionId, {
-      // state fields
-      messages:      state.messages,
-      isStreaming:   state.isStreaming,
-      model:         state.model,
-      thinkingLevel: state.thinkingLevel,
-      availableThinkingLevels: state.availableThinkingLevels,
-      ctx:           { ...state.ctx },
-      kanban:        state.kanban,
-      planMeta:      state.planMeta,
-      models:        state.models,
-      activity:      state.activity,
-      sparkline:     [...state.sparkline],
-      rpcState:      state.rpcState,
-      sessionCost:   state.sessionCost,
-      currentTps:    state.currentTps,
-      runningTools:  [...state.runningTools],
-      recentTools:   [...state.recentTools],
-      turnStartMs:   state.turnStartMs,
-      hubMode:       state.hubMode,
-      hubAgents:     state.hubAgents.map(a => ({
-        ...a,
-        _stream: (a._stream ?? []).slice(-200), // cap saved stream lines
-      })),
-      hubTaskId:     state.hubTaskId,
-      hubHistory:    state.hubHistory,
-      agentError:    state.agentError,
-      toolLogs:      { ...state.toolLogs },
-      hasPendingAsyncWork: state.hasPendingAsyncWork,
-      isSettled:           state.isSettled,
-      // volatile vars
-      streamingBubble,
-      activeToolCards: new Map(activeToolCards),
-      tpsSamples:    [...tpsSamples],
-      turnStartTime,
-      activityLog:   [...activityLog],
-    });
-  }
-
-  function _restoreSession(id) {
-    const snap = sessionSnapshots.get(id);
-    if (!snap) return false;
-    Object.assign(state, {
-      messages:      snap.messages,
-      isStreaming:   snap.isStreaming,
-      model:         snap.model,
-      thinkingLevel: snap.thinkingLevel,
-      availableThinkingLevels: snap.availableThinkingLevels ?? null,
-      ctx:           snap.ctx,
-      kanban:        snap.kanban,
-      planMeta:      snap.planMeta,
-      models:        snap.models,
-      activity:      snap.activity,
-      sparkline:     snap.sparkline,
-      rpcState:      snap.rpcState,
-      sessionCost:   snap.sessionCost,
-      currentTps:    snap.currentTps,
-      runningTools:  snap.runningTools ?? [],
-      recentTools:   snap.recentTools ?? [],
-      turnStartMs:   snap.turnStartMs ?? null,
-      hubMode:       snap.hubMode ?? "compact",
-      hubAgents:     snap.hubAgents ?? [],
-      hubTaskId:     snap.hubTaskId ?? null,
-      hubHistory:    snap.hubHistory ?? [],
-      agentError:    snap.agentError ?? null,
-      toolLogs:      snap.toolLogs ?? {},
-      hasPendingAsyncWork: snap.hasPendingAsyncWork ?? false,
-      isSettled:           snap.isSettled ?? true,
-    });
-    streamingBubble = snap.streamingBubble;
-    activeToolCards = snap.activeToolCards;
-    tpsSamples      = snap.tpsSamples;
-    turnStartTime   = snap.turnStartTime;
-    activityLog     = snap.activityLog;
-    return true;
+    _ui.finalizeAsks({ aborted });
+    rt.session.activeToolCards.clear();
   }
 
   // ── Session switching ─────────────────────────────────────────────────────
@@ -538,27 +319,27 @@
     await _export.whenIdle();
 
     // Snapshot current session so we can restore it when switching back
-    _saveCurrentSession();
+    runtime.save();
     // Frames for this session stop arriving once its listeners are torn down,
     // so an armed "Other" handshake can never be consumed — never carry it over.
-    askHandshake = null;
+    _ui.resetHandshake();
     // Listeners are torn down below; responses to in-flight set_model never arrive.
     _pendingSetModel.length = 0;
 
     // Tear down old listeners
-    for (const ul of activeListeners) { try { await ul(); } catch (_) {} }
-    activeListeners = [];
+    for (const ul of rt.conn.activeListeners) { try { await ul(); } catch (_) {} }
+    rt.conn.activeListeners = [];
 
-    activeSessionId = id;
-    agentStarting = false;
-    const waitSeq = ++_startWaitSeq;
+    rt.conn.activeSessionId = id;
+    rt.conn.agentStarting = false;
+    const waitSeq = ++rt.conn.startWaitSeq;
 
     // Restore cached snapshot (preserves streaming messages) or start fresh
-    if (fresh || !_restoreSession(id)) {
-      _resetSessionVars();
-      _sessionFresh = true;
+    if (fresh || !runtime.restore(id)) {
+      _resetSession();
+      rt.session.sessionFresh = true;
     } else {
-      _sessionFresh = false;
+      rt.session.sessionFresh = false;
     }
 
     const notRunningText = () =>
@@ -570,8 +351,8 @@
       state.isStreaming = false;
       // Any failure ends a pending startup wait: stop its poll, drop what
       // was queued for it and clear the "Starting agent…" indicator.
-      _startWaitSeq++;
-      agentStarting = false;
+      rt.conn.startWaitSeq++;
+      rt.conn.agentStarting = false;
       _startQueues.delete(id);
       state.agentError = (typeof reason === "string" && reason.trim()) || notRunningText();
     }
@@ -582,12 +363,11 @@
       const reason = (ev?.payload && String(ev.payload).trim()) || "";
       console.warn(`[live] session '${id}' omp process exited${reason ? ": " + reason : ""}`);
       _setAgentFailure(reason);
-      _settleInFlightActions({ aborted: true }); // e.g. a pending compact card
-      _finalizeAsks({ aborted: true });
+      _settleInFlightActions({ aborted: true }); // pending compact card, open asks, ...
       loginInFlight.delete(id); // the login died with the process
       notify();
     });
-    activeListeners = [ulLine, ulExit];
+    rt.conn.activeListeners = [ulLine, ulExit];
 
     // Surface any cached startup error for this session. Tauri starts
     // the default session in setup() before the frontend can attach
@@ -620,7 +400,7 @@
         // Right after an in-app update omp may still be coming up: wait for
         // it instead of flashing a "not running" error that clears itself.
         state.agentError = null;
-        agentStarting = true;
+        rt.conn.agentStarting = true;
         waitForStartup = true;
       } else {
         state.agentError = notRunningText();
@@ -632,7 +412,7 @@
     if (waitForStartup) {
       window.AgentStartupWait.waitUntilStarted({
         query: () => readStatus().catch(() => ({ starting: true, running: false, error: null })),
-        isCurrent: () => activeSessionId === id && waitSeq === _startWaitSeq,
+        isCurrent: () => rt.conn.activeSessionId === id && waitSeq === rt.conn.startWaitSeq,
         onRunning: () => _onAgentStarted(),
         onFailed: (reason) => {
           _setAgentFailure(reason);
@@ -662,10 +442,10 @@
     const { type } = obj;
 
     if (type === "ready") {
-      console.log(`[live] ready from session '${activeSessionId}'`);
+      console.log(`[live] ready from session '${rt.conn.activeSessionId}'`);
       // Still waiting out a slow start: finish it here (one init fetch, queue
       // flushed) instead of again when the poll notices the process.
-      if (agentStarting) _onAgentStarted();
+      if (rt.conn.agentStarting) _onAgentStarted();
       else _initFetch();
       return;
     }
@@ -705,7 +485,7 @@
           ? { status: "done", shortSummary: d.shortSummary || null, summary: d.summary || null, ...(rpcBefore != null ? { tokensBefore: rpcBefore } : {}) }
           : { status: "error", errorReason: resp.error || null };
         state.messages = state.messages.map((m, i) => i === idx ? { ...m, ...update } : m);
-        if (resp.success && compactMsgId) _compactBackfillId = compactMsgId;
+        if (resp.success && compactMsgId) rt.session.compactBackfillId = compactMsgId;
       }
       notify();
       // After a successful compact the context window shrank — refresh
@@ -751,14 +531,14 @@
       const completed = window.adaptAgentMessages(data.messages ?? []);
       // Reconcile live messages with completed history using window/tail alignment.
       // Avoids naive positional replacement that mis-aligns turns when state.messages
-      // has been head-trimmed (_trimMessages). Ephemeral tool/ask/compact cards are
+      // has been head-trimmed (runtime.trimMessages). Ephemeral tool/ask/compact cards are
       // preserved and background turns appended.
       const merged = window.MessageMerge
         ? window.MessageMerge.merge(state.messages, completed)
         : completed;
       // Rebuild activeToolCards — new entries may have been appended from pending
-      _reindexActiveToolCards(merged);
-      state.messages = streamingBubble ? [...merged, streamingBubble] : merged;
+      runtime.reindexToolCards(merged);
+      state.messages = rt.session.streamingBubble ? [...merged, rt.session.streamingBubble] : merged;
 
       // Restore kanban from persisted message history if not yet set or newer
       if (Array.isArray(data.messages)) {
@@ -767,24 +547,14 @@
           const toolName = raw?.toolName ?? raw?.name;
           if (raw?.role === "toolResult" && (toolName === "todo" || toolName === "todo_write")) {
             const rawPhases = raw.details?.phases ?? raw.details?.todos ?? raw.details ?? raw.phases ?? raw.todos;
-            const phases = window.normalizeTodoPhases ? window.normalizeTodoPhases(rawPhases) : [];
-            if (phases.length > 0) {
-              state.kanban   = window.buildKanban(phases);
-              state.planMeta = window.buildPlanMeta(phases, state.rpcState);
-              _injectInlinePlan(phases);
-              break;
-            }
+            if (_todo.apply(rawPhases)) break;
           }
           if (raw?.role === "assistant" && Array.isArray(raw.content)) {
             let found = false;
             for (const b of raw.content) {
               if (b?.type === "toolCall" && (b.name === "todo" || b.name === "todo_write")) {
                 const rawPhases = b.arguments?.phases ?? b.arguments?.todos ?? b.arguments;
-                const phases = window.normalizeTodoPhases ? window.normalizeTodoPhases(rawPhases) : [];
-                if (phases.length > 0) {
-                  state.kanban   = window.buildKanban(phases);
-                  state.planMeta = window.buildPlanMeta(phases, state.rpcState);
-                  _injectInlinePlan(phases);
+                if (_todo.apply(rawPhases)) {
                   found = true;
                   break;
                 }
@@ -805,7 +575,7 @@
         state.models = _mergeModels(rpcModels, customData);
         _syncCurrentModel();
         notify();
-        console.log(`[live] models loaded (${state.models.length} total) for session '${activeSessionId}'`);
+        console.log(`[live] models loaded (${state.models.length} total) for session '${rt.conn.activeSessionId}'`);
         _checkModelsConfig(rpcModels, customData);
       }).catch(() => {
         state.models = rpcModels;
@@ -891,7 +661,7 @@
 
     } else if (command === "new_session") {
       // New session started — clear local state and re-fetch
-      _resetSessionVars();
+      _resetSession();
       _initFetch();
       notify();
 
@@ -952,617 +722,32 @@
   }
 
   // ── AgentSessionEvent handler ─────────────────────────────────────────────
+  // Event handlers live in live/events-{ui,tool,message}.js; this is only the
+  // type → handler table (own keys only: ev.type comes off the wire).
+  const _eventHandlers = Object.assign(Object.create(null),
+    _ui.handlers, _toolEvents.handlers, _messageEvents.handlers);
   function _handleEvent(ev) {
-    const { type } = ev;
-    const now  = Date.now();
-    const time = timeNow();
-
-    if (type === "custom") {
-      if (ev.customType === "user_todo_edit" || ev.customType === "todo_edit" || ev.customType === "todo" || ev.customType === "todo_write") {
-        const raw = ev.data?.phases ?? ev.data?.todos ?? ev.data;
-        const phases = window.normalizeTodoPhases ? window.normalizeTodoPhases(raw) : (raw?.phases ?? raw ?? []);
-        if (phases.length > 0) {
-          state.kanban   = window.buildKanban(phases);
-          state.planMeta = window.buildPlanMeta(phases, state.rpcState);
-          _injectInlinePlan(phases);
-          notify();
-          return;
-        }
-      }
-    }
-
-    if (type === "extension_ui_request") {
-      // URL to open in the system browser (e.g. OAuth auth page).
-      if (ev.method === "open_url") {
-        // In Tauri, window.open() creates a webview rather than opening the system
-        // browser. Use the open_url_external Rust command (open crate → ShellExecute
-        // on Windows) so OAuth URLs open in the user's actual browser.
-        if (window.__TAURI__) {
-          window.__TAURI__.core.invoke("open_url_external", { url: ev.url }).catch(e => {
-            console.error("[live] open_url_external failed:", e);
-          });
-        } else {
-          window.open(ev.url, "_blank");
-        }
-        if (ev.instructions) {
-          state.messages = [
-            ...state.messages,
-            window.NoticeBubble.make(ev.instructions, timeNow(), state.model?.name ?? null),
-          ];
-          notify();
-        }
-        return;
-      }
-      // Free text / code prompts: an "Other" follow-up (auto-answered), an OAuth/login
-      // prompt (blocking window.prompt, as before) or an inline field of an ask form.
-      if (ev.method === "input" || ev.method === "editor") {
-        const reply = window.AskAnswer.resolveHandshake(askHandshake, ev);
-        if (reply) {
-          askHandshake = null;
-          _send({ type: "extension_ui_response", id: ev.id, ...reply });
-          return;
-        }
-        if (ev.method === "input" && loginInFlight.has(activeSessionId)) {
-          const value = window.prompt(ev.title ?? ev.placeholder ?? "Enter value:");
-          if (value !== null) {
-            _send({ type: "extension_ui_response", id: ev.id, value });
-          } else {
-            _send({ type: "extension_ui_response", id: ev.id, cancelled: true });
-          }
-          return;
-        }
-        const t = timeNow();
-        _pushAskBubble(ev.method === "input"
-          ? window.AskModel.buildFromInput(ev, t)
-          : window.AskModel.buildFromEditor(ev, t));
-        return;
-      }
-      // Agent asks the user to pick from a list. Pushed immediately (every round of a
-      // multi-select is a new select); tool_execution_start hoists the ask card above it.
-      if (ev.method === "select") {
-        // A select means the server did NOT enter input/editor: any armed handshake is stale.
-        askHandshake = null;
-        _pushAskBubble(window.AskModel.buildFromSelect(ev, timeNow()));
-        return;
-      }
-      // Agent cancelled a pending UI request (e.g. turn aborted while waiting for input).
-      if (ev.method === "cancel") {
-        askHandshake = null;
-        const next = window.AskModel.cancelById(state.messages, ev.targetId);
-        if (next !== state.messages) {
-          state.messages = next;
-          notify();
-        }
-        return;
-      }
-      // Dialogs we cannot show — cancel them so the server doesn't hang.
-      const NEEDS_RESPONSE = ["confirm"];
-      if (NEEDS_RESPONSE.includes(ev.method)) {
-        _send({ type: "extension_ui_response", id: ev.id, cancelled: true });
-      }
-      return;
-    }
-
-    if (type === "session_info_update") {
-      const title = ev.title;
-      if (title) _setTabTitle(title, ev.sessionId);
-      return;
-    }
-
-    if (type === "thinking_level_changed") {
-      let newLevel = ev.thinkingLevel ?? "off";
-      if (Array.isArray(state.availableThinkingLevels) && state.availableThinkingLevels.length > 0) {
-        if (!state.availableThinkingLevels.includes(newLevel)) {
-          newLevel = state.availableThinkingLevels[0] || "off";
-        }
-      }
-      if (state.thinkingLevel !== newLevel) {
-        state.thinkingLevel = newLevel;
-        _savePrefs({ thinkingLevel: newLevel });
-        notify();
-      }
-      return;
-    }
-
-    // ── Turn lifecycle ────────────────────────────────────────────────────────
-    if (type === "turn_start") {
-      turnStartTime = now;
-      state.isStreaming = true;
-      state.turnStartMs = now;
-      state.runningTools = [];
-      notify();
-      return;
-    }
-
-    if (type === "turn_end") {
-      state.isStreaming = false;
-      state.turnStartMs = null;
-      state.runningTools = [];
-      streamingBubble = null;
-      _settleInFlightActions({ aborted: false });
-      const usage = ev.message?.usage;
-      if (turnStartTime) {
-        const elapsed   = (now - turnStartTime) / 1000;
-        const outTokens = usage?.output ?? 0;
-        if (elapsed > 0 && outTokens > 0) {
-          const tps = outTokens / elapsed;
-          tpsSamples.push(Math.round(tps));
-          tpsSamples.shift();
-          state.currentTps = tps;
-          state.sparkline  = [...tpsSamples];
-        }
-      }
-      if (usage?.cost?.total) {
-        state.sessionCost = (state.sessionCost ?? 0) + usage.cost.total;
-        _refreshCtx();
-      }
-      _send({ type: "get_session_stats" });
-      _send({ type: "get_state" });
-      notify();
-      return;
-    }
-
-    // ── Message lifecycle ─────────────────────────────────────────────────────
-    if (type === "message_start") {
-      const msg  = ev.message;
-      const role = msg?.role;
-
-      if (role === "user") {
-        const blocks = Array.isArray(msg.content) ? msg.content : [];
-        const text = blocks.filter(b => b.type === "text").map(b => b.text ?? "").join("\n").trim();
-        const images = blocks.filter(b => b.type === "image").map(b => ({
-          type: "image",
-          data: b.data,
-          mimeType: b.mimeType || "image/png",
-        }));
-        if (text || images.length > 0) {
-          const last = state.messages[state.messages.length - 1];
-          if (!(last?.kind === "user" && last.text === text)) {
-            state.messages = [...state.messages, { kind: "user", time, text, images }];
-          } else if (images.length > 0 && (!last.images || last.images.length === 0)) {
-            last.images = images;
-          }
-          if (text) _updateTabTitleIfDefault(text);
-          notify();
-        }
-      } else if (role === "assistant") {
-        const blocks = Array.isArray(msg?.content) ? msg.content : [];
-        const initialThought = window.extractThought ? window.extractThought(blocks) : null;
-        streamingBubble = {
-          kind: "assistant", time,
-          thought: initialThought,
-          lead: initialThought ? "thinking" : null,
-          blocks: [{ type: "text", text: "" }],
-          streaming: true,
-          model: state.model?.name ?? "–",
-        };
-        state.messages = [...state.messages, streamingBubble];
-        notify();
-      }
-      return;
-    }
-
-    if (type === "message_update") {
-      if (!streamingBubble) return;
-      const msg = ev.message;
-      if (!msg) return;
-
-      const blocks = Array.isArray(msg.content) ? msg.content : [];
-      const newThought = window.extractThought ? window.extractThought(blocks) : null;
-      // Preserve streamingBubble.thought if current update did not contain thinking block
-      const thought = newThought !== null ? newThought : streamingBubble.thought;
-      const designBlocks = [];
-      for (const block of blocks) {
-        if (block.type === "text" && block.text) designBlocks.push({ type: "text", text: block.text });
-      }
-      const existingPlan = (streamingBubble.blocks ?? []).find(b => b.type === "plan");
-      if (existingPlan && !designBlocks.some(b => b.type === "plan")) {
-        designBlocks.push(existingPlan);
-      }
-
-      streamingBubble.thought = thought;
-      streamingBubble.lead    = thought ? "thinking" : null;
-      streamingBubble.blocks  = designBlocks.length > 0 ? designBlocks : [{ type: "text", text: "" }];
-
-      const updated = { ...streamingBubble, blocks: [...streamingBubble.blocks] };
-      // Find by streaming flag — indexOf fails after the first update because
-      // each update replaces the entry with a new copy; ask bubbles may also
-      // sit after the streaming bubble in state.messages.
-      const uidx = state.messages.findLastIndex(m => m.streaming === true);
-      if (uidx !== -1) {
-        const msgs = [...state.messages];
-        msgs[uidx] = updated;
-        state.messages = msgs;
-      } else {
-        state.messages = [...state.messages.slice(0, -1), updated];
-      }
-      notify();
-      return;
-    }
-
-    if (type === "message_end") {
-      const msg = ev.message;
-      // user / toolResult messages end too (e.g. steer mid-stream); they must
-      // not close the in-flight assistant bubble.
-      if (msg?.role && msg.role !== "assistant") return;
-      const usage = msg?.usage;
-      const tokens = usage ? ((usage.input ?? 0) + (usage.output ?? 0)) : null;
-      if (streamingBubble && msg) {
-        const blocks = Array.isArray(msg.content) ? msg.content : [];
-        const endThought = window.extractThought ? window.extractThought(blocks) : null;
-        const thought = endThought !== null ? endThought : streamingBubble.thought;
-        const designBlocks = blocks.filter(b => b.type === "text" && b.text?.trim()).map(b => ({ type: "text", text: b.text }));
-        const existingPlan = (streamingBubble?.blocks ?? []).find(b => b.type === "plan");
-        const finalBlocks = designBlocks.length > 0 ? [...designBlocks] : [...(streamingBubble.blocks ?? [])];
-        if (existingPlan && !finalBlocks.some(b => b.type === "plan")) {
-          finalBlocks.push(existingPlan);
-        }
-        // Find by streaming flag — extension_ui_request.select may have pushed
-        // an ask bubble after the streaming bubble before message_end arrives.
-        const completed = {
-          ...streamingBubble,
-          streaming: false, thought,
-          lead:   thought ? "thinking" : null,
-          blocks: finalBlocks,
-          tokens,
-          tokensIn:  usage?.input  ?? null,
-          tokensOut: usage?.output ?? null,
-        };
-        const eidx = state.messages.findLastIndex(m => m.streaming === true);
-        // Tool-call-only turn: nothing to show, so drop the placeholder instead
-        // of leaving a header-only bubble. A failed turn is kept (and given its
-        // errorMessage) so the later prompt_result error lands on this bubble
-        // rather than on an older assistant message.
-        // Also covers a turn that failed after streaming some text: its error
-        // is shown even if no prompt_result ever follows.
-        const errMsg = typeof msg.errorMessage === "string" ? msg.errorMessage.trim() : "";
-        const failed = msg.stopReason === "error" || Boolean(errMsg);
-        if (errMsg && !completed.error) {
-          completed.error = {
-            message: errMsg, provider: msg.provider, model: msg.model, retryable: false,
-          };
-        }
-        if (!failed && window.EmptyBubble?.isContentless(completed)) {
-          // Never fall back to dropping the last message: with no streaming
-          // entry the list is out of sync with `streamingBubble`, leave it be.
-          if (eidx !== -1) {
-            state.messages = state.messages.filter((_, i) => i !== eidx);
-            _reindexActiveToolCards();
-          }
-        } else if (eidx !== -1) {
-          const msgs = [...state.messages];
-          msgs[eidx] = completed;
-          state.messages = msgs;
-        } else {
-          state.messages = [...state.messages.slice(0, -1), completed];
-        }
-        streamingBubble = null;
-      } else if (streamingBubble) {
-        const completed2 = { ...streamingBubble, streaming: false, tokens };
-        const eidx2 = state.messages.findLastIndex(m => m.streaming === true);
-        if (window.EmptyBubble?.isContentless(completed2)) {
-          // Same collapse as above (no message payload, so no failure info).
-          if (eidx2 !== -1) {
-            state.messages = state.messages.filter((_, i) => i !== eidx2);
-            _reindexActiveToolCards();
-          }
-        } else if (eidx2 !== -1) {
-          const msgs = [...state.messages];
-          msgs[eidx2] = completed2;
-          state.messages = msgs;
-        } else {
-          state.messages = [...state.messages.slice(0, -1), completed2];
-        }
-        streamingBubble = null;
-      }
-      notify();
-      return;
-    }
-
-    // ── Tool execution ────────────────────────────────────────────────────────
-    if (type === "tool_execution_start") {
-      const card = window.buildToolStartCard(ev, time);
-      const idx  = state.messages.length;
-      activeToolCards.set(ev.toolCallId, idx);
-      state.messages = [...state.messages, card];
-      // Track running tool for the agent activity card
-      const toolName = window.normalizeToolName(ev.toolName ?? "");
-      const args = (typeof ev.args === "object" && ev.args !== null) ? ev.args : {};
-      let rawTarget = args.path ?? args.pattern ?? args.command ?? args.query ?? "";
-      if (!rawTarget && toolName === "hub" && args.op) {
-        rawTarget = `${args.op}${args.ids?.length ? ` ${args.ids.join(", ")}` : ""}`;
-      }
-      const shortTarget = rawTarget ? String(rawTarget).split(/[\\/]/).pop() : "";
-      state.runningTools = [...state.runningTools, {
-        id: ev.toolCallId, tool: toolName, target: shortTarget || String(rawTarget), startMs: now,
-      }];
-      // Initialize tool log buffer
-      const cmdStr = typeof args.command === "string" ? args.command : (rawTarget || "");
-      state.toolLogs = {
-        ...state.toolLogs,
-        [ev.toolCallId]: {
-          id: ev.toolCallId,
-          tool: toolName,
-          target: shortTarget || String(rawTarget),
-          title: card.title || toolName,
-          command: cmdStr,
-          status: "running",
-          startMs: now,
-          lines: typeof args.command === "string" ? [`$ ${args.command}`] : [],
-        },
-      };
-      // omp may emit an ask's select/input before tool_execution_start: put the ask
-      // card ahead of those orphan bubbles so chat order is [tool_card, ask_bubble].
-      if (toolName === "ask") {
-        const hoisted = window.AskModel.hoistToolCard(state.messages, idx);
-        if (hoisted.changed) {
-          state.messages = hoisted.messages;
-          _reindexActiveToolCards();
-        }
-      }
-
-      activityLog.push({ ts: now, toolName: ev.toolName ?? "" });
-      const cutoff = now - 60_000;
-      while (activityLog.length && activityLog[0].ts < cutoff) activityLog.shift();
-      state.activity = window.buildActivityFromLog(activityLog);
-      // Hub: when a task tool starts, switch to tree mode
-      if (toolName === "task") {
-        state.hubMode    = "tree";
-        state.hubTaskId  = ev.toolCallId;
-        state.hubAgents  = [];
-      }
-      if (toolName === "todo" || ev.toolName === "todo_write") {
-        const raw = args.phases ?? args.todos ?? (Array.isArray(args) ? args : null);
-        const phases = window.normalizeTodoPhases ? window.normalizeTodoPhases(raw) : [];
-        if (phases.length > 0) {
-          state.kanban   = window.buildKanban(phases);
-          state.planMeta = window.buildPlanMeta(phases, state.rpcState);
-          _injectInlinePlan(phases);
-        }
-      }
-      notify();
-      return;
-    }
-
-    if (type === "tool_execution_update") {
-      const idx = activeToolCards.get(ev.toolCallId);
-      if (idx !== undefined) {
-        const card = state.messages[idx];
-        if (card?.kind === "tool") {
-          const updated = window.updateToolCard(card, ev);
-          const msgs = [...state.messages];
-          msgs[idx] = updated;
-          state.messages = msgs;
-          // Hub: sync subagent list from task progress updates
-          if (state.hubTaskId === ev.toolCallId && updated.subagents) {
-            state.hubAgents = updated.subagents;
-          }
-        }
-      }
-      if (state.toolLogs[ev.toolCallId]) {
-        const pr = ev.partialResult ?? {};
-        const text = pr.content?.[0]?.text ?? pr.details?.output ?? "";
-        if (text) {
-          const prev = state.toolLogs[ev.toolCallId];
-          const rawLines = text.split("\n");
-          const capped = rawLines.length > 2000 ? rawLines.slice(-2000) : rawLines;
-          state.toolLogs = {
-            ...state.toolLogs,
-            [ev.toolCallId]: { ...prev, lines: capped },
-          };
-        }
-      }
-      notify();
-      return;
-    }
-
-    if (type === "tool_execution_end") {
-      // Move the finished tool into the recent-tools trail (keep last 3)
-      const RECENT_MAX = 3;
-      const finished = state.runningTools.find(t => t.id === ev.toolCallId);
-      state.runningTools = state.runningTools.filter(t => t.id !== ev.toolCallId);
-      if (finished) {
-        state.recentTools = [...state.recentTools, {
-          id: finished.id, tool: finished.tool, target: finished.target,
-          durationMs: now - finished.startMs,
-        }].slice(-RECENT_MAX);
-      }
-      if (state.toolLogs[ev.toolCallId]) {
-        const prev = state.toolLogs[ev.toolCallId];
-        const details = ev.result?.details;
-        let finalLines = prev.lines;
-        if (details?.output) {
-          finalLines = String(details.output).split("\n");
-          if (finalLines.length > 2000) finalLines = finalLines.slice(-2000);
-        } else if (ev.result?.content?.[0]?.text) {
-          finalLines = String(ev.result.content[0].text).split("\n");
-          if (finalLines.length > 2000) finalLines = finalLines.slice(-2000);
-        }
-        state.toolLogs = {
-          ...state.toolLogs,
-          [ev.toolCallId]: {
-            ...prev,
-            status: ev.isError ? "failed" : "completed",
-            durationMs: now - prev.startMs,
-            lines: finalLines,
-          },
-        };
-      }
-      const idx = activeToolCards.get(ev.toolCallId);
-      let card = idx !== undefined ? state.messages[idx] : null;
-      if (!card || card._toolCallId !== ev.toolCallId) {
-        card = state.messages.find(m => m._toolCallId === ev.toolCallId);
-      }
-      if (card?.kind === "tool") {
-        const updated = window.finalizeToolCard(card, ev);
-        // Hub: when the tracked task finishes, switch to summary mode
-        if (state.hubTaskId === ev.toolCallId) {
-          const finalAgents = updated.subagents ?? state.hubAgents;
-          state.hubAgents  = finalAgents;
-          state.hubMode    = "summary";
-          state.hubHistory = [...state.hubHistory, {
-            taskId: ev.toolCallId, agents: finalAgents, time,
-          }].slice(-3);
-          state.hubTaskId  = null;
-        }
-      }
-      // Update kanban whenever a todo tool completes, even if no tool card was created
-      // (e.g. Cursor agent resolves todo server-side and emits tool_execution_end without tool_execution_start).
-      const finishedTool = window.normalizeToolName ? window.normalizeToolName(ev.toolName ?? "") : (ev.toolName ?? "");
-      if (finishedTool === "todo" || ev.toolName === "todo_write" || ev.toolName === "todo") {
-        const raw = ev.result?.details?.phases ?? ev.result?.details?.todos ?? ev.result?.details ?? ev.result?.phases ?? ev.result?.todos ?? ev.result;
-        const phases = window.normalizeTodoPhases ? window.normalizeTodoPhases(raw) : (raw?.phases ?? raw ?? []);
-        if (phases.length > 0) {
-          state.kanban   = window.buildKanban(phases);
-          state.planMeta = window.buildPlanMeta(phases, state.rpcState);
-          _injectInlinePlan(phases);
-        }
-      }
-      // Ephemeral tool card: remove finished card from chat messages array
-      state.messages = state.messages.filter(m => m !== card && m._toolCallId !== ev.toolCallId);
-      // Only the ask tool owns ask bubbles; another tool ending must not disturb an in-flight handshake.
-      // (`toolName` may be absent on the end frame, so the card is consulted too.)
-      if (finishedTool === "ask" || card?.tool === "ask") _finalizeAsks({ aborted: Boolean(ev.isError) });
-      activeToolCards.delete(ev.toolCallId);
-      _reindexActiveToolCards();
-      notify();
-      return;
-    }
-
-    // omp 19 manual-compaction lifecycle. Only cards for compactions PiDesk
-    // did not start are created/resolved here; the Compact button's own
-    // card is resolved by the RPC `compact` response.
-    if (type === "manual_compaction_start" && window.CompactionEvents) {
-      const r = window.CompactionEvents.onStart(state.messages, {
-        id: "ext-cmpct-" + (_nextCmdId++),
-        time: timeNow(),
-        contextTokens: state.rpcState?.contextUsage?.tokens ?? null,
-      });
-      if (r.changed) { state.messages = r.messages; notify(); }
-      return;
-    }
-    if (type === "manual_compaction_end" && window.CompactionEvents) {
-      const r = window.CompactionEvents.onEnd(state.messages, ev, {
-        abortedText: window.t ? window.t("chat.aborted") : "aborted",
-      });
-      if (r.changed) {
-        state.messages = r.messages;
-        if (r.completedId) {
-          _compactBackfillId = r.completedId;
-          _send({ type: "get_state" });
-        }
-        notify();
-      }
-      return;
-    }
-
-    if (type === "agent_start" || type === "agent_end") {
-      _send({ type: "get_state" });
-    }
-
-    if (type === "session_settled") {
-      state.hasPendingAsyncWork = false;
-      state.isSettled = true;
-      notify();
-      return;
-    }
-
-    if (type === "prompt_result") {
-      if (ev.sessionSettled !== undefined) {
-        state.isSettled = Boolean(ev.sessionSettled);
-        if (ev.sessionSettled) {
-          state.hasPendingAsyncWork = false;
-        }
-      }
-      if (ev.status === "error" && ev.error) {
-        _applyPromptError(ev.error);
-      }
-      notify();
-      return;
-    }
-  }
-
-  function _applyPromptError(err) {
-    if (!err) return;
-    let lastAsst = null;
-    for (let i = state.messages.length - 1; i >= 0; i--) {
-      if (state.messages[i].kind === "assistant" && !state.messages[i].notice) {
-        lastAsst = state.messages[i];
-        break;
-      }
-    }
-    const errObj = {
-      message: err.message || String(err),
-      provider: err.provider,
-      model: err.model,
-      httpStatus: err.httpStatus,
-      retryable: Boolean(err.retryable),
-      // omp 19: "cost_cap" = session.maxCost reached (no provider involved).
-      code: typeof err.code === "string" ? err.code : undefined,
-    };
-    if (lastAsst) {
-      lastAsst.error = errObj;
-      lastAsst.streaming = false;
-      if (streamingBubble === lastAsst) {
-        streamingBubble = null;
-      }
-    } else {
-      const errBubble = {
-        kind: "assistant",
-        time: timeNow(),
-        thought: null,
-        lead: null,
-        blocks: [],
-        streaming: false,
-        model: state.model?.name ?? "–",
-        error: errObj,
-      };
-      state.messages = [...state.messages, errBubble];
-    }
-  }
-
-  function _injectInlinePlan(phases) {
-    const idx = [...state.messages].reverse().findIndex(m => m.kind === "assistant" && !m.notice);
-    if (idx === -1) return;
-    const realIdx = state.messages.length - 1 - idx;
-    const msg     = state.messages[realIdx];
-    const planBlock = {
-      type: "plan", title: "Plan",
-      phases: phases.map(ph => ({
-        id: ph.name, label: ph.name,
-        tasks: ph.tasks.map((t, i) => ({
-          id: `${ph.name}-${i}`, text: t.content,
-          status: (t.status === "completed" || t.status === "abandoned") ? "done" : t.status,
-        })),
-      })),
-    };
-    const msgs    = [...state.messages];
-    const nonPlanBlocks = (msg.blocks ?? []).filter(b => b.type !== "plan");
-    msgs[realIdx] = { ...msg, blocks: [...nonPlanBlocks, planBlock] };
-    state.messages = msgs;
-    if (streamingBubble) {
-      const sbNonPlan = (streamingBubble.blocks ?? []).filter(b => b.type !== "plan");
-      streamingBubble.blocks = [...sbNonPlan, planBlock];
-    }
+    const handler = _eventHandlers[ev.type];
+    if (handler) handler(ev);
   }
 
   function _resolveSessionId(targetId) {
-    if (!targetId) return activeSessionId;
+    if (!targetId) return rt.conn.activeSessionId;
     if (sessionRegistry.has(targetId)) return targetId;
     for (const [id, entry] of sessionRegistry.entries()) {
       if (entry.savedSessionId && entry.savedSessionId === targetId) return id;
     }
-    return activeSessionId;
+    return rt.conn.activeSessionId;
   }
 
   function _updateTabTitleIfDefault(text) {
-    if (!text || !activeSessionId || !sessionRegistry.has(activeSessionId)) return;
-    const entry = sessionRegistry.get(activeSessionId);
+    if (!text || !rt.conn.activeSessionId || !sessionRegistry.has(rt.conn.activeSessionId)) return;
+    const entry = sessionRegistry.get(rt.conn.activeSessionId);
     const formatted = window.SessionTitle?.nextTitle
       ? window.SessionTitle.nextTitle(entry, text, { force: false })
       : null;
     if (formatted) {
-      sessionRegistry.set(activeSessionId, { ...entry, name: formatted, titleLocked: true, userTitled: true });
+      sessionRegistry.set(rt.conn.activeSessionId, { ...entry, name: formatted, titleLocked: true, userTitled: true });
       notify();
     }
   }
@@ -1584,7 +769,7 @@
         titleLocked: true,
         userTitled: true,
       });
-      if (sid === activeSessionId) notify();
+      if (sid === rt.conn.activeSessionId) notify();
     }
   }
 
@@ -1599,19 +784,19 @@
     // bubble immediately. The completed text arrives with get_messages; the
     // stale ghost is removed from state.messages here so the minimap doesn't
     // show a pulsating cell until get_messages lands.
-    if (!state.isStreaming && streamingBubble) {
-      streamingBubble.streaming = false;
+    if (!state.isStreaming && rt.session.streamingBubble) {
+      rt.session.streamingBubble.streaming = false;
       state.messages = state.messages.map(m => m.streaming ? { ...m, streaming: false } : m);
-      streamingBubble = null;
+      rt.session.streamingBubble = null;
     }
     if (!state.isStreaming) {
       state.turnStartMs  = null;
       state.runningTools = [];
       // Idle agent ⇒ no ask can still be waiting (e.g. the answer/tool end was lost across a tab switch).
-      _finalizeAsks({ aborted: false });
+      _ui.finalizeAsks({ aborted: false });
       if (state.messages.some(m => m.kind === "tool")) {
         state.messages = state.messages.filter(m => m.kind !== "tool");
-        activeToolCards.clear();
+        rt.session.activeToolCards.clear();
       }
     }
     state.thinkingLevel = state.thinkingLevel ?? rpcState.thinkingLevel ?? "off";
@@ -1623,13 +808,10 @@
     if (rpcState.model && state.models.length > 0) {
       state.models = state.models.map(m => ({ ...m, current: m.id === rpcState.model.id }));
     }
-    const rpcPhases = window.normalizeTodoPhases
-      ? window.normalizeTodoPhases(rpcState.todoPhases ?? rpcState.phases ?? rpcState.todos)
-      : (rpcState.todoPhases ?? []);
-    if (rpcPhases.length > 0) {
-      state.kanban   = window.buildKanban(rpcPhases);
-      state.planMeta = window.buildPlanMeta(rpcPhases, rpcState);
-    }
+    // get_state only feeds kanban/planMeta — the inline plan block in chat is not touched.
+    _todo.apply(rpcState.todoPhases ?? rpcState.phases ?? rpcState.todos, {
+      fallback: rpcState.todoPhases ?? [], inject: false,
+    });
 
     // Only update the tab name if omp provides an explicit human-readable
     // sessionName. The sessionFile is a timestamp ID — leave the folder-based
@@ -1637,18 +819,18 @@
     if (rpcState.sessionName) {
       _setTabTitle(rpcState.sessionName);
     }
-    if (rpcState.sessionFile && activeSessionId && sessionRegistry.has(activeSessionId)) {
-      const entry = sessionRegistry.get(activeSessionId);
+    if (rpcState.sessionFile && rt.conn.activeSessionId && sessionRegistry.has(rt.conn.activeSessionId)) {
+      const entry = sessionRegistry.get(rt.conn.activeSessionId);
       const normFile = window.SessionTitle?.normalizePath || (p => (p || "").replace(/\\/g, "/").toLowerCase());
       if (!entry.sessionFile) {
-        sessionRegistry.set(activeSessionId, { ...entry, sessionFile: rpcState.sessionFile });
+        sessionRegistry.set(rt.conn.activeSessionId, { ...entry, sessionFile: rpcState.sessionFile });
       } else if (normFile(entry.sessionFile) !== normFile(rpcState.sessionFile)) {
         // omp moved this process to another session file (undo/branch,
         // new_session, switch_session). Re-bind the tab, otherwise history's
         // "already open" check and resumeSession de-dup would match the old
         // file and let the new one be opened a second time (two omp
         // processes writing one .jsonl).
-        sessionRegistry.set(activeSessionId, {
+        sessionRegistry.set(rt.conn.activeSessionId, {
           ...entry,
           sessionFile:    rpcState.sessionFile,
           sessionPath:    rpcState.sessionFile,
@@ -1663,11 +845,11 @@
     // after a successful compact. _compactBackfillId ensures we only patch the
     // right message and only once (prevents stale back-fills from later
     // get_state calls after new turns have grown the context again).
-    if (_compactBackfillId != null) {
+    if (rt.session.compactBackfillId != null) {
       const afterTokens = rpcState?.contextUsage?.tokens;
       if (afterTokens != null) {
-        const cid = _compactBackfillId;
-        _compactBackfillId = null;
+        const cid = rt.session.compactBackfillId;
+        rt.session.compactBackfillId = null;
         state.messages = state.messages.map(m =>
           m.kind === "compact" && m.id === cid ? { ...m, tokensAfter: afterTokens } : m
         );
@@ -1677,17 +859,13 @@
     // On the first get_state of a fresh session (no snapshot), restore
     // the user's saved model + thinking level so the new omp process
     // matches their previous choices.
-    if (_sessionFresh) {
-      _sessionFresh = false;
+    if (rt.session.sessionFresh) {
+      rt.session.sessionFresh = false;
       _restorePrefs();
     }
 
-    _refreshCtx();
+    runtime.refreshCtx();
     notify();
-  }
-
-  function _refreshCtx() {
-    state.ctx = window.buildCtx(state.rpcState, state.sessionCost, state.currentTps);
   }
 
   // omp silently drops every custom provider when models.yml fails its schema
@@ -1735,7 +913,7 @@
   // back. A grace-period start in progress must not be pre-empted by an
   // explicit start_session (the backend treats that as cancelling it).
   async function _needsRestart(id) {
-    if (!window.__TAURI__ || !id || agentStarting) return false;
+    if (!window.__TAURI__ || !id || rt.conn.agentStarting) return false;
     const { invoke } = window.__TAURI__.core;
     const running = await invoke("is_session_running", { sessionId: id }).catch(() => false);
     if (running) return false;
@@ -1746,26 +924,26 @@
   // omp is up after a grace-period start: fetch initial state, then deliver
   // what the user issued meanwhile (prompts, steers, model changes…).
   function _onAgentStarted() {
-    _startWaitSeq++;                 // stop any pending startup poll
-    agentStarting = false;
+    rt.conn.startWaitSeq++;                 // stop any pending startup poll
+    rt.conn.agentStarting = false;
     state.agentError = null;
     _initFetch();
-    for (const cmd of window.AgentStartupWait.drain(_startQueues, activeSessionId)) _send(cmd);
+    for (const cmd of window.AgentStartupWait.drain(_startQueues, rt.conn.activeSessionId)) _send(cmd);
     notify();
   }
 
   // ── Send a command to the active session's omp ────────────────────────────
   function _send(cmd) {
-    if (!window.__TAURI__ || !activeSessionId) return;
+    if (!window.__TAURI__ || !rt.conn.activeSessionId) return;
     // The process isn't there yet: hold the command rather than lose it.
-    if (agentStarting && window.AgentStartupWait) {
-      if (!window.AgentStartupWait.enqueue(_startQueues, activeSessionId, cmd)) {
+    if (rt.conn.agentStarting && window.AgentStartupWait) {
+      if (!window.AgentStartupWait.enqueue(_startQueues, rt.conn.activeSessionId, cmd)) {
         console.warn("[live] startup queue full; dropping", cmd?.type);
       }
       return;
     }
     window.__TAURI__.core
-      .invoke("send_command", { sessionId: activeSessionId, json: JSON.stringify(cmd) })
+      .invoke("send_command", { sessionId: rt.conn.activeSessionId, json: JSON.stringify(cmd) })
       .catch(e => {
         console.error("[live] send error:", e);
         const errMsg = (e && typeof e === "string") ? e : (e?.message || String(e));
@@ -1817,10 +995,10 @@
     notify,
     sendWithResponse: _sendWithResponse,
     applyRpcState:    _applyRpcState,
-    getActiveSessionId: () => activeSessionId,
+    getActiveSessionId: () => rt.conn.activeSessionId,
     sessionSnapshots,
-    clearVolatile: () => { streamingBubble = null; askHandshake = null; },
-    reindexToolCards: () => _reindexActiveToolCards(),
+    clearVolatile: () => { rt.session.streamingBubble = null; _ui.resetHandshake(); },
+    reindexToolCards: () => runtime.reindexToolCards(),
     defaultPlanMeta: () => ({ ...DEFAULT_DATA.planMeta }),
   });
 
@@ -1829,17 +1007,17 @@
     state,
     notify,
     sendWithResponse: _sendWithResponse,
-    getActiveSessionId: () => activeSessionId,
+    getActiveSessionId: () => rt.conn.activeSessionId,
     getSessionInfo: () => {
-      const entry = sessionRegistry.get(activeSessionId);
+      const entry = sessionRegistry.get(rt.conn.activeSessionId);
       return { name: entry?.name || "", cwd: entry?.path || "" };
     },
   });
   // ── OMP_BRIDGE public API ─────────────────────────────────────────────────
   window.OMP_BRIDGE = {
-    get isConnected() { return !!window.__TAURI__ && !!activeSessionId && !state.agentError; },
+    get isConnected() { return !!window.__TAURI__ && !!rt.conn.activeSessionId && !state.agentError; },
     get models()      { return state.models; },
-    get activeSessionId() { return activeSessionId; },
+    get activeSessionId() { return rt.conn.activeSessionId; },
 
     // ── Messaging ────────────────────────────────────────────────────────────
     send(text, images) {
@@ -1862,17 +1040,17 @@
       _send({ type: "steer", message: text, images: [] });
     },
     async setModel(model) {
-      if (await _needsRestart(activeSessionId)) {
-        const entry = sessionRegistry.get(activeSessionId);
+      if (await _needsRestart(rt.conn.activeSessionId)) {
+        const entry = sessionRegistry.get(rt.conn.activeSessionId);
         const cwd = entry?.path ?? "";
         await window.__TAURI__.core
-          .invoke("start_session", { sessionId: activeSessionId, cwd })
+          .invoke("start_session", { sessionId: rt.conn.activeSessionId, cwd })
           .catch(() => {});
       }
       state.agentError = null;
       _sendSetModel(model.provider, model.id, "user");
     },
-    async retrySession(id = activeSessionId) {
+    async retrySession(id = rt.conn.activeSessionId) {
       if (!window.__TAURI__ || !id) return;
       const entry = sessionRegistry.get(id);
       const cwd = entry?.path ?? "";
@@ -1895,7 +1073,7 @@
      * while a turn / background work runs. Resolves { ok } or { ok:false, reason }.
      */
     async restartActiveSession() {
-      const id = activeSessionId;
+      const id = rt.conn.activeSessionId;
       const entry = sessionRegistry.get(id);
       const plan = window.SessionRestart.plan({
         hasSession:          Boolean(window.__TAURI__ && id),
@@ -1953,7 +1131,7 @@
     },
     getAvailableThinkingLevels() { return state.availableThinkingLevels; },
     compact() {
-      const id  = "cmpct-" + (_nextCmdId++);
+      const id  = "cmpct-" + runtime.nextCmdId();
       // Snapshot current context usage as the "before" value so the card
       // always shows a meaningful number even if omp's compact response
       // returns tokensBefore: 0 (observed in some omp versions).
@@ -1976,14 +1154,14 @@
      *  entire session is copied (branch from HEAD). */
     async branch(fromMsgIdx = null) {
       if (!window.__TAURI__) return;
-      const activeEntry = sessionRegistry.get(activeSessionId);
+      const activeEntry = sessionRegistry.get(rt.conn.activeSessionId);
       const cwd = activeEntry?.path ?? "";
 
       // The awaits below leave room for a tab switch. `state.messages` and
       // warnings belong to the tab the user clicked in — never to another one.
-      const originId = activeSessionId;
+      const originId = rt.conn.activeSessionId;
       const warn = (key, params) => {
-        if (activeSessionId !== originId) return;
+        if (rt.conn.activeSessionId !== originId) return;
         state.messages = [
           ...state.messages,
           window.NoticeBubble.make(window.t ? window.t(key, params) : key, timeNow()),
@@ -2006,14 +1184,14 @@
       if (!sourcePath) return warn("branch.fail.noSession");
 
       // Cut at a stable entry id, not a message count: the UI list is
-      // head-trimmed (_trimMessages) and the file also stores toolResult rows
+      // head-trimmed (runtime.trimMessages) and the file also stores toolResult rows
       // as "message" events. If the bubble can't be located with certainty,
       // refuse — a silent full copy would fork from the wrong point.
       let untilEntryId = null;
       if (fromMsgIdx !== null && fromMsgIdx >= 0) {
         try {
           const listing = await _sendWithResponse({ type: "get_entries" }, 30000);
-          if (activeSessionId !== originId) return; // switched tabs: state.messages is another session's
+          if (rt.conn.activeSessionId !== originId) return; // switched tabs: state.messages is another session's
           untilEntryId = window.BranchSession.resolveTarget(
             state.messages, fromMsgIdx, listing?.entries, listing?.leafId,
           );
@@ -2030,7 +1208,7 @@
           untilEntryId,
         });
 
-        const id = _genSessionId();
+        const id = runtime.genSessionId();
         const baseName = activeEntry?.name ?? "session";
         const label = `${baseName} (fork)`;
         sessionRegistry.set(id, {
@@ -2068,7 +1246,7 @@
     exportSession(format) { return _export.exportSession(format); },
     // ── Peer session (delegated to peer-session.js) ────────────────────────
     get peerSessionId() { return window.PeerSessionBridge.id; },
-    setPeer(id)   { window.PeerSessionBridge.pin(id, activeSessionId); },
+    setPeer(id)   { window.PeerSessionBridge.pin(id, rt.conn.activeSessionId); },
     clearPeer()   { window.PeerSessionBridge.unpin(); },
 
     /** Hide the models.yml warning banner until the missing-model set changes. */
@@ -2079,13 +1257,13 @@
 
     async refreshModels() {
       _configCheckRunner?.invalidate(); // models.yml changed: drop in-flight result, diagnose again
-      if (await _needsRestart(activeSessionId)) {
-        const entry = sessionRegistry.get(activeSessionId);
+      if (await _needsRestart(rt.conn.activeSessionId)) {
+        const entry = sessionRegistry.get(rt.conn.activeSessionId);
         const cwd = entry?.path ?? "";
-        console.log(`[live] session '${activeSessionId}' is not running; restarting with new models config`);
+        console.log(`[live] session '${rt.conn.activeSessionId}' is not running; restarting with new models config`);
         try {
           await window.__TAURI__.core.invoke("start_session", {
-            sessionId: activeSessionId,
+            sessionId: rt.conn.activeSessionId,
             cwd,
           });
           state.agentError = null;
@@ -2110,7 +1288,7 @@
       _syncCurrentModel();
       notify();
       // While omp is still starting the post-start init fetch covers this.
-      if (!agentStarting) _initFetch();
+      if (!rt.conn.agentStarting) _initFetch();
     },
 
     // ── Login ─────────────────────────────────────────────────────────────────
@@ -2129,28 +1307,19 @@
     login(providerId) {
       // While a login is in flight its `input` prompts (OAuth codes, risk
       // confirmation) stay blocking window.prompt dialogs. Keyed per session.
-      const release = _loginBegin(activeSessionId);
+      const release = _loginBegin(rt.conn.activeSessionId);
       return _sendWithResponse({ type: "login", providerId }, 300000).finally(release);
     },
 
     /**
      * Respond to a pending ask bubble (select / input / editor request).
-     * The logic lives in app/ask-answer.js: it decides which frames to send
-     * (e.g. the two-step "Other" handshake) and how the bubble changes.
+     * Logic: live/events-ui.js (+ app/ask-answer.js) — it decides which frames
+     * to send (e.g. the two-step "Other" handshake) and how the bubble changes.
      * @param {string} id  The extension_ui_request id the bubble currently answers.
      * @param {string|object} payload  `{ value }` | `{ custom }` | `{ clearOther: true }`
      *   | `{ text }` | `{ cancelled: true }`. A bare string is treated as `{ value }`.
      */
-    answerAsk(id, payload) {
-      const p = typeof payload === "string" ? { value: payload } : payload;
-      const plan = window.AskAnswer.planAnswer(window.AskModel.findOpen(state.messages, id), p);
-      if (!plan) return;
-      state.messages = window.AskModel.patchOpen(state.messages, id, plan.patch);
-      // Armed before the frame goes out so the follow-up request can never beat it.
-      if (plan.handshake) askHandshake = plan.handshake;
-      notify();
-      for (const frame of plan.frames) _send({ type: "extension_ui_response", id, ...frame });
-    },
+    answerAsk(id, payload) { _ui.answerAsk(id, payload); },
 
     /** Cancel a pending ask bubble (the server aborts the ask — and the turn). */
     cancelAsk(id) {
@@ -2175,7 +1344,7 @@
 
     /** Open a new tab for the given project folder (or standalone if null/empty). Returns the new session id. */
     async openSession(cwd) {
-      const id   = _genSessionId();
+      const id   = runtime.genSessionId();
       let name = "PiDesk";
       const norm = window.SessionTitle?.normalizePath || (p => (p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase());
 
@@ -2233,7 +1402,7 @@
 
     /** Switch the active tab. Resets state and re-fetches from the session's omp. */
     async activateSession(id) {
-      if (id === activeSessionId) return;
+      if (id === rt.conn.activeSessionId) return;
       if (!sessionRegistry.has(id)) return;
       await _switchToSession(id);
     },
@@ -2260,7 +1429,7 @@
           return tabId;
         }
         // 2. Check tab's rpcState.sessionFile (active tab or cached snapshot)
-        const tabRpcState = (tabId === activeSessionId)
+        const tabRpcState = (tabId === rt.conn.activeSessionId)
           ? state.rpcState
           : sessionSnapshots.get(tabId)?.rpcState;
         if (tabRpcState?.sessionFile) {
@@ -2279,7 +1448,7 @@
         }
       }
 
-      const id = _genSessionId();
+      const id = runtime.genSessionId();
       // "No project" sessions were recorded with the exe directory (e.g.
       // target/debug) as their cwd. Treat them as standalone again: empty
       // path → no project tab/file tree, and let the backend pin the child
@@ -2351,15 +1520,15 @@
       window.PeerSessionBridge.clearIfMatch(id);
       // If no sessions remain, immediately reset and create a clean default "PiDesk" session
       if (sessionRegistry.size === 0) {
-        for (const ul of activeListeners) { try { await ul(); } catch (_) {} }
-        activeListeners = [];
-        activeSessionId = null;
-        _resetSessionVars();
+        for (const ul of rt.conn.activeListeners) { try { await ul(); } catch (_) {} }
+        rt.conn.activeListeners = [];
+        rt.conn.activeSessionId = null;
+        _resetSession();
         await this.openSession(null);
         return;
       }
 
-      if (id === activeSessionId) {
+      if (id === rt.conn.activeSessionId) {
         const remaining = [...sessionRegistry.keys()];
         await _switchToSession(remaining[remaining.length - 1]);
       } else {
@@ -2370,35 +1539,7 @@
     /** Subscribe to state snapshots. Returns an unsubscribe function. */
     onUpdate(cb) {
       subscribers.add(cb);
-      cb({
-        messages:        state.messages,
-        isStreaming:     state.isStreaming,
-        model:           state.model,
-        thinkingLevel:   state.thinkingLevel,
-        ctx:             state.ctx,
-        kanban:          state.kanban,
-        planMeta:        state.planMeta,
-        models:          state.models,
-        activity:        state.activity,
-        sparkline:       state.sparkline,
-        sessions:        [...sessionRegistry.values()],
-        activeSessionId,
-        peer:            window.PeerSessionBridge.build(),
-        peerSessionId:   window.PeerSessionBridge.id,
-        runningTools:    state.runningTools,
-        recentTools:     state.recentTools,
-        turnStartMs:     state.turnStartMs,
-        hubMode:         state.hubMode,
-        hubAgents:       state.hubAgents,
-        hubTaskId:       state.hubTaskId,
-        hubHistory:      state.hubHistory,
-        agentError:      state.agentError,
-        modelsConfigWarning: state.modelsConfigWarning,
-        agentStarting,
-        toolLogs:        state.toolLogs,
-        hasPendingAsyncWork: state.hasPendingAsyncWork,
-        isSettled:           state.isSettled,
-      });
+      cb(runtime.buildSnapshot());
       return () => subscribers.delete(cb);
     },
 
@@ -2413,7 +1554,7 @@
     },
 
     getCwd() {
-      const entry = sessionRegistry.get(activeSessionId);
+      const entry = sessionRegistry.get(rt.conn.activeSessionId);
       return entry?.path ?? "";
     },
 

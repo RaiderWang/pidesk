@@ -4,7 +4,7 @@
    bridge can call the native `branch` RPC. No side effects; loaded as a
    plain script (exposes window.UndoMessage) and testable under node.
 
-   Why tail alignment: `state.messages` is head-trimmed (_trimMessages) and
+   Why tail alignment: `state.messages` is head-trimmed (runtime.trimMessages) and
    omp's compaction drops older turns from get_messages, so counting user
    bubbles "from the start" does not line up with the session file. The
    newest user bubbles always do — count from the end and verify the text.
