@@ -1,5 +1,5 @@
 # CI — runs on every push and PR.
-# Does a fast cargo check across all three platforms.
+# Runs JS unit tests and Rust cargo check + unit tests across all three platforms.
 # No full bundle build here — that lives in release.yml.
 
 name: CI
@@ -10,11 +10,24 @@ on:
     paths:
       - 'src-tauri/**'
       - 'src/**'
+      - 'test/**'
+      - 'package.json'
       - '.github/workflows/ci.yml'
   pull_request:
     branches: [main, master]
 
 jobs:
+  test-js:
+    name: test:js
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run JS unit tests
+        run: npm run test:js
+
   check:
     name: cargo check · ${{ matrix.os }}
     strategy:
@@ -54,3 +67,7 @@ jobs:
       - name: cargo check
         working-directory: src-tauri
         run: cargo check --locked
+
+      - name: cargo test
+        working-directory: src-tauri
+        run: cargo test --locked
