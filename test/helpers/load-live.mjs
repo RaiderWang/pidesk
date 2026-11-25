@@ -24,9 +24,16 @@ export const LIVE_PARTS = [
   'live/custom-models.js',
   'live/runtime.js',
   'live/todo-phases.js',
+  'live/tab-titles.js',
   'live/events-ui.js',
   'live/events-tool.js',
   'live/events-message.js',
+  'live/models.js',
+  'live/response-handlers.js',
+  'live/session-switch.js',
+  'live/sessions.js',
+  'live/session-branch.js',
+  'live/window-chrome.js',
   'live.js',
 ];
 
