@@ -203,8 +203,8 @@ The frontend communicates with `omp` exclusively through the Tauri IPC bridge. `
 omp stdout
   └─► agent://line Tauri event
         └─► handleLine(rawLine)
-              ├─► _handleResponse(resp)   — RPC responses
-              │     ├── get_state         → _applyRpcState() → notify()
+              ├─► responses.handleResponse(resp)   — RPC responses (live/response-handlers.js)
+              │     ├── get_state         → applyRpcState() → notify()
               │     ├── get_available_models → state.models → notify()
               │     ├── set_model         → state.model + current flags → notify()
               │     └── cycle_model       → state.model + thinkingLevel → notify()
@@ -255,7 +255,7 @@ omp 18.x `get_state` does not include `thinkingLevel`; `cycle_thinking_level` re
 
 ### Compact response token backfill
 
-The omp compact response contains `tokensBefore` (may be 0 in some versions) but **not** `tokensAfter`. PiDesk snapshots pre-compact tokens from `contextUsage` at send time, then back-fills `tokensAfter` from the next `get_state` via `_compactBackfillId` in `live.js`.
+The omp compact response contains `tokensBefore` (may be 0 in some versions) but **not** `tokensAfter`. PiDesk snapshots pre-compact tokens from `contextUsage` at send time, then back-fills `tokensAfter` from the next `get_state` via `rt.session.compactBackfillId` (`live/runtime.js`, saved/restored with the tab snapshot; back-filled in `live/response-handlers.js`).
 
 ### Undo a sent message (omp `branch`)
 
@@ -263,11 +263,11 @@ Flow (`undo-bridge.js`, wired from `live.js`): `get_entries` → `UndoMessage.re
 
 - **Native RPC, not file surgery.** omp's `branch` writes a *new* `.jsonl` containing everything before the chosen user entry (header `parentSession` → old file) and switches the running process to it; todo/subagents/async jobs/memory are reset by omp. The old file stays on disk as a backup (it shows up in History). No process restart, no Rust involved.
 - **`get_entries`, not `get_branch_messages`.** The latter drops image-only user messages and returns text only. The `branch` response also omits the stored images, so they are taken from the UI message.
-- **Tail alignment.** UI messages have no entry id, and the UI list is head-trimmed (`_trimMessages`, 169 cap) while compaction drops old turns from `get_messages`, so "N-th user bubble from the start" does not line up with the file. The newest user bubbles always do: count from the end, then verify whitespace-insensitive text + image presence of every bubble from the target to the end. Any mismatch (e.g. a steer bubble not yet persisted) → refuse, never guess — `branch` is destructive.
+- **Tail alignment.** UI messages have no entry id, and the UI list is head-trimmed (`trimMessages` in `live/runtime.js`, 169 cap) while compaction drops old turns from `get_messages`, so "N-th user bubble from the start" does not line up with the file. The newest user bubbles always do: count from the end, then verify whitespace-insensitive text + image presence of every bubble from the target to the end. Any mismatch (e.g. a steer bubble not yet persisted) → refuse, never guess — `branch` is destructive.
 - **No `get_messages` after undo.** Its merge into `state.messages` is positional and mis-aligns on a trimmed list; the locally truncated list is authoritative.
-- **Tab re-binding.** The registry entry's `sessionFile/sessionPath/savedSessionId` are refreshed in `_applyRpcState` whenever omp reports a different file; otherwise History would treat the backup as "open" and allow the new file to be opened in a second tab (two omp processes on one jsonl).
+- **Tab re-binding.** The registry entry's `sessionFile/sessionPath/savedSessionId` are refreshed in `applyRpcState` (`live/response-handlers.js`) whenever omp reports a different file; otherwise History would treat the backup as "open" and allow the new file to be opened in a second tab (two omp processes on one jsonl).
 - **One busy guard.** `UndoBridge.busyReason()` (exposed as `OMP_BRIDGE.undoBlocked`) returns `null | "running" | "async"` and is the single source of truth for the button (`useUndoMessage`) and the bridge. `"running"` = streaming, `rpcState.isCompacting`, or a pending compact card (manual `/compact` never sets `isCompacting`); `"async"` = `hasPendingAsyncWork` — omp's `branch()` cancels its own background jobs. `AgentSession.branch` does not refuse while busy, so the bridge re-checks before sending `branch`.
-- **Tab switches wait for an in-flight undo.** `_switchToSession` awaits `undoBridge.whenIdle()` first. Switching tears down the old session's `agent://line/{id}` listener, so the `get_entries`/`branch` responses would otherwise never arrive (30 s timeout, error bubble in the *new* tab, undone text lost). `whenIdle` adds one macrotask so the hook's `composer-restore` dispatch runs before the switch. Failure warnings are written only if the originating session is still active.
+- **Tab switches wait for an in-flight undo.** `switchToSession` (`live/session-switch.js`) awaits `undoBridge.whenIdle()` first. Switching tears down the old session's `agent://line/{id}` listener, so the `get_entries`/`branch` responses would otherwise never arrive (30 s timeout, error bubble in the *new* tab, undone text lost). `whenIdle` adds one macrotask so the hook's `composer-restore` dispatch runs before the switch. Failure warnings are written only if the originating session is still active.
 - **Known limitation.** If omp rewrites a prompt before persisting it (slash command / template / `@model` expansion), `message_start` echoes the expanded text and the UI shows an extra bubble; the tail check then fails safely (`undo.fail.locate`) for that message and everything before it. Fixing it needs optimistic-echo de-duplication in `live.js`.
 - Finished tool cards are ephemeral (removed from `state.messages` on `tool_execution_end`), so `countAffected().tools` is ~0 in live sessions and `toolLogs` are left untouched by undo.
 - Agent edits to files on disk are **not** reverted — the confirm dialog says so.
@@ -281,7 +281,7 @@ Flow (`undo-bridge.js`, wired from `live.js`): `get_entries` → `UndoMessage.re
 - **HTML** = omp `export_html` → `save_html_export`. The old command copied then deleted the source, which destroyed the export when you saved onto the same path, and left the generated file in the project directory when you cancelled; both are fixed (and the dialog is now parented to the main window, file I/O runs in `spawn_blocking`).
 - **Known limit.** `get_entries` is a single stdout line and `agent/reader.rs` drops lines over 16 MiB, so a huge (image-laden) session times out; the Markdown path then reports a timeout and suggests retrying or the HTML export. Undo shares this limit. `exportSession` fails fast when `state.agentError` is set (a dead omp never answers, and the pending RPC would hold the tab-switch gate for the whole 30 s); `_send` swallows send failures, so a process that dies *during* an export still times out.
 - The exported HTML loads its viewer from a CDN in release builds of omp (needs internet to render); Markdown does not.
-- **Tab switches wait for an in-flight export** (`_export.whenIdle()` in `_switchToSession`); notices are written only to the tab the export started in. Overlapping exports are ignored (`busy`).
+- **Tab switches wait for an in-flight export** (`_export.whenIdle()` via `awaitBridgesIdle` in `live/session-switch.js`); notices are written only to the tab the export started in. Overlapping exports are ignored (`busy`).
 
 ### In-app updates
 

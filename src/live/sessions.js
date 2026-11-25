@@ -198,7 +198,7 @@
       window.PeerSessionBridge.clearIfMatch(id);
       // If no sessions remain, immediately reset and create a clean default "PiDesk" session
       if (sessionRegistry.size === 0) {
-        for (const ul of rt.conn.activeListeners) { try { await ul(); } catch (_) {} }
+        for (const ul of rt.conn.activeListeners) { try { await ul(); } catch {} }
         rt.conn.activeListeners = [];
         rt.conn.activeSessionId = null;
         resetSession();

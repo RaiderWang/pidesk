@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Compact token count survives a tab switch**: switching tabs right after a compaction finished, before omp's next `get_state` arrived, dropped the pending `tokensAfter` back-fill for that tab (and left it armed in the next one). The pending back-fill now travels with the tab's snapshot.
+
 ## [0.5.0] - 2026-11-24
 
 ### Added

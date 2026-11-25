@@ -53,6 +53,26 @@ describe('live.js — event dispatch table', () => {
     assert.equal(bridge.getState().isSettled, true);
   });
 
+  it('_handleLine parses a raw stdout line and dispatches it (events and garbage)', () => {
+    bridge._handleLine('{"type":"turn_start"}');
+    assert.equal(bridge.getState().isStreaming, true);
+    bridge._handleLine('{"type":"turn_end"}');
+    assert.equal(bridge.getState().isStreaming, false);
+    for (const junk of ['', 'not json', 'null', '[1,2]', '"str"']) {
+      assert.doesNotThrow(() => bridge._handleLine(junk), junk);
+    }
+  });
+
+  it('_handleLine routes a response frame to the response handlers', () => {
+    bridge._handleLine(JSON.stringify({
+      type: 'response', command: 'get_state', success: true,
+      data: { isStreaming: false, sessionName: null, hasPendingAsyncWork: true },
+    }));
+    assert.equal(bridge.getState().hasPendingAsyncWork, true);
+    bridge._handleLine(JSON.stringify({ type: 'response', command: 'get_state', success: false, error: 'x' }));
+    assert.equal(bridge.getState().hasPendingAsyncWork, true); // failures are dropped
+  });
+
   it('onUpdate snapshot carries availableThinkingLevels like notify() does', () => {
     let first;
     const off = bridge.onUpdate(snap => { first ??= snap; });
