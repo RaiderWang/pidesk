@@ -22,6 +22,11 @@ export const LIVE_PARTS = [
   'live/prefs.js',
   'live/tauri-api.js',
   'live/custom-models.js',
+  'live/runtime.js',
+  'live/todo-phases.js',
+  'live/events-ui.js',
+  'live/events-tool.js',
+  'live/events-message.js',
   'live.js',
 ];
 

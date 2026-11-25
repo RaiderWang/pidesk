@@ -114,7 +114,7 @@ Three layers:
 **Layer responsibilities:**
 
 - **Rust (`src-tauri/src/`)** — `agent/` module: `mod.rs` (`AgentBridge` public API), `inner.rs` (`BridgeInner` per-session state), `spawn.rs` (candidate resolution + Win `CREATE_NO_WINDOW`), `reader.rs` (stdout/stderr threads + bounded `read_until_capped`, 16 MiB cap).
-- **Bridge (`src/live.js`)** — Listens to `agent://line/{id}` for the active session; holds per-session live state and `sessionRegistry` (tabs). Exposes `window.OMP_BRIDGE` (commands + `onUpdate`) and legacy `window.OMP_DATA`. Split-out pieces live in `src/live/` and register on `window._Live`: `defaults.js`, `prefs.js`, `tauri-api.js` (plain invoke wrappers spread into `OMP_BRIDGE`), `custom-models.js`.
+- **Bridge (`src/live.js`)** — Listens to `agent://line/{id}` for the active session; holds per-session live state and `sessionRegistry` (tabs). Exposes `window.OMP_BRIDGE` (commands + `onUpdate`) and legacy `window.OMP_DATA`. Split-out pieces live in `src/live/` and register on `window._Live`: `defaults.js`, `prefs.js`, `tauri-api.js` (plain invoke wrappers spread into `OMP_BRIDGE`), `custom-models.js`, `runtime.js` (shared `state` + `rt`: `rt.session` per-tab volatile vars, `rt.conn` transport bookkeeping, `rt.seq` counters), `todo-phases.js`, and the event handlers `events-ui.js` / `events-tool.js` / `events-message.js` (factories wired in `live.js`).
 - **React (`src/app-live.jsx` + `src/app/` + `src/design/*/`)** — Sole React root. Uses `useBridgeSnapshot` to mirror `OMP_BRIDGE.onUpdate` into hooks.
 
 ---
@@ -334,7 +334,7 @@ Script order in `src/index.html` **is** the dependency graph — Babel has no mo
 3. UI primitives: `ui/icons.jsx` → `ui/sparks.jsx` → `ui/markdown.jsx` → `ui/plan-annotations.jsx`
 4. Chat: `chat/user-bubble.jsx` → `chat/eval-cell.jsx` → `chat/assistant-bubble.jsx` → `chat/tool-card.jsx` → `chat/chat-view.jsx` → `chat/undo-confirm-modal.jsx`
 5. `design/composer-restore.jsx` → `design/composer.jsx` → `design/palette/*` (command palette) → `design/file-tree-panel.jsx` → `design/chrome/*` (window-chrome, tab-bar, status-bar, ambient-rail, agent-error-banner, update-banner) → `design/plan/*` → `design/dock/*`
-6. Live data: `model-names.js` → `adapter.js` → `peer-session.js` → `undo-bridge.js` → `export-bridge.js` → `live/*` (`defaults`, `prefs`, `tauri-api`, `custom-models`) → `live.js`
+6. Live data: `model-names.js` → `adapter.js` → `peer-session.js` → `undo-bridge.js` → `export-bridge.js` → `live/*` (`defaults`, `prefs`, `tauri-api`, `custom-models`, `runtime`, `todo-phases`, `events-ui`, `events-tool`, `events-message`) → `live.js`
 7. App helpers: `app/constants.js` → `app/use-bridge-snapshot.jsx` → `app/use-global-shortcuts.jsx` → `app/use-dock-state.jsx` → `app/use-undo-message.jsx` → `app/use-updater.jsx`
 8. `app-live.jsx` (last)
 

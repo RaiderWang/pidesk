@@ -3,7 +3,7 @@
    persisted turns from omp's `get_messages`.
 
    Why alignment instead of positions:
-   `state.messages` is head-trimmed (`_trimMessages`, 169 cap), and omp's
+   `state.messages` is head-trimmed (`runtime.trimMessages`, 169 cap), and omp's
    compaction drops older turns from `get_messages`. Pairing the Nth local
    text bubble with the Nth persisted turn therefore mis-maps content and
    re-appends already-shown turns at the end.
