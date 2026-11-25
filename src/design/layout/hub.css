@@ -18,6 +18,7 @@
   font-size: var(--d-text-xs);
   min-height: 18px;
 }
+.hub-compact-phase .dot { flex-shrink: 0; }
 .hub-compact-running {
   display: flex; flex-direction: column; gap: 2px;
   padding-top: 4px;

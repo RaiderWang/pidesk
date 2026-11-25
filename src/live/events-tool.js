@@ -2,7 +2,8 @@
 
    Owns the ephemeral tool cards in chat, the running/recent tool trail, tool
    log buffers, Agent Hub task tracking and the activity sparkline log.
-   Registers window._Live.EventsTool; load after runtime.js and todo-phases.js. */
+   Registers window._Live.EventsTool; load after runtime.js and todo-phases.js.
+   Depends on window.ToolTarget (app/tool-target.js) for the display target. */
 (function () {
   "use strict";
   window._Live = window._Live || {};
@@ -28,22 +29,18 @@
       // Track running tool for the agent activity card
       const toolName = window.normalizeToolName(ev.toolName ?? "");
       const args = (typeof ev.args === "object" && ev.args !== null) ? ev.args : {};
-      let rawTarget = args.path ?? args.pattern ?? args.command ?? args.query ?? "";
-      if (!rawTarget && toolName === "hub" && args.op) {
-        rawTarget = `${args.op}${args.ids?.length ? ` ${args.ids.join(", ")}` : ""}`;
-      }
-      const shortTarget = rawTarget ? String(rawTarget).split(/[\\/]/).pop() : "";
+      const target = window.ToolTarget.of(toolName, args);
       state.runningTools = [...state.runningTools, {
-        id: ev.toolCallId, tool: toolName, target: shortTarget || String(rawTarget), startMs: now,
+        id: ev.toolCallId, tool: toolName, target, startMs: now,
       }];
-      // Initialize tool log buffer
-      const cmdStr = typeof args.command === "string" ? args.command : (rawTarget || "");
+      // Initialize tool log buffer (command keeps the full text / full path)
+      const cmdStr = typeof args.command === "string" ? args.command : window.ToolTarget.raw(toolName, args);
       state.toolLogs = {
         ...state.toolLogs,
         [ev.toolCallId]: {
           id: ev.toolCallId,
           tool: toolName,
-          target: shortTarget || String(rawTarget),
+          target,
           title: card.title || toolName,
           command: cmdStr,
           status: "running",

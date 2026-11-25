@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Agent Hub no longer cuts bash commands at the last `/`**: the running/recent tool rows in the Agent Hub, the split-peer pane and the peer card in the rail ran every tool argument through a "last path segment" filter meant for file paths, so a command ending in `2>/dev/null` showed as `bash null` and one ending in `"http://…/q=sh563020"` as `bash q=sh563020"`. Only `path` is reduced to its file name now (trailing slashes ignored); `command`, `pattern` and `query` keep their text (whitespace folded, capped at 200 characters via the new pure `src/app/tool-target.js`) and are ellipsised in the UI; the full text is in the tooltip of the peer card, the split-peer pane and the Hub's current-phase line, and in the log dialog you open by clicking a Hub running/recent tool row. The peer card chip and the Hub's current-phase line also got proper overflow handling so long commands no longer widen the rail or squash the status dot.
 - **Compact token count survives a tab switch**: switching tabs right after a compaction finished, before omp's next `get_state` arrived, dropped the pending `tokensAfter` back-fill for that tab (and left it armed in the next one). The pending back-fill now travels with the tab's snapshot.
 
 ## [0.5.0] - 2026-11-24

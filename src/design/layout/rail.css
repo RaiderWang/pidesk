@@ -67,10 +67,10 @@
 
 
 /* peer */
-.peer { display: flex; flex-direction: column; gap: 6px; }
+.peer { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .peer-head { display: flex; align-items: center; gap: 6px; font-size: var(--d-text-sm); }
 .peer-title { color: var(--fg); font-size: var(--d-text-sm); }
-.peer-row { display: flex; align-items: center; gap: 6px; font-size: var(--d-text-xs); }
+.peer-row { display: flex; align-items: center; gap: 6px; font-size: var(--d-text-xs); min-width: 0; }
 
 /* ── Minimap (dense token-heatmap grid) ───────────────────────────── */
 .minimap { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
