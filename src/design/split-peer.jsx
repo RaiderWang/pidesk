@@ -64,7 +64,8 @@ function SplitPeer({ peer, onFocus, onClear }) {
                   <Icon name={meta.icon} size={9} color={meta.color} />
                   {t.tool}
                 </span>
-                <span style={{ color: "var(--fg-3)", overflow: "hidden", textOverflow: "ellipsis",
+                <span title={t.target || undefined}
+                      style={{ color: "var(--fg-3)", overflow: "hidden", textOverflow: "ellipsis",
                                whiteSpace: "nowrap", flex: 1 }}>
                   {t.target || "—"}
                 </span>

@@ -74,6 +74,7 @@ loadScript('i18n.js');
 loadScript('app/chat-grouping.js');
 loadScript('app/notice-bubble.js');
 loadScript('app/empty-bubble.js');
+loadScript('app/tool-target.js');
 loadScript('app/ask-model.js');
 loadScript('app/ask-answer.js');
 loadScript('app/welcome-state.js');
@@ -136,6 +137,9 @@ export const ChatGrouping = globalThis.ChatGrouping;
 
 // app/empty-bubble.js namespace object (window.EmptyBubble)
 export const EmptyBubble = globalThis.EmptyBubble;
+
+// app/tool-target.js namespace object (window.ToolTarget)
+export const ToolTarget = globalThis.ToolTarget;
 
 // app/welcome-state.js namespace object (window.WelcomeState)
 export const WelcomeState = globalThis.WelcomeState;

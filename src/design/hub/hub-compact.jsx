@@ -95,7 +95,8 @@ function HubCompact({ runningTools, recentTools, isStreaming, turnStartMs, activ
       {/* Current phase */}
       <div className="hub-compact-phase mono" style={{ color: phaseColor }}>
         {(isStreaming || hasPendingAsyncWork) && <span className="dot live" style={{ background: phaseColor }} />}
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span title={phaseLabel}
+          style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
           {phaseLabel}
         </span>
       </div>

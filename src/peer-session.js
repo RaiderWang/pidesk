@@ -1,5 +1,6 @@
 /* peer-session.js — Peer (pinned) session monitoring for the ambient rail.
-   Depends on: adapter.js (normalizeToolName must be on window).
+   Depends on: adapter.js (normalizeToolName must be on window) and
+   app/tool-target.js (window.ToolTarget).
    Exposes: window.PeerSessionBridge
 
    "Pin" another session so its live activity is visible in the ambient
@@ -133,16 +134,12 @@
     } else if (type === "tool_execution_start") {
       const tool = window.normalizeToolName(obj.toolName ?? "");
       const args = (typeof obj.args === "object" && obj.args) ? obj.args : {};
-      let target = args.path ?? args.pattern ?? args.command ?? args.query ?? "";
-      if (!target && tool === "hub" && args.op) {
-        target = `${args.op}${args.ids?.length ? ` ${args.ids.join(", ")}` : ""}`;
-      }
-      const short = target ? String(target).split(/[\\/]/).pop() : "";
+      const short = window.ToolTarget.of(tool, args);
       peerState.activity = short ? `${tool} · ${short}` : tool;
       // Append to recentTools (rolling window)
       peerState.recentTools = [
         ...peerState.recentTools.slice(-(PEER_MAX_TOOLS - 1)),
-        { id: obj.toolCallId, tool, target: short || String(target), status: "running",
+        { id: obj.toolCallId, tool, target: short, status: "running",
           duration: null, time: timeNow(), _startMs: Date.now() },
       ];
       changed = true;

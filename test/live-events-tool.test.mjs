@@ -61,6 +61,26 @@ describe('events-tool — start', () => {
     assert.equal(state.runningTools[0].target, 'main.rs');
   });
 
+  it('keeps a command ending in "2>/dev/null" intact (no path cut)', () => {
+    const cmd = 'iconv -f gbk -t utf-8 file.txt 2>/dev/null';
+    start('t2b', 'bash', { command: cmd });
+    assert.equal(state.runningTools[0].target, cmd);
+    assert.equal(state.toolLogs.t2b.target, cmd);
+    assert.equal(state.toolLogs.t2b.command, cmd);
+  });
+
+  it('keeps a curl command with a URL intact', () => {
+    const cmd = 'curl -s "http://qt.gtimg.cn/q=sh563020"';
+    start('t2c', 'bash', { command: cmd });
+    assert.equal(state.runningTools[0].target, cmd);
+  });
+
+  it('log command keeps the full path while target is the basename', () => {
+    start('t2d', 'read', { path: 'C:\\proj\\src\\main.rs' });
+    assert.equal(state.toolLogs.t2d.target, 'main.rs');
+    assert.equal(state.toolLogs.t2d.command, 'C:\\proj\\src\\main.rs');
+  });
+
   it('prunes activity-log entries older than 60s', () => {
     rt.session.activityLog = [{ ts: Date.now() - 120_000, toolName: 'old' }];
     start('t3');

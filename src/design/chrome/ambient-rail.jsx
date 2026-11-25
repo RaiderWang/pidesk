@@ -93,9 +93,11 @@ function PeerSession({ peer, onFocus, onClear }) {
       </div>
       <div className="peer-title selectable">{peer.title}</div>
       <div className="peer-row">
-        <span className="chip accent" style={{ borderColor: `color-mix(in oklab, ${meta.color} 40%, var(--line))`, color: meta.color, background: `color-mix(in oklab, ${meta.color} 12%, transparent)` }}>
-          <Icon name={meta.icon} size={9} color={meta.color} />
-          {peer.activity}
+        <span className="chip accent" style={{ maxWidth: "100%", minWidth: 0, borderColor: `color-mix(in oklab, ${meta.color} 40%, var(--line))`, color: meta.color, background: `color-mix(in oklab, ${meta.color} 12%, transparent)` }}>
+          <Icon name={meta.icon} size={9} color={meta.color} style={{ flexShrink: 0 }} />
+          <span title={peer.activity} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+            {peer.activity}
+          </span>
         </span>
       </div>
       <div className="peer-row" style={{ color: "var(--fg-3)" }}>
