@@ -16,6 +16,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { join, dirname } from 'path';
 import './helpers/shim.mjs';
+import { loadLive } from './helpers/load-live.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SRC = join(__dirname, '../src');
@@ -26,7 +27,7 @@ loadScript('peer-session.js');
 loadScript('app/undo-message.js');
 loadScript('undo-bridge.js');
 loadScript('export-bridge.js');
-loadScript('live.js');
+loadLive();
 
 const bridge = globalThis.OMP_BRIDGE;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

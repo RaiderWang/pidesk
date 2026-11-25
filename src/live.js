@@ -1,5 +1,6 @@
 /* live.js — Tauri IPC bridge + OMP_BRIDGE + OMP_DATA initialisation.
-   Depends on: adapter.js (must load first).
+   Depends on: adapter.js and the live/* modules (defaults, prefs, tauri-api,
+   custom-models — they register on window._Live); all must load first.
    Exposes: window.OMP_DATA (for design components), window.OMP_BRIDGE (for app-live.jsx).
 
    Each tab owns one omp process (one session). Switching tabs switches the active
@@ -14,38 +15,8 @@
   const { timeNow } = window;
 
   // ── Safe defaults so design components never crash on missing fields ──────
-  const DEFAULT_DATA = {
-    projects: [],
-    messages: [],
-    kanban: [],
-    planMeta: { ask: "", strategy: "", touches: [], branch: "main", risks: [], estimate: { tokens: "—", cost: "—", wall: "—" } },
-    commands: [
-      { name: "plan",     hint: "draft a plan before writing code",   icon: "◇", group: "Mode"    },
-      { name: "steer",    hint: "interrupt and redirect mid-tool",    icon: "↺", group: "Mode"    },
-      { name: "compact",  hint: "compact context window",             icon: "▤", group: "Session" },
-      { name: "new",      hint: "start a fresh session (history kept on disk)", icon: "↺", group: "Session" },
-      { name: "history",  hint: "browse and resume saved sessions",   icon: "clock", group: "Session" },
-      { name: "model",    hint: "switch model",                       icon: "◉", group: "Agent"   },
-      { name: "models",   hint: "manage custom models (models.yml)",  icon: "cpu", group: "Agent" },
-      { name: "thinking", hint: "cycle thinking level",               icon: "✶", group: "Agent"   },
-      { name: "login",    hint: "authenticate with a model provider",   icon: "⊙", group: "Agent"   },
-      { name: "todo",     hint: "open the kanban surface",            icon: "▦", group: "View"    },
-      { name: "review",   hint: "inspect code diff & launch review",  icon: "diff2", group: "Code" },
-      { name: "export",   hint: "export this session as Markdown or HTML", icon: "⇪", group: "View"    },
-    ],
-    models: [],
-    activity: [],
-    ctx: { used: 0, total: 200000, pct: 0, label: "0 / 200k", cost: "$0.00", tokensPerSec: 0 },
-    peer: null,
-    microcopy: {
-      empty:        "Hand me a project. I'll set the table.",
-      streamingTip: "Press ⎋ to interrupt — your cursor is in the room.",
-      paletteTip:   "type / to give orders · ⌘K opens the bridge",
-      planTip:      "describe what to build, or give feedback on the plan…",
-      todoEmpty:    "no plan yet. think out loud below.",
-      radarHint:    "agent has been busy — last 60 seconds",
-    },
-  };
+  // (data lives in live/defaults.js)
+  const DEFAULT_DATA = window._Live.Defaults;
 
   window.OMP_DATA = JSON.parse(JSON.stringify(DEFAULT_DATA));
 
@@ -116,34 +87,14 @@
   // Saves the user's last model + thinking level across app restarts.
   // On a fresh session (no snapshot to restore from) the saved prefs are
   // pushed to omp so the new process matches the user's previous choice.
-  const PREFS_KEY = "pidesk:prefs";
-
-  function _loadPrefs() {
-    try {
-      const raw = localStorage.getItem(PREFS_KEY);
-      return raw ? JSON.parse(raw) : {};
-    } catch { return {}; }
-  }
-
-  function _savePrefs(patch) {
-    try {
-      const prev = _loadPrefs();
-      localStorage.setItem(PREFS_KEY, JSON.stringify({ ...prev, ...patch }));
-    } catch {}
-  }
-
-  // _savePrefs is a shallow merge and cannot delete keys; write the stripped
-  // object back to drop a dangling model (renamed/deleted in models.yml).
-  function _clearModelPrefs() {
-    try {
-      const prev = _loadPrefs();
-      const next = window.ModelPrefs ? window.ModelPrefs.stripModel(prev) : { ...prev };
-      if (!window.ModelPrefs) {
-        delete next.modelId; delete next.modelProvider; delete next.modelName;
-      }
-      localStorage.setItem(PREFS_KEY, JSON.stringify(next));
-    } catch {}
-  }
+  // Storage helpers live in live/prefs.js; the model-list helpers in live/custom-models.js.
+  const { loadPrefs: _loadPrefs, savePrefs: _savePrefs, clearModelPrefs: _clearModelPrefs } = window._Live.Prefs;
+  const CustomModels = window._Live.CustomModels;
+  const { buildModelEntry: _buildModelEntry, mergeModels: _mergeModels } = CustomModels;
+  // Reads models.yml; `current` follows whatever model is active once the read lands.
+  const _loadCustomModelsFromConfig = () => CustomModels.loadFromConfig(
+    id => state.rpcState?.model?.id === id || state.model?.id === id,
+  );
 
   // Origin of each in-flight set_model ("restore" | "user"), oldest first.
   // omp answers commands in order, so each set_model response shifts one entry.
@@ -949,20 +900,6 @@
     }
   }
 
-  function _buildModelEntry(m) {
-    return {
-      id:       m.id,
-      name:     m.name ?? window.MODEL_NAMES?.[m.id] ?? window.formatModelId(m.id),
-      provider: m.provider,
-      note:     m.provider,
-      latency:  0,
-      current:  true,
-      input:    m.input,
-      reasoning: m.reasoning,
-      thinking:  m.thinking,
-    };
-  }
-
   function _syncCurrentModel() {
     if (!state.model || !Array.isArray(state.models) || state.models.length === 0) return;
     const match = state.models.find(m => m.id === state.model.id && (!state.model.provider || m.provider === state.model.provider))
@@ -1753,77 +1690,6 @@
     state.ctx = window.buildCtx(state.rpcState, state.sessionCost, state.currentTps);
   }
 
-  async function _loadCustomModelsFromConfig() {
-    if (!window.__TAURI__) return { customModels: [], customProviders: new Set() };
-    try {
-      const res = await window.__TAURI__.core.invoke("read_models_config");
-      if (!res?.content || !window.YamlUtil?.parseModelsYaml) {
-        return { customModels: [], customProviders: new Set() };
-      }
-      const parsed = window.YamlUtil.parseModelsYaml(res.content);
-      const customModels = [];
-      const providers = parsed?.providers || {};
-      const customProviders = new Set(Object.keys(providers));
-
-      for (const [providerName, pConfig] of Object.entries(providers)) {
-        if (!pConfig || !Array.isArray(pConfig.models)) continue;
-        for (const m of pConfig.models) {
-          if (!m || !m.id) continue;
-          customModels.push({
-            id:            m.id,
-            name:          m.name || m.id,
-            provider:      providerName,
-            note:          providerName,
-            latency:       0,
-            current:       state.rpcState?.model?.id === m.id || state.model?.id === m.id,
-            contextWindow: m.contextWindow,
-            maxTokens:     m.maxTokens,
-            reasoning:     !!m.reasoning,
-            thinking:      m.thinking,
-            input:         m.input ?? (m.images ? ["text", "image"] : ["text"]),
-          });
-        }
-      }
-      return { customModels, customProviders };
-    } catch (e) {
-      console.warn("[live] Failed to read models.yml for custom models:", e);
-      return { customModels: [], customProviders: new Set() };
-    }
-  }
-
-  function _mergeModels(baseList, { customModels }) {
-    const modelKey = m => `${m.provider || ""}/${m.id || ""}`;
-    const customMap = new Map((customModels || []).map(m => [modelKey(m), m]));
-    const customById = new Map((customModels || []).map(m => [m.id, m]));
-
-    // Retain all base models (including OAuth & builtins), enriching matching ones with custom metadata
-    const merged = (baseList || []).map(m => {
-      const key = modelKey(m);
-      if (customMap.has(key)) {
-        const custom = customMap.get(key);
-        customMap.delete(key);
-        customById.delete(m.id);
-        return { ...m, ...custom };
-      }
-      if (customById.has(m.id)) {
-        const custom = customById.get(m.id);
-        customMap.delete(modelKey(custom));
-        customById.delete(m.id);
-        return { ...m, ...custom };
-      }
-      return m;
-    });
-
-    // Append any additional custom models not present in baseList
-    for (const cm of customMap.values()) {
-      if (customById.has(cm.id)) {
-        merged.push(cm);
-        customById.delete(cm.id);
-      }
-    }
-    return merged;
-  }
-
   // omp silently drops every custom provider when models.yml fails its schema
   // validation, while PiDesk still lists those models from the file. When
   // custom models are missing from omp's list, ask `omp models` why (it prints
@@ -2372,182 +2238,7 @@
       await _switchToSession(id);
     },
 
-    /** List saved sessions on disk (~/.omp/agent/sessions). */
-    async listSavedSessions(cwd = null) {
-      if (!window.__TAURI__) return [];
-      try {
-        const sessions = await window.__TAURI__.core.invoke("list_saved_sessions", { cwd: cwd || null });
-        return sessions || [];
-      } catch (err) {
-        console.error("[live] listSavedSessions error:", err);
-        return [];
-      }
-    },
-
-    /** Get default cwd for standalone sessions. */
-    async getDefaultCwd() {
-      if (!window.__TAURI__) return null;
-      try {
-        const dir = await window.__TAURI__.core.invoke("get_default_cwd");
-        if (dir && window.RecentProjects?.setDefaultCwd) {
-          window.RecentProjects.setDefaultCwd(dir);
-        }
-        return dir;
-      } catch {
-        return null;
-      }
-    },
-
-    /**
-     * Permanently delete a saved session from disk.
-     * `path` is the full path to the session's `.jsonl` file (from listSavedSessions).
-     * The entire parent session folder is removed.
-     */
-    async deleteSavedSession(path) {
-      if (!window.__TAURI__) return;
-      await window.__TAURI__.core.invoke("delete_saved_session", { path });
-    },
-
-    /** Read models.yml configuration from disk. */
-    async readModelsConfig() {
-      if (!window.__TAURI__) return { path: "", content: "", exists: false };
-      try {
-        return await window.__TAURI__.core.invoke("read_models_config");
-      } catch (err) {
-        console.error("[live] readModelsConfig error:", err);
-        throw err;
-      }
-    },
-
-    /** Write models.yml configuration to disk. */
-    async writeModelsConfig(content) {
-      if (!window.__TAURI__) return;
-      try {
-        await window.__TAURI__.core.invoke("write_models_config", { content });
-      } catch (err) {
-        console.error("[live] writeModelsConfig error:", err);
-        throw err;
-      }
-    },
-
-    /** Open models.yml in the system default text editor. */
-    async openModelsFile() {
-      if (!window.__TAURI__) return;
-      try {
-        await window.__TAURI__.core.invoke("open_models_file");
-      } catch (err) {
-        console.error("[live] openModelsFile error:", err);
-        throw err;
-      }
-    },
-
-    /** Open models directory in the file explorer. */
-    async openModelsFolder() {
-      if (!window.__TAURI__) return;
-      try {
-        await window.__TAURI__.core.invoke("open_models_folder");
-      } catch (err) {
-        console.error("[live] openModelsFolder error:", err);
-        throw err;
-      }
-    },
-
-    /** List directory contents */
-    async listDirectory(path) {
-      if (!window.__TAURI__) return [];
-      try {
-        return await window.__TAURI__.core.invoke("list_directory", { path });
-      } catch (err) {
-        console.error("[live] listDirectory error:", err);
-        throw err;
-      }
-    },
-
-    /** Rename file or directory */
-    async renameFile(oldPath, newPath) {
-      if (!window.__TAURI__) return;
-      try {
-        await window.__TAURI__.core.invoke("rename_file", { oldPath, newPath });
-      } catch (err) {
-        console.error("[live] renameFile error:", err);
-        throw err;
-      }
-    },
-
-    /** Delete file or directory */
-    async deleteFileOrDir(path) {
-      if (!window.__TAURI__) return;
-      try {
-        await window.__TAURI__.core.invoke("delete_file_or_dir", { path });
-      } catch (err) {
-        console.error("[live] deleteFileOrDir error:", err);
-        throw err;
-      }
-    },
-
-    /** Open with default application */
-    async openPathDefault(path) {
-      if (!window.__TAURI__) return;
-      try {
-        await window.__TAURI__.core.invoke("open_path_default", { path });
-      } catch (err) {
-        console.error("[live] openPathDefault error:", err);
-        throw err;
-      }
-    },
-
-    /** Open a file in the external editor command configured in Tweaks */
-    async openWithEditor(editor, path) {
-      if (!window.__TAURI__) return;
-      try {
-        await window.__TAURI__.core.invoke("open_with_editor", { editor, path });
-      } catch (err) {
-        console.error("[live] openWithEditor error:", err);
-        throw err;
-      }
-    },
-
-    /** Reveal in OS file manager */
-    async revealInExplorer(path) {
-      if (!window.__TAURI__) return;
-      try {
-        await window.__TAURI__.core.invoke("reveal_in_explorer", { path });
-      } catch (err) {
-        console.error("[live] revealInExplorer error:", err);
-        throw err;
-      }
-    },
-
-    /** Start watching files in a directory for auto-refresh */
-    async startFilesWatch(watchId, path) {
-      if (!window.__TAURI__) return;
-      try {
-        await window.__TAURI__.core.invoke("start_file_watch", { watchId, path });
-      } catch (err) {
-        console.error("[live] startFilesWatch error:", err);
-      }
-    },
-
-    /** Stop watching files in a directory */
-    async stopFilesWatch(watchId) {
-      if (!window.__TAURI__) return;
-      try {
-        await window.__TAURI__.core.invoke("stop_file_watch", { watchId });
-      } catch (err) {
-        console.error("[live] stopFilesWatch error:", err);
-      }
-    },
-
-    /** Get application version from Tauri backend. */
-    async getAppVersion() {
-      if (!window.__TAURI__) return "0.3.0";
-      try {
-        return await window.__TAURI__.core.invoke("get_app_version");
-      } catch (err) {
-        console.error("[live] getAppVersion error:", err);
-        return "0.3.0";
-      }
-    },
+    ...window._Live.TauriApi,
 
     /** Resume a saved session into a new tab (or switch to existing tab if already opened). */
     async resumeSession(session) {
@@ -2674,12 +2365,6 @@
       } else {
         notify(); // tab list changed
       }
-    },
-
-    /** Open native folder picker and return the chosen path (or null). */
-    async pickFolder() {
-      if (!window.__TAURI__) return null;
-      return window.__TAURI__.core.invoke("open_project");
     },
 
     /** Subscribe to state snapshots. Returns an unsubscribe function. */

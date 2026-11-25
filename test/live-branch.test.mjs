@@ -14,6 +14,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { join, dirname } from 'path';
 import './helpers/shim.mjs';
+import { loadLive } from './helpers/load-live.mjs';
 
 const SRC = join(dirname(fileURLToPath(import.meta.url)), '../src');
 function loadScript(rel) {
@@ -26,7 +27,7 @@ loadScript('app/message-merge.js');
 loadScript('app/branch-session.js');
 loadScript('undo-bridge.js');
 loadScript('export-bridge.js');
-loadScript('live.js');
+loadLive();
 
 const bridge = globalThis.OMP_BRIDGE;
 const NEWEST_FILE = 'C:\\sessions\\proj\\newest.jsonl';

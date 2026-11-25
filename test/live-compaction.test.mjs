@@ -11,11 +11,13 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { join, dirname } from 'path';
 import './helpers/shim.mjs';
+import { loadLive } from './helpers/load-live.mjs';
 
 const SRC = join(dirname(fileURLToPath(import.meta.url)), '../src');
-for (const rel of ['peer-session.js', 'app/undo-message.js', 'undo-bridge.js', 'export-bridge.js', 'live.js']) {
+for (const rel of ['peer-session.js', 'app/undo-message.js', 'undo-bridge.js', 'export-bridge.js']) {
   new Function(readFileSync(join(SRC, rel), 'utf-8'))();
 }
+loadLive();
 const bridge = globalThis.OMP_BRIDGE;
 const ev = (e) => bridge._handleEvent(e);
 const cards = () => bridge.getState().messages.filter((m) => m.kind === 'compact');

@@ -14,6 +14,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { join, dirname } from 'path';
 import './helpers/shim.mjs';
+import { loadLive } from './helpers/load-live.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = join(HERE, '../src');
@@ -28,7 +29,7 @@ loadScript('app/message-merge.js');
 loadScript('app/branch-session.js');
 loadScript('undo-bridge.js');
 loadScript('export-bridge.js');
-loadScript('live.js');
+loadLive();
 
 const bridge = globalThis.OMP_BRIDGE;
 const OTHER = 'Other (type your own)';
