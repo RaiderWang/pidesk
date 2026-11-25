@@ -6,8 +6,10 @@
 
      rt.session — per-tab volatile vars, wiped by reset(). save()/restore()
                   carry streamingBubble, activeToolCards, tpsSamples,
-                  turnStartTime and activityLog; compactBackfillId (reset only)
-                  and sessionFresh (set by the tab switch) deliberately do not.
+                  turnStartTime, activityLog and compactBackfillId (so a compact
+                  finished just before a tab switch is still back-filled when its
+                  tab is re-activated, and never leaks into another tab). sessionFresh
+                  is deliberately not carried: the tab switch sets it explicitly.
      rt.conn    — transport / active-session bookkeeping. Never part of a
                   snapshot and never touched by reset(); a tab switch drops or
                   re-arms it explicitly. (The ask handshake is private to events-ui.)
@@ -65,8 +67,6 @@
         tpsSamples:         Array(30).fill(0),
         turnStartTime:      null,
         activityLog:        [],                // [{ts, toolName}], pruned to 60s
-        // Not saved/restored with a tab (known gap: it can outlive a switch; harmless today
-        // because the back-fill only matches a compact card with that id).
         compactBackfillId:  null,              // compact msg id awaiting tokensAfter back-fill
         // Not touched by reset()/save()/restore(): _switchToSession sets it per switch.
         sessionFresh:       false,             // true when the active tab started fresh (no snapshot)
@@ -258,6 +258,7 @@
         tpsSamples:    [...s.tpsSamples],
         turnStartTime: s.turnStartTime,
         activityLog:   [...s.activityLog],
+        compactBackfillId: s.compactBackfillId,
       });
     }
 
@@ -297,6 +298,7 @@
       s.tpsSamples      = snap.tpsSamples;
       s.turnStartTime   = snap.turnStartTime;
       s.activityLog     = snap.activityLog;
+      s.compactBackfillId = snap.compactBackfillId ?? null;
       return true;
     }
 

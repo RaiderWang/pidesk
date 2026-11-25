@@ -51,7 +51,7 @@
       pendingSetModel.length = 0;
 
       // Tear down old listeners
-      for (const ul of rt.conn.activeListeners) { try { await ul(); } catch (_) {} }
+      for (const ul of rt.conn.activeListeners) { try { await ul(); } catch {} }
       rt.conn.activeListeners = [];
 
       rt.conn.activeSessionId = id;

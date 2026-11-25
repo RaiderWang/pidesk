@@ -523,7 +523,7 @@
     },
 
     _handleLine(line) {
-      _dispatchLine(line);
+      handleLine(line);
     },
 
     _handleResponse(resp) {

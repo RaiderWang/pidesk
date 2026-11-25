@@ -127,17 +127,31 @@ describe('runtime — save / restore / reset', () => {
     assert.equal(rt.conn.agentStarting, true);
   });
 
-  it('compactBackfillId and sessionFresh are not part of a snapshot (documented gap)', () => {
+  it('compactBackfillId travels with the tab; sessionFresh does not (the tab switch sets it)', () => {
     rt.conn.activeSessionId = 'A';
     rt.session.compactBackfillId = 'c1';
     rt.session.sessionFresh = true;
     runtime.save();
     const snap = sessionSnapshots.get('A');
-    assert.ok(!('compactBackfillId' in snap));
+    assert.equal(snap.compactBackfillId, 'c1');
     assert.ok(!('sessionFresh' in snap));
+
+    rt.session.compactBackfillId = 'other-tab';
     runtime.restore('A');
     assert.equal(rt.session.compactBackfillId, 'c1');
-    assert.equal(rt.session.sessionFresh, true);
+    assert.equal(rt.session.sessionFresh, true); // untouched by restore
+  });
+
+  it('restoring a tab without a pending back-fill clears one left by another tab', () => {
+    sessionSnapshots.set('B', {
+      messages: [], isStreaming: false, model: null, thinkingLevel: null, ctx: {}, kanban: [],
+      planMeta: {}, models: [], activity: [], sparkline: [], rpcState: null, sessionCost: null,
+      currentTps: 0, streamingBubble: null, activeToolCards: new Map(), tpsSamples: [],
+      turnStartTime: null, activityLog: [],
+    });
+    rt.session.compactBackfillId = 'leftover';
+    runtime.restore('B');
+    assert.equal(rt.session.compactBackfillId, null);
   });
 });
 
