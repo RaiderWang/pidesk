@@ -19,6 +19,7 @@ function EvalCell({ cell }) {
   // actually running. Finished cells and never-executed "pending" ones (after
   // an earlier cell failed) read from the top.
   const running = cell.status === "running";
+  const runningLabel = window.t ? window.t("chat.running", null, "running") : "running";
   const codeRef = React.useRef(null);
   const outRef  = React.useRef(null);
   const onCodeScroll = window.useStickScroll(codeRef, [cell.code], { active: running });
@@ -31,7 +32,7 @@ function EvalCell({ cell }) {
         {cell.title && <span className="eval-title">{cell.title}</span>}
         {cell.durationMs != null
           ? <span className="eval-dur" style={{ marginLeft: "auto" }}>{cell.durationMs}ms</span>
-          : cell.status === "running" && <span className="shimmer-text" style={{ marginLeft: "auto", fontSize: 10 }}>running…</span>
+          : running && <span className="run-orb" role="img" aria-label={runningLabel} title={runningLabel} />
         }
       </div>
       {cell.code && (

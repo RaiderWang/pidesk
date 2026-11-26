@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Running tools show a glowing orb instead of a "running" pill**: the text chip on tool cards, the compact card and eval cells wrapped onto two lines in narrow windows. It is now a text-free pulsing orb in the accent colour (follows the theme and custom accent; animates only `transform`/`opacity`, and keeps pulsing even when the OS has animations turned off, like the app's other activity indicators). "running" stays available as the hover tooltip and screen-reader label. Tool-card header chips (`aborted`, duration, time, tool tag) also no longer shrink or wrap — the title takes the ellipsis instead.
+
 ### Fixed
 
 - **File tree now refreshes on its own**: the Files panel only updated through the manual refresh button. Every auto-refresh source now goes through one cooldown gate: the OS watcher, the agent finishing a file-writing tool or a turn (so it works even where the OS reports nothing, e.g. sync folders or network drives), and the window regaining focus. If the watcher cannot start you get a toast and a 5 s poll instead of silence. Backend hardening: only changes under the project root are judged (a parent folder called `build` or `target` no longer silences the project), ignored folders such as `node_modules` / `target` / `.git` no longer cause refresh storms, new `Cargo.lock` / `*.lock` files show up, OS overflow/rescan events trigger a refresh, bursts are capped at 1 s instead of being starved by a steady stream of writes, and a panel closed while a watch is still starting can no longer leak a watcher. Switching projects resets the tree state (expanded folders, rename) and deleted expanded folders are dropped instead of failing every refresh.

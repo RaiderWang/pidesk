@@ -27,6 +27,7 @@ const CompactRow = React.memo(function CompactRow({ msg }) {
   const tokAfter  = fmtTok(msg.tokensAfter);
   const hasBody   = !!msg.summary && !pending && !error;
   const t = window.t;
+  const runningLabel = t ? t("chat.running", null, "running") : "running";
 
   // Build the token-stats chip label:
   //   both present → "26.2k → 24.1k"
@@ -62,11 +63,7 @@ const CompactRow = React.memo(function CompactRow({ msg }) {
               : (msg.shortSummary || (t ? t("chat.compacted", null, "context compacted") : "context compacted"))}
           </span>
           <div className="tool-card-spacer" />
-          {pending && (
-            <span className="chip accent" style={{ animation: "pulseDot 1.4s infinite" }}>
-              <span className="dot live" />{" "}{t ? t("chat.running", null, "running") : "running"}
-            </span>
-          )}
+          {pending && <span className="run-orb" role="img" aria-label={runningLabel} title={runningLabel} />}
           {!pending && !error && tokLabel && (
             <span className="chip muted mono">{tokLabel}</span>
           )}

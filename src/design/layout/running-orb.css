@@ -1,0 +1,49 @@
+/* Running indicator: a text-free glowing orb (tool cards, compact card, eval
+   cells). Only transform/opacity are animated, so the loop stays on the
+   compositor in WebView2 and WKWebKit. Re-colour with `--orb-color`. */
+.run-orb {
+  --orb-size: 10px;
+  --orb-color: var(--accent);
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  width: var(--orb-size);
+  height: var(--orb-size);
+  margin: 0 2px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 35% 30%,
+    color-mix(in oklab, var(--orb-color) 45%, white) 0%,
+    var(--orb-color) 60%
+  );
+  animation: runOrbCore 1.4s ease-in-out infinite;
+}
+.run-orb::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--orb-color) 45%, transparent) 0%,
+    color-mix(in oklab, var(--orb-color) 18%, transparent) 50%,
+    transparent 72%
+  );
+  pointer-events: none;
+  animation: runOrbHalo 1.4s ease-in-out infinite;
+}
+/* Core and halo swell together; the halo's scale is relative to the core
+   (it is a child), so its on-screen size is core scale x halo scale. */
+@keyframes runOrbCore {
+  0%, 100% { opacity: 1;    transform: scale(1.2); }
+  50%      { opacity: 0.85; transform: scale(0.55); }
+}
+@keyframes runOrbHalo {
+  0%, 100% { opacity: 1;    transform: scale(1.3); }
+  50%      { opacity: 0.2;  transform: scale(0.7); }
+}
+.eval-cell-head .run-orb { --orb-size: 8px; margin-left: auto; }
+
+/* Header chips never shrink or wrap; the title takes the ellipsis. */
+.tool-card-head > .chip,
+.tool-card-head > .tool-tag { white-space: nowrap; flex-shrink: 0; }

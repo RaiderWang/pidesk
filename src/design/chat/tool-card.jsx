@@ -143,6 +143,7 @@ function TaskPanel({ subagents }) {
 function ToolCard({ msg, idx, highlighted }) {
   const meta    = _TC_TOOL_META[msg.tool] || { color: "var(--fg-3)", icon: "circle", label: msg.tool };
   const running = msg.status === "running";
+  const runningLabel = window.t ? window.t("chat.running", null, "running") : "running";
 
   // Check if there are details below the header
   const hasDetails = Boolean(
@@ -193,9 +194,7 @@ function ToolCard({ msg, idx, highlighted }) {
           <span className="tool-title selectable">{msg.title}</span>
           <div className="tool-card-spacer" />
           {running ? (
-            <span className="chip accent" style={{ animation: "pulseDot 1.4s infinite" }}>
-              <span className="dot live" /> {window.t ? window.t("chat.running", null, "running") : "running"}
-            </span>
+            <span className="run-orb" role="img" aria-label={runningLabel} title={runningLabel} />
           ) : msg.status === "aborted" ? (
             <span className="chip" style={{ color: "var(--amber)", borderColor: "color-mix(in oklab, var(--amber) 30%, var(--line))" }}>
               <span className="dot" style={{ background: "var(--amber)" }} /> {window.t ? window.t("chat.aborted", null, "aborted") : "aborted"}
