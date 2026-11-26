@@ -115,6 +115,44 @@ describe('events-tool — update / end', () => {
     assert.equal(lines[1999], 'l2499');
   });
 
+  it('end of a write-class tool bumps fsEpoch; a read-only tool does not', () => {
+    const before = rt.seq.fsEpoch;
+    start('r1', 'read', { path: 'a.rs' });
+    end('r1', { toolName: 'read' });
+    start('g1', 'grep', { pattern: 'x' });
+    end('g1', { toolName: 'grep' });
+    assert.equal(rt.seq.fsEpoch, before, 'look-only tools leave the tree alone');
+
+    start('b1', 'bash', { command: 'touch a' });
+    end('b1', { toolName: 'bash' });
+    assert.equal(rt.seq.fsEpoch, before + 1);
+    start('e1', 'edit', { path: 'a.rs' });
+    end('e1', { toolName: 'edit' });
+    assert.equal(rt.seq.fsEpoch, before + 2);
+  });
+
+  it('end frame without toolName falls back to the tracked tool', () => {
+    const before = rt.seq.fsEpoch;
+    start('r2', 'read', { path: 'a.rs' });
+    h.tool_execution_end({ type: 'tool_execution_end', toolCallId: 'r2' });
+    assert.equal(rt.seq.fsEpoch, before, 'tracked "read" is still read-only');
+    start('w2', 'write', { path: 'a.rs' });
+    h.tool_execution_end({ type: 'tool_execution_end', toolCallId: 'w2' });
+    assert.equal(rt.seq.fsEpoch, before + 1);
+  });
+
+  it('an empty toolName on the end frame also falls back to the tracked tool', () => {
+    const before = rt.seq.fsEpoch;
+    start('r3', 'read', { path: 'a.rs' });
+    h.tool_execution_end({ type: 'tool_execution_end', toolCallId: 'r3', toolName: '' });
+    assert.equal(rt.seq.fsEpoch, before, '"" must not be mistaken for a writer');
+  });
+
+  it('fsEpoch is part of the bridge snapshot', () => {
+    rt.seq.fsEpoch = 7;
+    assert.equal(runtime.buildSnapshot().fsEpoch, 7);
+  });
+
   it('end truncates final output the same way and records status + duration', () => {
     start('t1');
     const output = Array.from({ length: 2100 }, (_, i) => `o${i}`).join('\n');

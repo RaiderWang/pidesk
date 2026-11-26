@@ -122,6 +122,12 @@ describe('events-message — turns', () => {
     assert.equal(notified, 1);
   });
 
+  it('turn_end bumps fsEpoch once as the file tree catch-all refresh', () => {
+    const before = rt.seq.fsEpoch;
+    h.turn_end({ type: 'turn_end' });
+    assert.equal(rt.seq.fsEpoch, before + 1);
+  });
+
   it('turn_end without usage leaves TPS and cost alone', () => {
     rt.session.turnStartTime = Date.now() - 1000;
     h.turn_end({ type: 'turn_end' });

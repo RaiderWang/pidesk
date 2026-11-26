@@ -62,6 +62,11 @@ describe('live/tauri-api.js — no Tauri runtime (demo mode)', () => {
     assert.equal(await api.writeModelsConfig('x'), undefined);
     assert.equal(await api.deleteSavedSession('/a.jsonl'), undefined);
   });
+
+  it('startFilesWatch reports "unavailable" so the UI neither toasts nor polls', async () => {
+    delete globalThis.window.__TAURI__;
+    assert.deepEqual(await api.startFilesWatch('w', '/p'), { ok: false, unavailable: true });
+  });
 });
 
 describe('live/tauri-api.js — invoke wiring', () => {
@@ -138,9 +143,22 @@ describe('live/tauri-api.js — invoke wiring', () => {
       await assert.rejects(api.renameFile('/a', '/b'), /denied/);
       await assert.rejects(api.readModelsConfig(), /denied/);
       await assert.rejects(api.writeModelsConfig('x'), /denied/);
-      await api.startFilesWatch('w', '/p');
       await api.stopFilesWatch('w');
     });
+  });
+
+  it('startFilesWatch resolves to a tri-state result and never throws', async () => {
+    mockTauri(() => undefined);
+    assert.deepEqual(await api.startFilesWatch('w', '/p'), { ok: true });
+
+    mockTauri(() => { throw new Error('Directory does not exist: /p'); });
+    const failed = await silent(() => api.startFilesWatch('w', '/p'));
+    assert.deepEqual(failed, { ok: false, error: 'Directory does not exist: /p' });
+
+    // Tauri rejects with a plain string for `Err(String)` commands.
+    mockTauri(() => { throw 'Failed to watch directory'; });
+    const asString = await silent(() => api.startFilesWatch('w', '/p'));
+    assert.deepEqual(asString, { ok: false, error: 'Failed to watch directory' });
   });
 
   it('getAppVersion returns the backend value and falls back on error', async () => {

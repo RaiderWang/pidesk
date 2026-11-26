@@ -46,6 +46,8 @@ function useBridgeSnapshot(bridge, setters) {
       // Background async work & settlement (omp 18.4+)
       setters.setHasPendingAsyncWork?.(snap.hasPendingAsyncWork ?? false);
       setters.setIsSettled?.(snap.isSettled ?? true);
+      // File tree refresh signal (bumps when the agent may have changed files)
+      setters.setFsEpoch?.(snap.fsEpoch ?? 0);
     });
     return unsub;
   }, [bridge]);
