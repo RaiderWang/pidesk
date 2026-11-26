@@ -65,6 +65,7 @@
       state.turnStartMs = null;
       state.runningTools = [];
       s.streamingBubble = null;
+      rt.seq.fsEpoch += 1; // catch-all file tree refresh (e.g. an `lsp` rename, or a missed end frame)
       settleInFlightActions({ aborted: false });
       const usage = ev.message?.usage;
       if (s.turnStartTime) {

@@ -85,6 +85,9 @@ loadScript('app/fuzzy.js');
 loadScript('app/palette-query.js');
 loadScript('app/model-groups.js');
 loadScript('app/file-index.js');
+loadScript('app/file-watch-match.js');
+loadScript('app/refresh-gate.js');
+loadScript('app/fs-activity.js');
 loadScript('app/plan-stats.js');
 loadScript('app/dock-layout.js');
 loadScript('app/dock-state.js');
@@ -152,6 +155,9 @@ export const AppShortcuts = globalThis.AppShortcuts;
 export const Fuzzy = globalThis.Fuzzy;
 export const PaletteQuery = globalThis.PaletteQuery;
 export const FileIndex = globalThis.FileIndex;
+export const FileWatchMatch = globalThis.FileWatchMatch;
+export const RefreshGate = globalThis.RefreshGate;
+export const FsActivity = globalThis.FsActivity;
 
 // app/model-groups.js namespace object (window.ModelGroups)
 export const ModelGroups = globalThis.ModelGroups;

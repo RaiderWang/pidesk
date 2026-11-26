@@ -122,6 +122,7 @@ function App() {
   const [modelsConfigWarning, setModelsConfigWarning] = React.useState(null);
   const [hasPendingAsyncWork, setHasPendingAsyncWork] = React.useState(false);
   const [isSettled,           setIsSettled]           = React.useState(true);
+  const [fsEpoch,             setFsEpoch]             = React.useState(0); // file tree refresh signal
 
   // ── Tab list — driven by bridge session registry ──────────────────────────
   // Each entry: { id, name, path, color, branch }
@@ -177,7 +178,7 @@ function App() {
     setRunningTools, setRecentTools, setTurnStartMs,
     setHubMode, setHubAgents, setHubHistory,
     setAgentError, setAgentStarting, setModelsConfigWarning, setToolLogs,
-    setHasPendingAsyncWork, setIsSettled,
+    setHasPendingAsyncWork, setIsSettled, setFsEpoch,
   });
   useThemeEffect(t);
   // Fetch OAuth providers whenever the login view opens (ensures fresh auth status)
@@ -475,7 +476,9 @@ function App() {
             />
             {stage.files && (
               <FileTreePanel
+                key={activeProject.path}
                 rootPath={activeProject.path}
+                refreshSignal={fsEpoch}
                 projectName={activeProject.name}
                 onClose={handleToggleFiles}
                 bridge={bridge}

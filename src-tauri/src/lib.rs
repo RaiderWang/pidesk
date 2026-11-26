@@ -175,23 +175,6 @@ fn stop_git_watch(session_id: String, watcher: State<'_, GitWatcherState>) {
     watcher.stop(&session_id);
 }
 
-/// Start watching a project directory for file changes.
-#[tauri::command]
-fn start_file_watch(
-    watch_id: String,
-    path: String,
-    watcher: State<'_, FileWatcherState>,
-    app: tauri::AppHandle,
-) -> Result<(), String> {
-    watcher.start(&watch_id, &path, app)
-}
-
-/// Stop watching a project directory for file changes.
-#[tauri::command]
-fn stop_file_watch(watch_id: String, watcher: State<'_, FileWatcherState>) {
-    watcher.stop(&watch_id);
-}
-
 /// Open a URL in the system default browser.
 /// Uses the `open` crate (`ShellExecute` on Windows, `xdg-open` on Linux, `open` on macOS).
 /// `window.open(url, "_blank")` creates a Tauri webview instead — this is the correct
@@ -320,8 +303,8 @@ pub fn run() {
             open_project,
             start_git_watch,
             stop_git_watch,
-            start_file_watch,
-            stop_file_watch,
+            file_watcher::start_file_watch,
+            file_watcher::stop_file_watch,
             open_url_external,
             list_saved_sessions,
             models_config::read_models_config,

@@ -151,13 +151,19 @@
       }
     },
 
-    /** Start watching files in a directory for auto-refresh */
+    /**
+     * Start watching files in a directory for auto-refresh.
+     * Never throws; resolves to `{ ok: true }`, `{ ok: false, unavailable: true }`
+     * (no Tauri, e.g. demo mode: nothing to report) or `{ ok: false, error }`.
+     */
     async startFilesWatch(watchId, path) {
-      if (!window.__TAURI__) return;
+      if (!window.__TAURI__) return { ok: false, unavailable: true };
       try {
         await window.__TAURI__.core.invoke("start_file_watch", { watchId, path });
+        return { ok: true };
       } catch (err) {
         console.error("[live] startFilesWatch error:", err);
+        return { ok: false, error: String(err?.message ?? err) };
       }
     },
 

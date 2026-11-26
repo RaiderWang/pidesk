@@ -3,7 +3,8 @@
    Owns the ephemeral tool cards in chat, the running/recent tool trail, tool
    log buffers, Agent Hub task tracking and the activity sparkline log.
    Registers window._Live.EventsTool; load after runtime.js and todo-phases.js.
-   Depends on window.ToolTarget (app/tool-target.js) for the display target. */
+   Depends on window.ToolTarget (app/tool-target.js) for the display target and
+   window.FsActivity (app/fs-activity.js) to bump `rt.seq.fsEpoch` on file-writing tools. */
 (function () {
   "use strict";
   window._Live = window._Live || {};
@@ -165,6 +166,9 @@
         const raw = ev.result?.details?.phases ?? ev.result?.details?.todos ?? ev.result?.details ?? ev.result?.phases ?? ev.result?.todos ?? ev.result;
         todo.apply(raw, { fallback: raw?.phases ?? raw ?? [] });
       }
+      // A tool that may have written files: let the file tree refresh now
+      // rather than wait for the turn to end. (`toolName` may be absent on the end frame.)
+      if (window.FsActivity.mayChangeFiles(ev.toolName || finished?.tool)) rt.seq.fsEpoch += 1;
       // Ephemeral tool card: remove finished card from chat messages array
       state.messages = state.messages.filter(m => m !== card && m._toolCallId !== ev.toolCallId);
       // Only the ask tool owns ask bubbles; another tool ending must not disturb an in-flight handshake.

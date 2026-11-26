@@ -220,6 +220,7 @@
       "files.error.rename": "Failed to rename: {error}",
       "files.error.delete": "Failed to delete: {error}",
       "files.error.openEditor": "Failed to open in editor: {error}",
+      "files.error.watch": "Can't watch this folder for changes ({error}). Refreshing periodically instead.",
 
       // Composer
       "composer.placeholder.default": "what should we ship?  ·  / for commands  ·  ⌘K for the bridge",
@@ -814,6 +815,7 @@
       "files.error.rename": "重命名失败：{error}",
       "files.error.delete": "删除失败：{error}",
       "files.error.openEditor": "用外部编辑器打开失败：{error}",
+      "files.error.watch": "无法监视该文件夹的变化（{error}），已改为定时刷新。",
 
       // Composer
       "composer.placeholder.default": "需要执行什么任务？ · 输入 / 查看指令 · ⌘K/Ctrl+K 打开指令桥",

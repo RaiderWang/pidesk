@@ -253,6 +253,20 @@ describe('known-key spot-checks', () => {
     setLocale('en');
   });
 
+  it('files.error.watch resolves in en and zh-CN with {error} interpolated', () => {
+    setLocale('en');
+    const en = t('files.error.watch', { error: 'denied' });
+    assert.match(en, /Can't watch this folder for changes \(denied\)/);
+    assert.ok(!en.includes('{error}'));
+
+    setLocale('zh-CN');
+    const zh = t('files.error.watch', { error: 'denied' });
+    assert.match(zh, /（denied）/);
+    assert.ok(!zh.includes('{error}'));
+    assert.notEqual(zh, en);
+    setLocale('en');
+  });
+
   it('file reference strings resolve in en and zh-CN', () => {
     setLocale('en');
     assert.equal(t('files.menu.reference'), 'Reference File');

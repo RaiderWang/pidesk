@@ -81,6 +81,7 @@
         msg:     0, // stable React keys for message bubbles
         session: 0, // unique session ids across rapid opens
         cmd:     1, // client-generated command ids
+        fsEpoch: 0, // bumps when the agent may have changed files (file tree refresh signal)
       },
     };
   }
@@ -214,6 +215,7 @@
         toolLogs:        state.toolLogs,
         hasPendingAsyncWork: state.hasPendingAsyncWork,
         isSettled:       state.isSettled,
+        fsEpoch:         rt.seq.fsEpoch,
       };
     }
 

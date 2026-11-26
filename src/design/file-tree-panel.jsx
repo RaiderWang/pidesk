@@ -201,7 +201,7 @@ function FileTreeNode({
   );
 }
 
-function FileTreePanel({ rootPath, projectName, onClose, bridge, width, onWidthChange, externalEditor }) {
+function FileTreePanel({ rootPath, projectName, onClose, bridge, width, onWidthChange, externalEditor, refreshSignal }) {
   const [rootEntries, setRootEntries] = React.useState([]);
   const [expandedPaths, setExpandedPaths] = React.useState(new Set());
   const [childrenMap, setChildrenMap] = React.useState(new Map());
@@ -227,6 +227,7 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge, width, onWidthC
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const isRefreshingRef = React.useRef(false);
   const pendingRefreshRef = React.useRef(false);
+  const refreshSkippedRef = React.useRef(false);
   const expandedPathsRef = React.useRef(expandedPaths);
   expandedPathsRef.current = expandedPaths;
   const renamingRef = React.useRef(renamingPath);
@@ -327,8 +328,10 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge, width, onWidthC
         do {
           pendingRefreshRef.current = false;
 
-          // If currently editing/renaming inline, skip to avoid clobbering input focus
+          // If currently editing/renaming inline, skip to avoid clobbering input
+          // focus; the rename-end effect below replays the skipped refresh.
           if (renamingRef.current) {
+            refreshSkippedRef.current = true;
             break;
           }
 
@@ -352,19 +355,35 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge, width, onWidthC
           const currentExpanded = Array.from(expandedPathsRef.current);
           if (currentExpanded.length > 0 && bridge?.listDirectory) {
             const updates = [];
+            const gone = [];
             for (const p of currentExpanded) {
               try {
                 const children = await bridge.listDirectory(p);
                 updates.push([p, children]);
               } catch (err) {
+                // Deleted / unreadable folder: forget it instead of failing on
+                // every later refresh.
                 console.error("Refresh subfolder failed:", p, err);
+                gone.push(p);
               }
             }
-            if (updates.length > 0) {
+            if (updates.length > 0 || gone.length > 0) {
               setChildrenMap((prev) => {
                 const next = new Map(prev);
                 for (const [p, ch] of updates) {
                   next.set(p, ch);
+                }
+                for (const p of gone) {
+                  next.delete(p);
+                }
+                return next;
+              });
+            }
+            if (gone.length > 0) {
+              setExpandedPaths((prev) => {
+                const next = new Set(prev);
+                for (const p of gone) {
+                  next.delete(p);
                 }
                 return next;
               });
@@ -379,53 +398,32 @@ function FileTreePanel({ rootPath, projectName, onClose, bridge, width, onWidthC
     [rootPath, bridge, showToast]
   );
 
-  // Auto-watch filesystem changes for rootPath
+  // OS watcher + agent / focus fallbacks, all through one cooldown gate.
+  const handleWatchError = React.useCallback(
+    (error) => {
+      const msg = error || "unknown";
+      const fallback = `Can't watch this folder for changes (${msg}). Refreshing periodically instead.`;
+      showToast(
+        window.t ? window.t("files.error.watch", { error: msg }, fallback) : fallback,
+        "error"
+      );
+    },
+    [showToast]
+  );
+  window.useFileTreeWatch({
+    rootPath,
+    bridge,
+    refresh: () => handleRefreshAll(true),
+    refreshSignal,
+    onWatchError: handleWatchError,
+  });
+
+  // A refresh skipped because a rename was in progress runs once it ends.
   React.useEffect(() => {
-    if (!rootPath) return;
-
-    const watchId = rootPath;
-    let unlisten = null;
-    let active = true;
-
-    // Start watching directory via Tauri backend
-    bridge?.startFilesWatch?.(watchId, rootPath);
-
-    if (window.__TAURI__?.event?.listen) {
-      window.__TAURI__.event
-        .listen("files://changed", (event) => {
-          if (!active) return;
-          const payload = event.payload;
-          const normRoot = rootPath.replace(/\\/g, "/").toLowerCase();
-          const eventRoot = (payload?.path || "").replace(/\\/g, "/").toLowerCase();
-          const eventId = payload?.watchId;
-
-          // Check if the change corresponds to this rootPath
-          if (
-            !payload ||
-            eventId === watchId ||
-            (eventRoot && (eventRoot === normRoot || normRoot.startsWith(eventRoot)))
-          ) {
-            handleRefreshAll(true);
-          }
-        })
-        .then((fn) => {
-          if (active) {
-            unlisten = fn;
-          } else {
-            fn();
-          }
-        })
-        .catch((err) => {
-          console.error("Failed to listen for files://changed:", err);
-        });
-    }
-
-    return () => {
-      active = false;
-      if (unlisten) unlisten();
-      bridge?.stopFilesWatch?.(watchId);
-    };
-  }, [rootPath, bridge, handleRefreshAll]);
+    if (renamingPath || !refreshSkippedRef.current) return;
+    refreshSkippedRef.current = false;
+    handleRefreshAll(true);
+  }, [renamingPath, handleRefreshAll]);
 
   // Close context menu on outside click or escape
   React.useEffect(() => {
